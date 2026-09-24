@@ -524,6 +524,96 @@ ranking recomputed → `student_subject_stats` updated incrementally.
    current work (see "Known gaps" above for the AI-grading idea floated
    for later).
 
+## Production deployment (live)
+
+Deployed to a shared DigitalOcean VPS (`164.90.162.22`, 1 vCPU / ~1GB RAM,
+Ubuntu 24.04) that already runs **5 other unrelated projects** (gunicorn +
+nginx + a shared Postgres 16 instance) — every choice below is scoped to
+avoid touching those, and to fit the tight RAM budget. Live at
+**https://exam.spetion.uz** (SSL via certbot/Let's Encrypt, auto-renews).
+
+- **No Docker/Redis/MinIO on this box** — deliberate, explicitly confirmed
+  with the user after the VPS recon showed it's already swapping under the
+  existing 5 projects' load, and this app's `docker-compose.yml` stack
+  (Postgres+Redis+MinIO+Celery) was judged too heavy to add on top. Instead:
+  - `STORAGE_BACKEND=local` — uploaded exam files go straight to
+    `/var/www/spetion-exam/backend/local_storage` (real disk, not MinIO).
+  - `CELERY_EAGER=true` — `Celery(...).task_always_eager`, so
+    `parse_exam_upload.delay(...)` in `admin_exams.py` runs synchronously
+    in the request instead of needing a worker. No Redis broker connection
+    ever happens (eager mode bypasses it entirely — safe with `redis_url`
+    left at its default/unreachable value).
+  - **`backend/scripts/run_sweep_loop.py`** (new, prod-only) replaces
+    Celery beat's `beat_schedule` for the two *time*-triggered lifecycle
+    tasks in `exam_lifecycle_tasks.py` (`auto_submit_expired_attempts`
+    every 20s, `mark_expired_unstarted` every 60s) — `CELERY_EAGER` only
+    covers the *request*-triggered upload-parsing path, these sweeps still
+    need something calling them on a timer regardless of eager mode. The
+    script just imports and calls both task functions directly in a plain
+    `while True` loop — Celery task objects are plain callables, so this
+    needs no broker either. Runs as its own systemd service
+    (`spetion-exam-sweep.service`), ~22MB RAM. **If a future edit adds a
+    third time-triggered task to `celery_app.py`'s `beat_schedule`, add the
+    same call to this script too** — it won't pick it up automatically.
+- **Postgres**: one isolated `spetion_db` / `spetion_user` on the VPS's
+  existing shared Postgres 16 instance (matches the pattern the other 5
+  projects already use — each gets its own DB+user, e.g.
+  `qarzdaptar_db`/`qarzdaptar_user`) — never touch another project's
+  database/role.
+- **Backend service**: `spetion-exam-api.service` (systemd), single
+  `uvicorn app.main:app --host 127.0.0.1 --port 8002` process — no gunicorn,
+  no multi-worker — deliberately minimal (~22MB RAM) since the other 5
+  projects already run gunicorn with several workers each on this box.
+  Port 8002 was picked because 8000/8001/8005 were already taken.
+- **Frontend**: built locally (`npm run build`) and the static `dist/`
+  copied to `/var/www/spetion-exam/frontend/dist` — nginx serves it
+  directly. **No Node.js on the server at all** — not installed, not
+  needed, one less thing to maintain on a shared box. Re-deploying a
+  frontend change means rebuilding locally and re-copying `dist/`, not
+  running anything server-side.
+- **nginx**: `/etc/nginx/sites-available/spetion-exam` — `/api/` proxies to
+  `127.0.0.1:8002`, everything else serves `frontend/dist` with SPA
+  fallback (`try_files $uri $uri/ /index.html`). Gzip (`gzip_types`
+  explicitly listed — the shared `nginx.conf`'s default `gzip_types` is
+  just `text/html`, so JS/CSS/JSON weren't being compressed at all until
+  this site block added its own) and `http2` are both on — worth keeping
+  given the VPS (Frankfurt) is geographically far from the school
+  (Uzbekistan); a bare health-check round trip measured ~2ms server-side
+  but 300-700ms from outside, almost entirely network RTT + TLS handshake,
+  not app slowness. Don't mistake that gap for a backend performance bug
+  again without checking `curl` timing from the server itself first
+  (`ssh` in, `curl -s -o /dev/null -w "%{time_total}" http://127.0.0.1:8002/...`)
+  — if that's fast, the issue is geography, not code.
+- **Bootstrapping**: `backend/scripts/create_admin.py` (new) creates the
+  very first admin user directly in the DB — every other account-creation
+  path requires an already-authenticated admin, which a fresh deployment
+  doesn't have yet. `python -m scripts.create_admin <username> <password>
+  "<Full Name>"`, one-time use per environment.
+- **Deploying code changes**: this app is on the server as a plain file
+  tree (`/var/www/spetion-exam/{backend,frontend}`), not a git checkout —
+  copied over via tarball+scp (no `rsync` binary on this Windows dev
+  machine's Git Bash), specifically to stay decoupled from whether/when
+  the GitHub repo gets pushed to (the user's standing rule: never `git
+  push` without an explicit "push qil" that turn — deploying to the VPS is
+  a separate action from pushing to GitHub and doesn't imply it). To
+  redeploy: tarball the changed backend/ or frontend/dist, scp it over,
+  extract, `chown -R root:root`, and for backend changes restart with
+  `systemctl restart spetion-exam-api` (and re-run `alembic upgrade head`
+  if there's a new migration) — for frontend, no restart needed, nginx
+  just serves the new static files immediately.
+- Real school roster (`scripts/seed_school_data.py`) has been imported —
+  25 classes, 20 subjects, 48 teachers, 228 teacher-class-subject
+  assignments, all teacher accounts on the shared temp password
+  `Spetion2026!` (see the bulk-password-reset feature above for how the
+  admin should get everyone to change it). **Students still need to be
+  bulk-imported per class** via the admin panel (Students page) — the
+  seed script only covers the class/subject/teacher structure, not the
+  student roster, same as local dev.
+- tesseract-ocr is **not installed** on the server — the scanned-PDF OCR
+  fallback path (`pdf_parser.py`) will silently produce
+  low-confidence/empty results rather than actually OCR'ing until it's
+  added (`apt install tesseract-ocr`, cheap, just hasn't been needed yet).
+
 ## Running locally
 
 ```

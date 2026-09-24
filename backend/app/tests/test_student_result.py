@@ -48,6 +48,42 @@ def test_result_endpoint_includes_unanswered_question_with_zero_points(client, d
     assert by_id[q2.id]["points_awarded"] == 0.0
 
 
+def test_result_includes_actual_option_text_not_just_generic_labels(client, db_session):
+    """A user-reported confusion: a wrong answer showed two identically
+    generic-looking bubbles ("To'g'ri javob" / "Sizning javobingiz") with no
+    indication of what either option actually said, making it unclear what
+    was right and what the student had picked. The result must carry the
+    real option text for both, not just ids the frontend can't resolve.
+    """
+    klass = make_class(db_session)
+    subject = make_subject(db_session)
+    start = datetime.now(timezone.utc)
+    exam = make_exam(db_session, klass, subject, duration_minutes=30, start_at=start, end_at=start + timedelta(hours=2))
+    question = add_mcq_question(db_session, exam, correct_index=0, order_index=0, points=1)
+    db_session.commit()
+    publish_exam(db_session, exam)
+
+    student = make_student(db_session, klass, username="student_option_text_test")
+    db_session.commit()
+
+    attempt = attempt_service.start_attempt(db_session, exam, student)
+    wrong_option = question.options[1]
+    attempt_service.record_answer(db_session, attempt, question.id, wrong_option.id, None)
+    attempt_service.submit_attempt(db_session, attempt.id)
+
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"username": "student_option_text_test", "password": "secret123", "class_id": klass.id},
+    )
+    token = login.json()["access_token"]
+
+    resp = client.get(f"/api/v1/student/exams/{exam.id}/result", headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code == 200
+    out = resp.json()["questions"][0]
+    assert out["selected_option_text"] == "Variant B"
+    assert out["correct_option_text"] == "Variant A"
+
+
 def test_result_question_order_matches_the_shuffled_order_the_student_saw(client, db_session):
     """A user-reported confusion: the result page used to list questions in
     exam.questions' fixed order_index order, while the exam-taking screen

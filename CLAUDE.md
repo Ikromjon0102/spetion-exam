@@ -345,6 +345,19 @@ running backend + sqlite dev DB seeded from `backend/seed_data/`.
     "Javob berilmagan" cards is not always a bug — check `student_answers`
     for the attempt before assuming corruption; it may just mean the
     student genuinely submitted early with most questions unanswered.)
+  - **A wrong answer showed two generic, content-free bubbles.** For a
+    question the student got wrong, the result page rendered a green
+    "To'g'ri javob" bubble and a red "Sizning javobingiz" bubble with no
+    indication of what either option's text actually was — `ResultQuestionOut`
+    only carried `selected_option_id`/`correct_option_id`, and the frontend
+    had no option list to resolve them against, per an explicit comment
+    ("We only have the ids here"). The user reported this as unclear. Fixed
+    by adding `selected_option_text`/`correct_option_text` to
+    `ResultQuestionOut` (`schemas/attempt.py`), populated in
+    `get_result` (`routers/student.py`) from a per-question `{option_id:
+    option_text}` lookup, and rendered in `ExamResultPage.tsx` as
+    "**Label:** actual option text" instead of the label alone. Covered by
+    `test_result_includes_actual_option_text_not_just_generic_labels`.
 
 - `backend/app/models/` — all SQLAlchemy models for the schema below. Every
   `DateTime(timezone=True)` column uses `UTCDateTime`

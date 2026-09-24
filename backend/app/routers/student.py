@@ -167,6 +167,7 @@ def get_result(exam_id: int, db: Session = Depends(get_db), student: Student = D
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Natija hali mavjud emas")
 
     correct_by_question = {q.id: next((o.id for o in q.options if o.is_correct), None) for q in exam.questions}
+    options_by_question = {q.id: {o.id: o.option_text for o in q.options} for q in exam.questions}
     answers_by_question = {a.question_id: a for a in attempt.answers}
 
     # Iterate in the same per-attempt shuffled order the student actually saw
@@ -180,13 +181,18 @@ def get_result(exam_id: int, db: Session = Depends(get_db), student: Student = D
     questions_out = []
     for question in attempt_service.get_ordered_questions(exam, attempt):
         answer = answers_by_question.get(question.id)
+        option_texts = options_by_question.get(question.id, {})
+        selected_option_id = answer.selected_option_id if answer else None
+        correct_option_id = correct_by_question.get(question.id)
         questions_out.append(
             ResultQuestionOut(
                 question_id=question.id,
                 prompt_text=question.prompt_text,
                 points=float(question.points),
-                selected_option_id=answer.selected_option_id if answer else None,
-                correct_option_id=correct_by_question.get(question.id),
+                selected_option_id=selected_option_id,
+                selected_option_text=option_texts.get(selected_option_id) if selected_option_id else None,
+                correct_option_id=correct_option_id,
+                correct_option_text=option_texts.get(correct_option_id) if correct_option_id else None,
                 is_correct=answer.is_correct if answer else False,
                 points_awarded=float(answer.points_awarded) if answer and answer.points_awarded is not None else 0.0,
             )

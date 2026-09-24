@@ -90,16 +90,17 @@ export default function ExamResultPage() {
                 {q.prompt_text}
               </p>
               <div className="stack" style={{ gap: "var(--space-2)" }}>
-                {/* We only have the student's selected + correct option ids, not the
+                {/* We only have the student's selected + correct option ids/text, not the
                     full option list here — render those two, not a full option set. */}
                 {q.correct_option_id !== null && q.correct_option_id !== q.selected_option_id && (
                   <AnswerOption letter="✓" correct disabled>
-                    {t("result.correctAnswer")}
+                    <strong>{t("result.correctAnswer")}:</strong> {q.correct_option_text}
                   </AnswerOption>
                 )}
                 {q.selected_option_id !== null ? (
                   <AnswerOption letter={q.is_correct ? "✓" : "✕"} correct={!!q.is_correct} incorrect={!q.is_correct} disabled>
-                    {q.is_correct ? t("result.yourAnswerCorrect") : t("result.yourAnswer")}
+                    <strong>{q.is_correct ? t("result.yourAnswerCorrect") : t("result.yourAnswer")}:</strong>{" "}
+                    {q.selected_option_text}
                   </AnswerOption>
                 ) : (
                   <AnswerOption letter="—" incorrect disabled>

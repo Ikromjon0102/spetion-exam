@@ -57,7 +57,9 @@ class ResultQuestionOut(BaseModel):
     prompt_text: str
     points: float
     selected_option_id: int | None = None
+    selected_option_text: str | None = None
     correct_option_id: int | None = None
+    correct_option_text: str | None = None
     is_correct: bool | None = None
     points_awarded: float | None = None
 

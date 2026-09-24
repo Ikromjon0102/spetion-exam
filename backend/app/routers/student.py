@@ -166,6 +166,15 @@ def get_result(exam_id: int, db: Session = Depends(get_db), student: Student = D
     if attempt is None or attempt.status not in (AttemptStatus.submitted, AttemptStatus.auto_submitted):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Natija hali mavjud emas")
 
+    # Hide which option was correct/selected while the exam window is still
+    # open (now < exam.end_at) — otherwise a student who finishes early can
+    # read off the answer key and pass it to classmates who haven't taken
+    # it yet. ✓/✕ and points still show either way, since those alone don't
+    # reveal any option's content. Once the window has closed for everyone,
+    # the real text is shown (see get_result's ExamResultOut construction).
+    now = datetime.now(timezone.utc)
+    answers_revealed = exam.end_at is None or now >= aware(exam.end_at)
+
     correct_by_question = {q.id: next((o.id for o in q.options if o.is_correct), None) for q in exam.questions}
     options_by_question = {q.id: {o.id: o.option_text for o in q.options} for q in exam.questions}
     answers_by_question = {a.question_id: a for a in attempt.answers}
@@ -190,9 +199,15 @@ def get_result(exam_id: int, db: Session = Depends(get_db), student: Student = D
                 prompt_text=question.prompt_text,
                 points=float(question.points),
                 selected_option_id=selected_option_id,
-                selected_option_text=option_texts.get(selected_option_id) if selected_option_id else None,
+                selected_option_text=(
+                    option_texts.get(selected_option_id)
+                    if answers_revealed and selected_option_id
+                    else None
+                ),
                 correct_option_id=correct_option_id,
-                correct_option_text=option_texts.get(correct_option_id) if correct_option_id else None,
+                correct_option_text=(
+                    option_texts.get(correct_option_id) if answers_revealed and correct_option_id else None
+                ),
                 is_correct=answer.is_correct if answer else False,
                 points_awarded=float(answer.points_awarded) if answer and answer.points_awarded is not None else 0.0,
             )
@@ -206,6 +221,8 @@ def get_result(exam_id: int, db: Session = Depends(get_db), student: Student = D
         score=score,
         max_score=max_score,
         percent=round(100 * score / max_score, 2) if max_score else 0.0,
+        answers_revealed=answers_revealed,
+        reveal_at=exam.end_at if not answers_revealed else None,
         questions=questions_out,
     )
 

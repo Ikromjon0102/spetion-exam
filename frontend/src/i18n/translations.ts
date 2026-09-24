@@ -223,6 +223,12 @@ export const translations: Record<string, Record<Lang, string>> = {
   "result.yourAnswerCorrect": { uz: "Sizning javobingiz (to'g'ri)", ru: "Ваш ответ (правильно)" },
   "result.yourAnswer": { uz: "Sizning javobingiz", ru: "Ваш ответ" },
   "result.noAnswer": { uz: "Javob berilmagan", ru: "Ответ не дан" },
+  "result.answeredCorrectHidden": { uz: "To'g'ri javob berdingiz", ru: "Вы ответили правильно" },
+  "result.answeredIncorrectHidden": { uz: "Noto'g'ri javob berdingiz", ru: "Вы ответили неправильно" },
+  "result.answersHiddenHint": {
+    uz: "Javob matnlari imtihon oynasi yopilgunga qadar yashirin — hali topshirmagan sinfdoshlaringizga javob tarqalib ketmasligi uchun. Faqat to'g'ri/noto'g'ri belgisi va ball ko'rinadi",
+    ru: "Текст ответов скрыт до закрытия окна экзамена — чтобы одноклассники, которые ещё не сдали, не узнали ответы. Видны только отметка правильно/неправильно и баллы",
+  },
   "result.points": { uz: "ball", ru: "балл" },
   "result.classRanking": { uz: "Sinf reytingi", ru: "Рейтинг класса" },
   "result.backToList": { uz: "Imtihonlar ro'yxatiga qaytish", ru: "Вернуться к списку экзаменов" },

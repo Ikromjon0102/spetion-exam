@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { getExamRanking, getResult, type ExamResult, type RankingEntry } from "../../api/studentApi";
 import { AnswerOption, AppHeader, Card, ListRow } from "../../components/ui";
 import { useLanguage } from "../../i18n/LanguageContext";
+import { formatDateTimeUz } from "../../utils/formatDate";
 
 export default function ExamResultPage() {
   const { examId } = useParams();
@@ -80,6 +81,12 @@ export default function ExamResultPage() {
         <h2 className="h4" style={{ marginBottom: "var(--space-4)" }}>
           {t("result.byQuestion")}
         </h2>
+        {!result.answers_revealed && (
+          <p className="body-sm ink-muted" style={{ marginBottom: "var(--space-4)" }}>
+            {t("result.answersHiddenHint")}
+            {result.reveal_at ? ` (${formatDateTimeUz(result.reveal_at)})` : ""}
+          </p>
+        )}
         <div className="stack" style={{ marginBottom: "var(--space-8)" }}>
           {result.questions.map((q, idx) => (
             <Card key={q.question_id}>
@@ -91,16 +98,28 @@ export default function ExamResultPage() {
               </p>
               <div className="stack" style={{ gap: "var(--space-2)" }}>
                 {/* We only have the student's selected + correct option ids/text, not the
-                    full option list here — render those two, not a full option set. */}
-                {q.correct_option_id !== null && q.correct_option_id !== q.selected_option_id && (
+                    full option list here — render those two, not a full option set.
+                    While the exam window is still open (!answers_revealed), the backend
+                    withholds the text entirely — don't reveal it via a bubble that names
+                    "correct", and don't show the picked option's text either (a correct
+                    pick would otherwise reveal the answer just as directly). */}
+                {result.answers_revealed && q.correct_option_id !== null && q.correct_option_id !== q.selected_option_id && (
                   <AnswerOption letter="✓" correct disabled>
                     <strong>{t("result.correctAnswer")}:</strong> {q.correct_option_text}
                   </AnswerOption>
                 )}
                 {q.selected_option_id !== null ? (
                   <AnswerOption letter={q.is_correct ? "✓" : "✕"} correct={!!q.is_correct} incorrect={!q.is_correct} disabled>
-                    <strong>{q.is_correct ? t("result.yourAnswerCorrect") : t("result.yourAnswer")}:</strong>{" "}
-                    {q.selected_option_text}
+                    {result.answers_revealed ? (
+                      <>
+                        <strong>{q.is_correct ? t("result.yourAnswerCorrect") : t("result.yourAnswer")}:</strong>{" "}
+                        {q.selected_option_text}
+                      </>
+                    ) : q.is_correct ? (
+                      t("result.answeredCorrectHidden")
+                    ) : (
+                      t("result.answeredIncorrectHidden")
+                    )}
                   </AnswerOption>
                 ) : (
                   <AnswerOption letter="—" incorrect disabled>

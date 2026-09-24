@@ -62,6 +62,8 @@ export interface ExamResult {
   score: number;
   max_score: number;
   percent: number;
+  answers_revealed: boolean;
+  reveal_at: string | null;
   questions: ResultQuestion[];
 }
 

@@ -48,12 +48,14 @@ def test_result_endpoint_includes_unanswered_question_with_zero_points(client, d
     assert by_id[q2.id]["points_awarded"] == 0.0
 
 
-def test_result_includes_actual_option_text_not_just_generic_labels(client, db_session):
+def test_result_includes_actual_option_text_once_window_closed(client, db_session):
     """A user-reported confusion: a wrong answer showed two identically
     generic-looking bubbles ("To'g'ri javob" / "Sizning javobingiz") with no
     indication of what either option actually said, making it unclear what
     was right and what the student had picked. The result must carry the
-    real option text for both, not just ids the frontend can't resolve.
+    real option text for both, not just ids the frontend can't resolve —
+    but only once the exam window has closed for everyone (see the next
+    test) so early finishers can't relay the answer key to classmates.
     """
     klass = make_class(db_session)
     subject = make_subject(db_session)
@@ -71,6 +73,10 @@ def test_result_includes_actual_option_text_not_just_generic_labels(client, db_s
     attempt_service.record_answer(db_session, attempt, question.id, wrong_option.id, None)
     attempt_service.submit_attempt(db_session, attempt.id)
 
+    # simulate the exam window having closed for everyone after submission
+    exam.end_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+    db_session.commit()
+
     login = client.post(
         "/api/v1/auth/login",
         json={"username": "student_option_text_test", "password": "secret123", "class_id": klass.id},
@@ -79,9 +85,52 @@ def test_result_includes_actual_option_text_not_just_generic_labels(client, db_s
 
     resp = client.get(f"/api/v1/student/exams/{exam.id}/result", headers={"Authorization": f"Bearer {token}"})
     assert resp.status_code == 200
-    out = resp.json()["questions"][0]
+    body = resp.json()
+    assert body["answers_revealed"] is True
+    out = body["questions"][0]
     assert out["selected_option_text"] == "Variant B"
     assert out["correct_option_text"] == "Variant A"
+
+
+def test_result_hides_option_text_while_exam_window_still_open(client, db_session):
+    """The user asked specifically for this: a student who finishes early
+    could otherwise read out the correct answer text to classmates who
+    haven't taken the exam yet within the same (possibly multi-day) window.
+    While now < exam.end_at, selected/correct option text must be null even
+    though is_correct/points_awarded are still shown.
+    """
+    klass = make_class(db_session)
+    subject = make_subject(db_session)
+    start = datetime.now(timezone.utc)
+    exam = make_exam(db_session, klass, subject, duration_minutes=30, start_at=start, end_at=start + timedelta(days=2))
+    question = add_mcq_question(db_session, exam, correct_index=0, order_index=0, points=1)
+    db_session.commit()
+    publish_exam(db_session, exam)
+
+    student = make_student(db_session, klass, username="student_hidden_text_test")
+    db_session.commit()
+
+    attempt = attempt_service.start_attempt(db_session, exam, student)
+    correct_option = question.options[0]
+    attempt_service.record_answer(db_session, attempt, question.id, correct_option.id, None)
+    attempt_service.submit_attempt(db_session, attempt.id)
+
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"username": "student_hidden_text_test", "password": "secret123", "class_id": klass.id},
+    )
+    token = login.json()["access_token"]
+
+    resp = client.get(f"/api/v1/student/exams/{exam.id}/result", headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["answers_revealed"] is False
+    assert body["reveal_at"] is not None
+    out = body["questions"][0]
+    assert out["is_correct"] is True
+    assert out["points_awarded"] == 1.0
+    assert out["selected_option_text"] is None
+    assert out["correct_option_text"] is None
 
 
 def test_result_question_order_matches_the_shuffled_order_the_student_saw(client, db_session):

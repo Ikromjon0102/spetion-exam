@@ -357,7 +357,37 @@ running backend + sqlite dev DB seeded from `backend/seed_data/`.
     `get_result` (`routers/student.py`) from a per-question `{option_id:
     option_text}` lookup, and rendered in `ExamResultPage.tsx` as
     "**Label:** actual option text" instead of the label alone. Covered by
-    `test_result_includes_actual_option_text_not_just_generic_labels`.
+    `test_result_includes_actual_option_text_once_window_closed`.
+
+- **Option text on the result page is withheld until the exam window
+  closes for everyone.** Immediately after adding real option text above,
+  the user raised a real concern themselves: a student who finishes early
+  could read the correct-answer text off their own result page and relay
+  it to classmates who haven't taken the exam yet — this app's exam
+  windows (`Exam.end_at`) are routinely multi-day, not a single sitting,
+  so this isn't a hypothetical. Agreed fix (explicitly confirmed with the
+  user, two other options — reveal instantly, and per-exam admin toggle —
+  weren't pursued): **`selected_option_text`/`correct_option_text` are
+  only populated once `now >= exam.end_at`**; `is_correct`/`points_awarded`
+  are still shown either way, since a plain ✓/✕ and a point count don't by
+  themselves reveal any option's content. `ExamResultOut` gained
+  `answers_revealed: bool` and `reveal_at: datetime | None` (the exam's
+  `end_at`, only set when not yet revealed) so the frontend can show *when*
+  the real answers will appear instead of just silently omitting them.
+  `get_result` in `routers/student.py` computes this once per request from
+  `exam.end_at` — don't cache/precompute it on the attempt row, a
+  student's `reveal_at` must track the live exam window, not a snapshot
+  from whenever they submitted. `ExamResultPage.tsx` shows a
+  `result.answersHiddenHint` banner (with the formatted reveal date) and
+  swaps the option-text bubbles for label-only ones
+  (`result.answeredCorrectHidden`/`answeredIncorrectHidden`) while hidden,
+  and drops the separate "correct answer" bubble entirely in that state
+  rather than rendering it with blank content. Covered by
+  `test_result_hides_option_text_while_exam_window_still_open` (and the
+  revealed-case test above, which now force-closes `exam.end_at` before
+  asserting text is present). If a future admin-facing "reveal now"
+  override is ever wanted, that's a deliberately deferred idea, not an
+  oversight — ask before adding it.
 
 - `backend/app/models/` — all SQLAlchemy models for the schema below. Every
   `DateTime(timezone=True)` column uses `UTCDateTime`

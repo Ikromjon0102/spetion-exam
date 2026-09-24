@@ -70,6 +70,8 @@ class ExamResultOut(BaseModel):
     score: float
     max_score: float
     percent: float
+    answers_revealed: bool
+    reveal_at: datetime | None = None
     questions: list[ResultQuestionOut]
 
 

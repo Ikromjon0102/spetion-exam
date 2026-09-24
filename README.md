@@ -48,10 +48,11 @@ Testlarni ishga tushirish (in-memory SQLite'da, Postgres shart emas):
 pytest app/tests -q
 ```
 
-78 test o'tadi (auth, parol almashtirish, admin boshqaruv (jumladan
+80 test o'tadi (auth, parol almashtirish, admin boshqaruv (jumladan
 ro'yxatdan ko'p o'quvchi qo'shish, sinf bo'yicha parolni almashtirish, sinf
 rahbari huquqlari, fan o'qituvchisi uchun ko'rish huquqi va har bir bo'lim
 uchun tahrirlash/o'chirish), nashr etilgan imtihonni qayta tahrirlash,
+parser ishonch darajasining (`parse_confidence`) savolga saqlanishi,
 publish validatsiyasi, taymer/deadline, baholash, reyting, DOCX/PDF
 parserlar — PDF parser ham sinov faylida, ham OCR-fallback yo'lida
 tekshirilgan).
@@ -101,6 +102,12 @@ boshlamagan** bo'lsa, savollarni, javob variantlarini va jadvalni
 imtihonni boshlashi bilan u butunlay qulflanadi — bu qat'iy chegara, chunki
 boshlangan urinish savollar tartibini va keyinchalik bahoni saqlab qoladi;
 uni orqasidan o'zgartirish adolatni buzadi.
+
+Savollarni tekshirish sahifasida (review) endi parser o'zi "ishonchim
+komil emas" deb belgilagan savollar qizil belgi bilan alohida
+ajratiladi ("Tekshirilmagan" belgisidan mustaqil — bittasi "hali
+ko'rilmagan", ikkinchisi "parser o'zi noaniq o'qigan" degani), shunda
+o'qituvchi qaysi savolga ko'proq e'tibor berish kerakligini bilib oladi.
 
 **Tahrirlash va o'chirish** — endi har bir bo'limda (Sinflar, Fanlar,
 O'quvchilar, O'qituvchilar) "Tahrirlash" va "O'chirish" tugmalari bor.
@@ -224,17 +231,19 @@ har doim MinIO + Celery worker ishlatiladi.
 
 ## Hali qilinmagan / keyingi qadamlar
 
-- Migratsiya haqiqiy Postgres'ga qarshi hali ishga tushirilmagan (Docker
-  hozircha WSL2'ni kutmoqda — yuqoridagi eslatmaga qarang; sqlite'da
-  strukturaviy va funksional tekshirildi).
-- Short-answer savollar uchun qo'lda baholash endpointi (spec 4-bo'lim,
-  v1.1 sifatida belgilangan).
-- `Question` modelida `parse_confidence` ustuni yo'q — parser ishonch
-  darajasi hozircha faqat `ExamUpload.raw_parse_debug`da (diagnostika
-  uchun) saqlanadi, review UI'da ko'rsatilmaydi.
+- Migratsiya haqiqiy Postgres'ga qarshi hali ishga tushirilmagan —
+  bu endi DigitalOcean VPS'da amalga oshiriladi (lokal Docker/WSL2 emas);
+  sqlite'da strukturaviy va funksional to'liq tekshirilgan, VPS tayyor
+  bo'lgach `alembic upgrade head`ni o'sha yerga qarshi ishga tushirish
+  kifoya.
+- Short-answer savollar uchun qo'lda baholash endpointi — hozircha kerak
+  emas (spec 4-bo'lim, v1.1 sifatida belgilangan); kelajakda buni AI orqali
+  avtomatik tekshirish g'oyasi ham bor, hali qaror qilinmagan.
 - PDF parser sintetik (reportlab bilan generatsiya qilingan) fayllarda va
   OCR-fallback yo'lida sinovdan o'tkazilgan, lekin haqiqiy skanerlangan/
-  suratga olingan imtihon PDF faylida hali tekshirilmagan.
+  suratga olingan imtihon PDF faylida va murakkab matematik testlarda
+  (formulalar, kasrlar) hali tekshirilmagan — haqiqiy fayllar bilan
+  sinovdan o'tkazish rejalashtirilgan.
 
 ## Windows'da eslatma: `uvicorn --reload`
 

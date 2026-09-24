@@ -51,6 +51,7 @@ def _question_out(question: Question) -> QuestionOut:
         points=float(question.points),
         source=question.source.value,
         needs_review=question.needs_review,
+        parse_confidence=question.parse_confidence,
         options=[
             QuestionOptionOut(id=o.id, order_index=o.order_index, option_text=o.option_text, is_correct=o.is_correct)
             for o in question.options

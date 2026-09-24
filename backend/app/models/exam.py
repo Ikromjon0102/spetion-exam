@@ -100,6 +100,11 @@ class Question(Base):
     # Always true for parser output. An exam can never be published while any
     # question still has this set — see Exam.publish validation in exam_service.
     needs_review: Mapped[bool] = mapped_column(Boolean, default=True)
+    # "high"/"low"/None — the parser's own confidence in this question (see
+    # ParsedQuestion.confidence in app/parsers/base.py), null for manually
+    # added questions. Surfaced in the review UI as a warning badge so a
+    # teacher knows which parsed questions deserve extra scrutiny.
+    parse_confidence: Mapped[str | None] = mapped_column(String(10), nullable=True)
 
     exam: Mapped["Exam"] = relationship(back_populates="questions")
     # delete-orphan: deleting a question must take its options with it — the

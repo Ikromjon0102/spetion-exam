@@ -48,6 +48,7 @@ class QuestionOut(BaseModel):
     points: float
     source: str
     needs_review: bool
+    parse_confidence: str | None = None
     options: list[QuestionOptionOut] = []
 
 

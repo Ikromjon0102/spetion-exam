@@ -99,6 +99,7 @@ export interface Question {
   points: number;
   source: string;
   needs_review: boolean;
+  parse_confidence: "high" | "low" | null;
   options: QuestionOption[];
 }
 

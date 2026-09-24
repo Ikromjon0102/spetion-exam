@@ -290,6 +290,27 @@ running backend + sqlite dev DB seeded from `backend/seed_data/`.
     `Question.options` in `app/models/exam.py`. No test had ever exercised
     that endpoint via HTTP before `test_exam_editing.py`.
 
+- **`parse_confidence` on questions, surfaced to the review UI.** Previously
+  the parser's own confidence signal (`ParsedQuestion.confidence`, set in
+  `docx_parser.py`/`pdf_parser.py` based on whether an answer key was found
+  and exactly 4 options were parsed) was computed but discarded at
+  materialization time — only visible in `ExamUpload.raw_parse_debug`
+  (diagnostic-only, not shown to anyone). The user confirmed adding a real
+  column was worth it: `Question.parse_confidence: str | None` (migration
+  `c7e4a2f91b3d_add_parse_confidence_to_questions`, `"high"`/`"low"`/`None`
+  — `None` for manually added questions, never set by anything but
+  `parsing_service.process_upload`) is now set from `parsed_q.confidence`
+  when materializing parsed questions, exposed on `QuestionOut`, and
+  rendered as a red "Parser noaniq o'qigan" (low-confidence) badge next to
+  the existing "Tekshirilmagan" badge in `ExamReviewEditor.tsx` — so a
+  teacher reviewing a parsed exam knows which questions the parser was
+  actually unsure about, not just which ones haven't been reviewed yet
+  (those are independent signals: a manually-reviewed question can still
+  have been a low-confidence parse originally). Don't repurpose this column
+  for anything auto-approval-related — see "Parsing approach" below, every
+  parsed question still always needs manual review regardless of
+  confidence.
+
 - `backend/app/models/` — all SQLAlchemy models for the schema below. Every
   `DateTime(timezone=True)` column uses `UTCDateTime`
   (`app/core/timeutil.py`) instead — see "Timezone handling" below, this is
@@ -303,10 +324,10 @@ running backend + sqlite dev DB seeded from `backend/seed_data/`.
   block-splitting + "Javoblar:" answer-key detection + bold-run fallback
   for DOCX).
 - `backend/app/tasks/` — Celery parsing + exam-lifecycle beat tasks wired.
-- `backend/migrations/` — Alembic initial migration (structurally verified
-  against sqlite; not yet run against a live Postgres instance — Docker's
-  WSL2 backend needs an admin-elevated `wsl --install` + reboot that
-  Claude Code can't do on its own, see README.md).
+- `backend/migrations/` — Alembic migrations (structurally verified against
+  sqlite; not yet run against a live Postgres instance — the user will do
+  this themselves against a DigitalOcean VPS rather than local
+  Docker/WSL2, see README.md).
 - `frontend/src/` — student + admin/teacher flows implemented and manually
   verified working in-browser (see above), now restyled with a real design
   system (`frontend/src/styles/tokens.css`, `frontend/src/components/ui/`)
@@ -341,11 +362,18 @@ now-proven usage pattern for this project, keep using `UTCDateTime` for
 any new datetime column rather than raw `DateTime(timezone=True)`.
 
 Known gaps (see README.md "Hali qilinmagan" for the full list): no live-DB
-migration run yet (blocked on WSL2/Docker setup, needs the user), no
-short-answer manual grading, and the `Question` model doesn't have a
-`parse_confidence` column — parser confidence only lives in
-`ExamUpload.raw_parse_debug` (diagnostic-only per this file's original
-design) and isn't surfaced in the review UI.
+migration run yet (the user will run it against a DigitalOcean VPS
+Postgres instance rather than local Docker/WSL2 — give them the
+`alembic upgrade head` command and a `DATABASE_URL` pointed at that VPS
+when they're ready, no code changes needed), no short-answer manual
+grading (explicitly deferred by the user — not needed yet since grading
+free-text answers costs a teacher's time either way; the user floated
+having an AI model grade short-answers automatically as a *future* idea,
+not committed to, so raise it again rather than assuming it's still
+wanted if this comes back up), and the real-world-scanned-PDF /
+complex-math-test parsing accuracy question is still open (the user is
+looking for real sample files to try). `parse_confidence` is no longer a
+gap — see the bullet under "Current status" above.
 
 ## Database schema (target — see the full write-up in `docs/spec.md`)
 
@@ -397,9 +425,10 @@ ranking recomputed → `student_subject_stats` updated incrementally.
 
 ## Next steps (in order)
 
-1. User runs `wsl --install` from an elevated PowerShell + reboots, then
-   `docker-compose up -d` and `alembic upgrade head` against the real
-   Postgres — confirm the migration applies cleanly there too.
+1. User will stand up real Postgres on a DigitalOcean VPS (not local
+   Docker/WSL2 — that path is superseded) and run `alembic upgrade head`
+   against it themselves; just be ready to help with `DATABASE_URL`/
+   connection-string questions when they do.
 2. PDF parsing is now covered by real tests (`app/tests/test_parsers.py`,
    `reportlab`-generated synthetic PDFs — a normal text PDF with a trailing
    "Javoblar:" key, one with no key at all so options parse but nothing is
@@ -407,14 +436,15 @@ ranking recomputed → `student_subject_stats` updated incrementally.
    prove the OCR fallback never crashes) and was also manually driven
    through the full upload → S3(local) → Celery(eager) → materialize
    pipeline. It has **not** been tried against a real scanned/photographed
-   exam PDF from a teacher yet — if OCR accuracy on an actual scan turns
-   out to matter, that's still open.
-3. Short-answer manual grading endpoint (spec section 4 flags this as
-   v1.1, schema already supports `answer_text`).
-4. Decide whether to add a `parse_confidence` column to `questions` so the
-   review UI can surface low-confidence parses (currently only in
-   `ExamUpload.raw_parse_debug`, which is diagnostic-only) — ask before
-   changing the schema per this file's rules.
+   exam PDF, or a complex math exam (formulas, fractions, roots — unclear
+   how these come through as text vs. images), from a teacher yet — the
+   user is actively looking for real sample files to test with; when they
+   arrive, run them through the same upload pipeline and check both parse
+   accuracy and whether `patterns.py`'s question-splitting regex still
+   holds up against math notation.
+3. Short-answer manual grading — deferred by the user for now, not
+   current work (see "Known gaps" above for the AI-grading idea floated
+   for later).
 
 ## Running locally
 

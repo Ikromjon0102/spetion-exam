@@ -82,6 +82,7 @@ def process_upload(
             prompt_text=parsed_q.prompt,
             source=QuestionSource.parsed,
             needs_review=True,
+            parse_confidence=parsed_q.confidence,
         )
         db.add(question)
         db.flush()

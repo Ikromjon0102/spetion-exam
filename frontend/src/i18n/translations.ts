@@ -290,6 +290,10 @@ export const translations: Record<string, Record<Lang, string>> = {
   "review.needsReviewCount": { uz: "tekshirilmagan", ru: "не проверено" },
   "review.question": { uz: "Savol", ru: "Вопрос" },
   "review.needsReviewBadge": { uz: "Tekshirilmagan", ru: "Не проверено" },
+  "review.lowConfidenceBadge": {
+    uz: "Parser noaniq o'qigan — diqqat bilan tekshiring",
+    ru: "Парсер распознал неуверенно — проверьте внимательно",
+  },
   "review.needsReviewCheckbox": { uz: "Tekshirish kerak", ru: "Требует проверки" },
   "review.delete": { uz: "O'chirish", ru: "Удалить" },
   "review.addQuestion": { uz: "Yangi savol qo'shish", ru: "Добавить вопрос" },

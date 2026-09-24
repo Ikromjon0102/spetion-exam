@@ -236,6 +236,9 @@ export default function ExamReviewEditor() {
                   {t("review.question")} {idx + 1}
                 </span>
                 {q.needs_review && <Badge status="warning">{t("review.needsReviewBadge")}</Badge>}
+                {q.parse_confidence === "low" && (
+                  <Badge status="danger">{t("review.lowConfidenceBadge")}</Badge>
+                )}
               </CardHead>
               <textarea
                 className="sp-input"

@@ -1,0 +1,23 @@
+.sp-card {
+  font-family: var(--font-sans);
+  background: var(--surface-raised);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+}
+.sp-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+.sp-card__foot {
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1.5px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}

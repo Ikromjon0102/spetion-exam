@@ -1,0 +1,37 @@
+.sp-statcard {
+  font-family: var(--font-sans);
+  background: var(--surface-raised);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.sp-statcard__label {
+  color: var(--ink-muted);
+}
+
+.sp-statcard__value {
+  font-family: var(--font-mono);
+  font-size: 26px;
+  line-height: 32px;
+  font-weight: 700;
+}
+
+.sp-statcard[data-tone="danger"] .sp-statcard__value {
+  color: var(--danger);
+}
+.sp-statcard[data-tone="warning"] .sp-statcard__value {
+  color: var(--warning);
+}
+.sp-statcard[data-tone="success"] .sp-statcard__value {
+  color: var(--success);
+}
+
+.sp-statcard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--space-3);
+}

@@ -1,0 +1,122 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap");
+
+:root {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Space Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* Brand — identical in both themes */
+  --brand-050: #fdedea;
+  --brand-100: #fedfdd;
+  --brand-200: #fcbbb5;
+  --brand-300: #fa887f;
+  --brand-400: #f8483a;
+  --brand-500: #e21908;
+  --brand-600: #dd1808;
+  --brand-700: #b81405;
+  --brand-800: #8a0f05;
+  --brand-900: #620b04;
+  --on-brand: #ffffff;
+
+  /* Neutrals — light theme */
+  --surface: #fbf9f8;
+  --surface-raised: #ffffff;
+  --surface-sunken: #f5f5f4;
+  --border: #ede4e2;
+  --border-strong: #c4c1c0;
+  --ink: #241512;
+  --ink-muted: #8a7975;
+  --ink-faint: #c4b7b4;
+  --link: #dd1808;
+  --focus-ring: #dd1808;
+
+  /* Status — light theme */
+  --success: #2f9e5b;
+  --success-subtle: #e9f6ee;
+  --on-success: #ffffff;
+  --warning: #b36205;
+  --on-warning: #ffffff;
+  --info: #366fec;
+  --on-info: #ffffff;
+  --danger: #b11306;
+  --on-danger: #ffffff;
+
+  /* Off-period / warm — light-only family */
+  --warm-050: #fff6e9;
+  --warm-100: #ffefdb;
+  --warm-300: #e8c58c;
+  --warm-ink: #8a5a1e;
+  --warm-ink-muted: #b08542;
+
+  /* Spacing (4px base) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+  --space-24: 96px;
+
+  /* Radius */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+  --radius-full: 9999px;
+}
+
+/* Dark theme: applied when the OS prefers dark (and the user hasn't
+   explicitly chosen light), or when the user explicitly chose dark via
+   the theme toggle (data-theme="dark" on <html>, see ThemeContext). */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --surface: #121211;
+    --surface-raised: #1a1919;
+    --surface-sunken: #252423;
+    --border: #474543;
+    --border-strong: #5f5b59;
+    --ink: #fbfbfb;
+    --ink-muted: #9c9896;
+    --ink-faint: #5f5b59;
+    --link: #f8483a;
+    --focus-ring: #f8483a;
+
+    --success: #1ab480;
+    --success-subtle: #16281f;
+    --on-success: #1a1919;
+    --warning: #ef8206;
+    --on-warning: #1a1919;
+    --info: #759df2;
+    --on-info: #1a1919;
+    --danger: #fa766b;
+    --on-danger: #1a1919;
+  }
+}
+
+:root[data-theme="dark"] {
+  --surface: #121211;
+  --surface-raised: #1a1919;
+  --surface-sunken: #252423;
+  --border: #474543;
+  --border-strong: #5f5b59;
+  --ink: #fbfbfb;
+  --ink-muted: #9c9896;
+  --ink-faint: #5f5b59;
+  --link: #f8483a;
+  --focus-ring: #f8483a;
+
+  --success: #1ab480;
+  --success-subtle: #16281f;
+  --on-success: #1a1919;
+  --warning: #ef8206;
+  --on-warning: #1a1919;
+  --info: #759df2;
+  --on-info: #1a1919;
+  --danger: #fa766b;
+  --on-danger: #1a1919;
+}

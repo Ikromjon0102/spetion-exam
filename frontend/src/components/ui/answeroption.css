@@ -1,0 +1,61 @@
+.sp-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  text-align: left;
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-raised);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 23px;
+  color: var(--ink);
+  cursor: pointer;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+.sp-option:disabled {
+  cursor: default;
+}
+.sp-option__letter {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-full);
+  border: 1.5px solid var(--border-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-muted);
+}
+.sp-option--selected {
+  border-color: var(--brand-600);
+  background: var(--brand-050);
+}
+.sp-option--selected .sp-option__letter {
+  border-color: var(--brand-600);
+  background: var(--brand-600);
+  color: var(--on-brand);
+}
+.sp-option--correct {
+  border-color: var(--success);
+  background: var(--success-subtle);
+}
+.sp-option--correct .sp-option__letter {
+  border-color: var(--success);
+  background: var(--success);
+  color: var(--on-success);
+}
+.sp-option--incorrect {
+  border-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 8%, var(--surface-raised));
+}
+.sp-option--incorrect .sp-option__letter {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: var(--on-danger);
+}

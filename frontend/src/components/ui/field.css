@@ -1,0 +1,39 @@
+.sp-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.sp-field__label {
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.sp-input,
+.sp-select {
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 20px;
+  color: var(--ink);
+  background: var(--surface-sunken);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  width: 100%;
+  transition: border-color 120ms ease;
+}
+.sp-input::placeholder {
+  color: var(--ink-faint);
+}
+.sp-input:hover,
+.sp-select:hover {
+  border-color: var(--border-strong);
+}
+.sp-input:focus,
+.sp-select:focus {
+  outline: none;
+  border-color: var(--brand-600);
+}
+.sp-select {
+  cursor: pointer;
+}

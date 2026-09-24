@@ -1,0 +1,149 @@
+@import "./tokens.css";
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 23px;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+}
+
+a {
+  color: var(--link);
+}
+
+button {
+  font-family: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+  margin: 0;
+}
+
+.h1 {
+  font-size: 32px;
+  line-height: 38px;
+  font-weight: 700;
+}
+.h2 {
+  font-size: 26px;
+  line-height: 32px;
+  font-weight: 700;
+}
+.h3 {
+  font-size: 21px;
+  line-height: 27px;
+  font-weight: 600;
+}
+.h4 {
+  font-size: 17px;
+  line-height: 23px;
+  font-weight: 600;
+}
+.body-lg {
+  font-size: 17px;
+  line-height: 26px;
+}
+.body-sm {
+  font-size: 13px;
+  line-height: 19px;
+}
+.label {
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: 700;
+}
+.label-sm {
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.caption {
+  font-size: 12px;
+  line-height: 17px;
+  font-weight: 500;
+  color: var(--ink-muted);
+}
+.ink-muted {
+  color: var(--ink-muted);
+}
+.ink-faint {
+  color: var(--ink-faint);
+}
+
+.data-value {
+  font-family: var(--font-mono);
+  font-size: 14.5px;
+  line-height: 18px;
+  font-weight: 700;
+}
+.data-sub {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 13px;
+}
+.data-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.page {
+  max-width: 720px;
+  width: 100%;
+  margin: 0 auto;
+  padding: var(--space-10) var(--space-4) var(--space-16);
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.row-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.center-screen {
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6) var(--space-4);
+}

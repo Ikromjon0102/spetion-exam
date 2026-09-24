@@ -1,0 +1,34 @@
+.sp-header {
+  border-bottom: 1.5px solid var(--border);
+  background: var(--surface-raised);
+}
+.sp-header__inner {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: var(--space-4);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+.sp-header__brand {
+  display: flex;
+  align-items: center;
+}
+.sp-header__user {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.sp-header__link {
+  color: var(--ink);
+  text-decoration: none;
+}
+.sp-header__link:hover {
+  color: var(--brand-600);
+}
+@media (max-width: 520px) {
+  .sp-header__name {
+    display: none;
+  }
+}

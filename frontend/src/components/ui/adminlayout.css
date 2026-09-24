@@ -1,0 +1,127 @@
+.sp-shell {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.sp-shell__content {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+}
+
+.sp-sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  background: var(--surface-raised);
+  border-right: 1.5px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-4) var(--space-3);
+  gap: var(--space-6);
+  transition: width 0.15s ease;
+}
+
+.sp-sidebar--collapsed {
+  width: 64px;
+  align-items: center;
+}
+
+.sp-sidebar__brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2) 0;
+}
+
+.sp-sidebar__nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex: 1;
+}
+
+.sp-sidebar__link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  color: var(--ink-muted);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  border: none;
+  background: none;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+}
+
+.sp-sidebar--collapsed .sp-sidebar__link {
+  justify-content: center;
+  padding: var(--space-2);
+  width: auto;
+}
+
+.sp-sidebar__link:hover {
+  background: var(--surface-sunken);
+  color: var(--ink);
+}
+
+.sp-sidebar__link--active {
+  background: var(--brand-050);
+  color: var(--brand-600);
+}
+:root[data-theme="dark"] .sp-sidebar__link--active {
+  background: var(--surface-sunken);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .sp-sidebar__link--active {
+    background: var(--surface-sunken);
+  }
+}
+
+.sp-sidebar__foot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  border-top: 1.5px solid var(--border);
+  padding-top: var(--space-3);
+}
+
+.sp-sidebar__user {
+  padding: var(--space-2) var(--space-3);
+}
+
+.sp-sidebar__tools {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3) 0;
+  flex-wrap: wrap;
+}
+
+.sp-sidebar--collapsed .sp-sidebar__tools {
+  flex-direction: column;
+  padding: var(--space-2) 0 0;
+}
+
+.sp-sidebar__collapse {
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  border-radius: var(--radius-full);
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+.sp-sidebar__collapse:hover {
+  color: var(--ink);
+}
+

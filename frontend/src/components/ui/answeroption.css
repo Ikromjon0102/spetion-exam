@@ -41,6 +41,18 @@
   background: var(--brand-600);
   color: var(--on-brand);
 }
+/* --brand-050 is a pale, light-only pink (see tokens.css) — fine against
+   --ink in light mode, but --ink turns near-white in dark mode, making the
+   option text unreadable on it. Swap to a neutral dark surface instead,
+   same fix already applied to .sp-sidebar__link--active in adminlayout.css. */
+:root[data-theme="dark"] .sp-option--selected {
+  background: var(--surface-sunken);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .sp-option--selected {
+    background: var(--surface-sunken);
+  }
+}
 .sp-option--correct {
   border-color: var(--success);
   background: var(--success-subtle);

@@ -311,6 +311,41 @@ running backend + sqlite dev DB seeded from `backend/seed_data/`.
   parsed question still always needs manual review regardless of
   confidence.
 
+- **Two real bugs the user hit doing an actual full exam run (not just
+  smoke-testing), both fixed:**
+  - **Selected answer text unreadable in dark mode.** `.sp-option--selected`
+    (`answeroption.css`) used `background: var(--brand-050)` — a pale pink
+    token explicitly documented as "identical in both themes" — while its
+    text color comes from `--ink` on the base `.sp-option` rule, which
+    flips to near-white in dark mode. Pale pink + near-white text = barely
+    visible. The exact same bug pattern was already fixed once before on
+    `.sp-sidebar__link--active` in `adminlayout.css` (swap the background to
+    `--surface-sunken` under both dark-mode selectors) — this fix mirrors
+    that. **Any future use of `--brand-050`/`--brand-100` as a background
+    needs the same dark-mode override, or an explicit check that the text
+    color on top of it isn't `--ink`/`--ink-muted`** — those two tokens are
+    the only "identical in both themes" family in `tokens.css`, everything
+    else (`--success-subtle`, `--danger`, etc.) already has dark variants
+    for exactly this reason.
+  - **Result page listed questions in the wrong order, making answered
+    questions look unanswered.** `GET /student/exams/{id}/result`
+    (`routers/student.py`) iterated `exam.questions` (fixed `order_index`
+    order) while the exam-taking screen shows/shuffles them per-attempt via
+    `attempt.question_order` (`attempt_service.get_ordered_questions`). So
+    "Savol 1" on the result page could be a totally different question than
+    "Savol 1" the student actually saw first — a student who'd answered 4
+    of 20 questions could easily see "Javob berilmagan" on the first couple
+    result cards just because those particular questions happened to be
+    further down their shuffled experience, and (mis)read it as their
+    answers having vanished. Fixed by iterating
+    `attempt_service.get_ordered_questions(exam, attempt)` instead — same
+    order in both places now. Covered by
+    `test_result_question_order_matches_the_shuffled_order_the_student_saw`
+    in `test_student_result.py`. (Separately: a 0/20 score with several
+    "Javob berilmagan" cards is not always a bug — check `student_answers`
+    for the attempt before assuming corruption; it may just mean the
+    student genuinely submitted early with most questions unanswered.)
+
 - `backend/app/models/` — all SQLAlchemy models for the schema below. Every
   `DateTime(timezone=True)` column uses `UTCDateTime`
   (`app/core/timeutil.py`) instead — see "Timezone handling" below, this is

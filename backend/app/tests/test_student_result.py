@@ -46,3 +46,41 @@ def test_result_endpoint_includes_unanswered_question_with_zero_points(client, d
     assert by_id[q2.id]["selected_option_id"] is None
     assert by_id[q2.id]["is_correct"] is False
     assert by_id[q2.id]["points_awarded"] == 0.0
+
+
+def test_result_question_order_matches_the_shuffled_order_the_student_saw(client, db_session):
+    """A user-reported confusion: the result page used to list questions in
+    exam.questions' fixed order_index order, while the exam-taking screen
+    showed them shuffled per-attempt (attempt.question_order). So "Savol 1"
+    in the result could be a completely different question than "Savol 1"
+    the student actually saw first — making already-answered questions look
+    unanswered just because they'd moved further down the (correct, fixed)
+    list. The result must now walk attempt.question_order, same as the
+    exam-taking screen does via attempt_service.get_ordered_questions.
+    """
+    klass = make_class(db_session)
+    subject = make_subject(db_session)
+    start = datetime.now(timezone.utc)
+    exam = make_exam(db_session, klass, subject, duration_minutes=30, start_at=start, end_at=start + timedelta(hours=2))
+    questions = [add_mcq_question(db_session, exam, correct_index=0, order_index=i) for i in range(6)]
+    db_session.commit()
+    publish_exam(db_session, exam)
+
+    student = make_student(db_session, klass, username="student_shuffle_result_test")
+    db_session.commit()
+
+    attempt = attempt_service.start_attempt(db_session, exam, student)
+    expected_order = attempt.question_order["questions"]
+    assert expected_order != [q.id for q in questions], "test exam too small/unlucky to prove shuffling took effect"
+    attempt_service.submit_attempt(db_session, attempt.id)
+
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"username": "student_shuffle_result_test", "password": "secret123", "class_id": klass.id},
+    )
+    token = login.json()["access_token"]
+
+    resp = client.get(f"/api/v1/student/exams/{exam.id}/result", headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code == 200
+    returned_order = [q["question_id"] for q in resp.json()["questions"]]
+    assert returned_order == expected_order

@@ -169,12 +169,16 @@ def get_result(exam_id: int, db: Session = Depends(get_db), student: Student = D
     correct_by_question = {q.id: next((o.id for o in q.options if o.is_correct), None) for q in exam.questions}
     answers_by_question = {a.question_id: a for a in attempt.answers}
 
-    # Iterate exam.questions (in order_index order), not attempt.answers — a
-    # question the student never answered has no StudentAnswer row at all,
-    # and must still show up as "no answer, 0 pts" rather than silently
-    # vanishing from the result.
+    # Iterate in the same per-attempt shuffled order the student actually saw
+    # while taking the exam (attempt.question_order), not exam.questions'
+    # fixed order_index — otherwise "Savol 1" here can be a totally
+    # different question than "Savol 1" during the exam, which looks like
+    # answers went missing when really they're just further down the list.
+    # A question the student never answered has no StudentAnswer row at
+    # all, and must still show up as "no answer, 0 pts" rather than
+    # silently vanishing from the result.
     questions_out = []
-    for question in exam.questions:
+    for question in attempt_service.get_ordered_questions(exam, attempt):
         answer = answers_by_question.get(question.id)
         questions_out.append(
             ResultQuestionOut(

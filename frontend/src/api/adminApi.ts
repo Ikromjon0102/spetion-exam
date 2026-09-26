@@ -87,6 +87,7 @@ export interface QuestionOption {
   id: number;
   order_index: number;
   option_text: string;
+  option_image_key: string | null;
   is_correct: boolean;
 }
 
@@ -416,6 +417,49 @@ export async function addQuestion(
 export async function deleteQuestion(examId: number, questionId: number): Promise<void> {
   await apiClient.delete(`/admin/exams/${examId}/questions/${questionId}`);
 }
+
+export async function setQuestionPromptImage(examId: number, questionId: number, file: File): Promise<Question> {
+  const form = new FormData();
+  form.append("file", file);
+  const { data } = await apiClient.post<Question>(
+    `/admin/exams/${examId}/questions/${questionId}/prompt-image`,
+    form
+  );
+  return data;
+}
+
+export async function clearQuestionPromptImage(examId: number, questionId: number): Promise<Question> {
+  const { data } = await apiClient.delete<Question>(`/admin/exams/${examId}/questions/${questionId}/prompt-image`);
+  return data;
+}
+
+export async function setOptionImage(
+  examId: number,
+  questionId: number,
+  optionId: number,
+  file: File
+): Promise<QuestionOption> {
+  const form = new FormData();
+  form.append("file", file);
+  const { data } = await apiClient.post<QuestionOption>(
+    `/admin/exams/${examId}/questions/${questionId}/options/${optionId}/image`,
+    form
+  );
+  return data;
+}
+
+export async function clearOptionImage(
+  examId: number,
+  questionId: number,
+  optionId: number
+): Promise<QuestionOption> {
+  const { data } = await apiClient.delete<QuestionOption>(
+    `/admin/exams/${examId}/questions/${questionId}/options/${optionId}/image`
+  );
+  return data;
+}
+
+export { questionImageUrl } from "../utils/questionImage";
 
 export async function publishExam(examId: number): Promise<ExamSummary> {
   const { data } = await apiClient.post<ExamSummary>(`/admin/exams/${examId}/publish`);

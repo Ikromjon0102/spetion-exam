@@ -2,17 +2,23 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import {
   addQuestion,
+  clearOptionImage,
+  clearQuestionPromptImage,
   deleteQuestion,
   getExamDetail,
   publishExam,
+  questionImageUrl,
+  setOptionImage,
+  setQuestionPromptImage,
   updateExam,
   updateQuestion,
   updateQuestionOption,
   type ExamDetail,
 } from "../../api/adminApi";
-import { AdminLayout, Badge, Button, Card, CardFoot, CardHead, type BadgeStatus } from "../../components/ui";
+import { AdminLayout, AuthedImage, Badge, Button, Card, CardFoot, CardHead, type BadgeStatus } from "../../components/ui";
 import { useLanguage } from "../../i18n/LanguageContext";
 import { errorDetail } from "../../utils/errorDetail";
+import { extractPastedImage } from "../../utils/pasteImage";
 
 const STATUS_KEY: Record<string, { status: BadgeStatus; key: string }> = {
   draft: { status: "neutral", key: "status.draft" },
@@ -22,6 +28,26 @@ const STATUS_KEY: Record<string, { status: BadgeStatus; key: string }> = {
   closed: { status: "success", key: "status.closed" },
   archived: { status: "neutral", key: "status.archived" },
 };
+
+/** Local preview of a not-yet-uploaded pasted image (the "Yangi savol
+ * qo'shish" form's fields aren't real questions/options yet, so there's
+ * nothing to fetch from the server — just show the File directly). */
+function PendingImagePreview({ file, maxHeight }: { file: File; maxHeight?: number }) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    const objectUrl = URL.createObjectURL(file);
+    setUrl(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [file]);
+  if (!url) return null;
+  return (
+    <img
+      src={url}
+      alt=""
+      style={{ maxWidth: "100%", maxHeight, borderRadius: "var(--radius-md)", border: "1px solid var(--border)" }}
+    />
+  );
+}
 
 function toLocalInputValue(iso: string | null): string {
   if (!iso) return "";
@@ -37,7 +63,13 @@ export default function ExamReviewEditor() {
   const [exam, setExam] = useState<ExamDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [newQuestion, setNewQuestion] = useState({ prompt_text: "", options: ["", "", "", ""], correctIndex: 0 });
+  const [newQuestion, setNewQuestion] = useState({
+    prompt_text: "",
+    options: ["", "", "", ""],
+    correctIndex: 0,
+    promptImageFile: null as File | null,
+    optionImageFiles: [null, null, null, null] as (File | null)[],
+  });
 
   async function reload() {
     try {
@@ -121,6 +153,48 @@ export default function ExamReviewEditor() {
     }
   }
 
+  async function handlePromptPaste(questionId: number, e: React.ClipboardEvent<HTMLTextAreaElement>) {
+    const file = extractPastedImage(e);
+    if (!file) return;
+    e.preventDefault();
+    try {
+      await setQuestionPromptImage(id, questionId, file);
+      await reload();
+    } catch (err) {
+      setError(errorDetail(err, t("review.genericError")));
+    }
+  }
+
+  async function handleClearPromptImage(questionId: number) {
+    try {
+      await clearQuestionPromptImage(id, questionId);
+      await reload();
+    } catch (err) {
+      setError(errorDetail(err, t("review.genericError")));
+    }
+  }
+
+  async function handleOptionPaste(questionId: number, optionId: number, e: React.ClipboardEvent<HTMLInputElement>) {
+    const file = extractPastedImage(e);
+    if (!file) return;
+    e.preventDefault();
+    try {
+      await setOptionImage(id, questionId, optionId, file);
+      await reload();
+    } catch (err) {
+      setError(errorDetail(err, t("review.genericError")));
+    }
+  }
+
+  async function handleClearOptionImage(questionId: number, optionId: number) {
+    try {
+      await clearOptionImage(id, questionId, optionId);
+      await reload();
+    } catch (err) {
+      setError(errorDetail(err, t("review.genericError")));
+    }
+  }
+
   async function removeQuestion(questionId: number) {
     try {
       await deleteQuestion(id, questionId);
@@ -132,16 +206,57 @@ export default function ExamReviewEditor() {
 
   async function handleAddQuestion(e: React.FormEvent) {
     e.preventDefault();
+    if (!newQuestion.prompt_text.trim() && !newQuestion.promptImageFile) {
+      setError(t("review.needsTextOrImage"));
+      return;
+    }
+    for (let i = 0; i < newQuestion.options.length; i++) {
+      if (!newQuestion.options[i].trim() && !newQuestion.optionImageFiles[i]) {
+        setError(t("review.needsTextOrImage"));
+        return;
+      }
+    }
     try {
-      await addQuestion(id, {
+      const created = await addQuestion(id, {
         prompt_text: newQuestion.prompt_text,
         options: newQuestion.options.map((text, i) => ({ option_text: text, is_correct: i === newQuestion.correctIndex })),
       });
-      setNewQuestion({ prompt_text: "", options: ["", "", "", ""], correctIndex: 0 });
+      if (newQuestion.promptImageFile) {
+        await setQuestionPromptImage(id, created.id, newQuestion.promptImageFile);
+      }
+      for (let i = 0; i < newQuestion.optionImageFiles.length; i++) {
+        const file = newQuestion.optionImageFiles[i];
+        if (file) await setOptionImage(id, created.id, created.options[i].id, file);
+      }
+      setNewQuestion({
+        prompt_text: "",
+        options: ["", "", "", ""],
+        correctIndex: 0,
+        promptImageFile: null,
+        optionImageFiles: [null, null, null, null],
+      });
       await reload();
     } catch (e) {
       setError(errorDetail(e, t("review.genericError")));
     }
+  }
+
+  function handleNewPromptPaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
+    const file = extractPastedImage(e);
+    if (!file) return;
+    e.preventDefault();
+    setNewQuestion((prev) => ({ ...prev, promptImageFile: file }));
+  }
+
+  function handleNewOptionPaste(index: number, e: React.ClipboardEvent<HTMLInputElement>) {
+    const file = extractPastedImage(e);
+    if (!file) return;
+    e.preventDefault();
+    setNewQuestion((prev) => {
+      const optionImageFiles = [...prev.optionImageFiles];
+      optionImageFiles[index] = file;
+      return { ...prev, optionImageFiles };
+    });
   }
 
   async function handlePublish() {
@@ -240,14 +355,32 @@ export default function ExamReviewEditor() {
                   <Badge status="danger">{t("review.lowConfidenceBadge")}</Badge>
                 )}
               </CardHead>
-              <textarea
-                className="sp-input"
-                defaultValue={q.prompt_text}
-                disabled={locked}
-                rows={2}
-                style={{ marginBottom: "var(--space-4)", resize: "vertical" }}
-                onBlur={(e) => saveQuestion(q.id, { prompt_text: e.target.value })}
-              />
+              {q.prompt_image_key ? (
+                <div style={{ marginBottom: "var(--space-4)" }}>
+                  <AuthedImage src={questionImageUrl(q.prompt_image_key)} alt={t("review.question")} maxHeight={280} />
+                  {!locked && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      style={{ marginTop: "var(--space-2)" }}
+                      onClick={() => handleClearPromptImage(q.id)}
+                    >
+                      {t("review.revertToText")}
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <textarea
+                  className="sp-input"
+                  defaultValue={q.prompt_text}
+                  disabled={locked}
+                  rows={2}
+                  placeholder={t("review.pasteHint")}
+                  style={{ marginBottom: "var(--space-4)", resize: "vertical" }}
+                  onBlur={(e) => saveQuestion(q.id, { prompt_text: e.target.value })}
+                  onPaste={(e) => handlePromptPaste(q.id, e)}
+                />
+              )}
               <div className="stack" style={{ gap: "var(--space-2)" }}>
                 {q.options.map((opt) => (
                   <div key={opt.id} style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
@@ -259,12 +392,25 @@ export default function ExamReviewEditor() {
                       onChange={() => setCorrectOption(q.id, opt.id)}
                       style={{ accentColor: "var(--brand-600)", width: 18, height: 18, flexShrink: 0 }}
                     />
-                    <input
-                      className="sp-input"
-                      defaultValue={opt.option_text}
-                      disabled={locked}
-                      onBlur={(e) => saveOptionText(q.id, opt.id, e.target.value)}
-                    />
+                    {opt.option_image_key ? (
+                      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", flex: 1 }}>
+                        <AuthedImage src={questionImageUrl(opt.option_image_key)} maxHeight={60} />
+                        {!locked && (
+                          <Button variant="ghost" size="sm" onClick={() => handleClearOptionImage(q.id, opt.id)}>
+                            {t("review.revertToText")}
+                          </Button>
+                        )}
+                      </div>
+                    ) : (
+                      <input
+                        className="sp-input"
+                        defaultValue={opt.option_text}
+                        disabled={locked}
+                        placeholder={t("review.pasteHint")}
+                        onBlur={(e) => saveOptionText(q.id, opt.id, e.target.value)}
+                        onPaste={(e) => handleOptionPaste(q.id, opt.id, e)}
+                      />
+                    )}
                   </div>
                 ))}
               </div>
@@ -293,14 +439,28 @@ export default function ExamReviewEditor() {
               {t("review.addQuestion")}
             </h3>
             <form onSubmit={handleAddQuestion} className="stack">
-              <textarea
-                className="sp-input"
-                placeholder={t("review.promptPlaceholder")}
-                value={newQuestion.prompt_text}
-                onChange={(e) => setNewQuestion({ ...newQuestion, prompt_text: e.target.value })}
-                rows={2}
-                required
-              />
+              {newQuestion.promptImageFile ? (
+                <div>
+                  <PendingImagePreview file={newQuestion.promptImageFile} maxHeight={280} />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    style={{ marginTop: "var(--space-2)" }}
+                    onClick={() => setNewQuestion((prev) => ({ ...prev, promptImageFile: null }))}
+                  >
+                    {t("review.revertToText")}
+                  </Button>
+                </div>
+              ) : (
+                <textarea
+                  className="sp-input"
+                  placeholder={`${t("review.promptPlaceholder")} — ${t("review.pasteHint")}`}
+                  value={newQuestion.prompt_text}
+                  onChange={(e) => setNewQuestion({ ...newQuestion, prompt_text: e.target.value })}
+                  onPaste={handleNewPromptPaste}
+                  rows={2}
+                />
+              )}
               {newQuestion.options.map((text, i) => (
                 <div key={i} style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
                   <input
@@ -310,17 +470,36 @@ export default function ExamReviewEditor() {
                     onChange={() => setNewQuestion({ ...newQuestion, correctIndex: i })}
                     style={{ accentColor: "var(--brand-600)", width: 18, height: 18, flexShrink: 0 }}
                   />
-                  <input
-                    className="sp-input"
-                    placeholder={`${t("review.optionPlaceholder")} ${String.fromCharCode(65 + i)}`}
-                    value={text}
-                    onChange={(e) => {
-                      const options = [...newQuestion.options];
-                      options[i] = e.target.value;
-                      setNewQuestion({ ...newQuestion, options });
-                    }}
-                    required
-                  />
+                  {newQuestion.optionImageFiles[i] ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", flex: 1 }}>
+                      <PendingImagePreview file={newQuestion.optionImageFiles[i]!} maxHeight={60} />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() =>
+                          setNewQuestion((prev) => {
+                            const optionImageFiles = [...prev.optionImageFiles];
+                            optionImageFiles[i] = null;
+                            return { ...prev, optionImageFiles };
+                          })
+                        }
+                      >
+                        {t("review.revertToText")}
+                      </Button>
+                    </div>
+                  ) : (
+                    <input
+                      className="sp-input"
+                      placeholder={`${t("review.optionPlaceholder")} ${String.fromCharCode(65 + i)}`}
+                      value={text}
+                      onChange={(e) => {
+                        const options = [...newQuestion.options];
+                        options[i] = e.target.value;
+                        setNewQuestion({ ...newQuestion, options });
+                      }}
+                      onPaste={(e) => handleNewOptionPaste(i, e)}
+                    />
+                  )}
                 </div>
               ))}
               <Button type="submit" variant="secondary">

@@ -42,11 +42,7 @@ def ensure_bucket() -> None:
         client.create_bucket(Bucket=settings.s3_bucket)
 
 
-def upload_exam_file(file_bytes: bytes, original_filename: str) -> str:
-    """Uploads raw exam file bytes, returns the storage key."""
-    ext = original_filename.rsplit(".", 1)[-1].lower() if "." in original_filename else "bin"
-    key = f"exam-uploads/{uuid.uuid4().hex}.{ext}"
-
+def _put(key: str, file_bytes: bytes) -> str:
     if settings.storage_backend == "local":
         path = Path(settings.local_storage_dir) / key
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -55,6 +51,23 @@ def upload_exam_file(file_bytes: bytes, original_filename: str) -> str:
 
     get_s3_client().put_object(Bucket=settings.s3_bucket, Key=key, Body=file_bytes)
     return key
+
+
+def upload_exam_file(file_bytes: bytes, original_filename: str) -> str:
+    """Uploads raw exam file bytes, returns the storage key."""
+    ext = original_filename.rsplit(".", 1)[-1].lower() if "." in original_filename else "bin"
+    return _put(f"exam-uploads/{uuid.uuid4().hex}.{ext}", file_bytes)
+
+
+def upload_question_image(file_bytes: bytes, content_type: str | None) -> str:
+    """Uploads a teacher-pasted question/option image (see
+    Question.prompt_image_key / QuestionOption.option_image_key), returns
+    the storage key. Separate key prefix from upload_exam_file's raw PDF/
+    DOCX uploads — these are meant to be re-served for display, not parsed."""
+    ext = (content_type or "").split("/")[-1].lower() or "png"
+    if ext == "jpeg":
+        ext = "jpg"
+    return _put(f"question-images/{uuid.uuid4().hex}.{ext}", file_bytes)
 
 
 def download_exam_file(storage_key: str) -> bytes:

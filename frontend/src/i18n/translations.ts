@@ -334,6 +334,15 @@ export const translations: Record<string, Record<Lang, string>> = {
   "review.addQuestion": { uz: "Yangi savol qo'shish", ru: "Добавить вопрос" },
   "review.promptPlaceholder": { uz: "Savol matni", ru: "Текст вопроса" },
   "review.optionPlaceholder": { uz: "Variant", ru: "Вариант" },
+  "review.pasteHint": {
+    uz: "murakkab formula bo'lsa, skrinshotni shu yerga joylashtiring (Ctrl+V)",
+    ru: "если формула сложная, вставьте скриншот сюда (Ctrl+V)",
+  },
+  "review.revertToText": { uz: "Matnga qaytarish", ru: "Вернуть текст" },
+  "review.needsTextOrImage": {
+    uz: "Har bir maydonga matn kiriting yoki rasm joylashtiring (Ctrl+V)",
+    ru: "В каждое поле введите текст или вставьте изображение (Ctrl+V)",
+  },
   "review.addQuestionSubmit": { uz: "Savolni qo'shish", ru: "Добавить вопрос" },
   "review.publish": { uz: "Nashr qilish", ru: "Опубликовать" },
   "review.lockedHint": {

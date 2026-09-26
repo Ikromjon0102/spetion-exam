@@ -94,6 +94,13 @@ class Question(Base):
     order_index: Mapped[int] = mapped_column(Integer, default=0)
     question_type: Mapped[QuestionType] = mapped_column(Enum(QuestionType), default=QuestionType.mcq)
     prompt_text: Mapped[str] = mapped_column(Text)
+    # A teacher pastes a screenshot (e.g. a formula too complex to retype,
+    # or a scanned/OCR'd question that came through garbled) straight into
+    # the prompt field instead of typing it. Set means "show this image
+    # instead of prompt_text"; prompt_text may be empty in that case. This
+    # column existed in the schema from the start but was never actually
+    # read or rendered by any frontend component until the paste-image
+    # feature wired it up — see admin_exams.py's image endpoints.
     prompt_image_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
     points: Mapped[float] = mapped_column(Numeric, default=1)
     source: Mapped[QuestionSource] = mapped_column(Enum(QuestionSource), default=QuestionSource.manual)
@@ -123,5 +130,10 @@ class QuestionOption(Base):
     order_index: Mapped[int] = mapped_column(Integer, default=0)
     option_text: Mapped[str] = mapped_column(Text)
     is_correct: Mapped[bool] = mapped_column(Boolean, default=False)
+    # A teacher can paste a screenshot (e.g. a complex formula) straight
+    # into an option field instead of typing it — see prompt_image_key
+    # above for the same idea on the question itself. Set means "show this
+    # image instead of option_text"; option_text may be empty in that case.
+    option_image_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     question: Mapped["Question"] = relationship(back_populates="options")

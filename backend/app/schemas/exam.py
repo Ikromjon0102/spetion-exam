@@ -35,6 +35,7 @@ class QuestionOptionOut(BaseModel):
     id: int
     order_index: int
     option_text: str
+    option_image_key: str | None = None
     is_correct: bool
 
 

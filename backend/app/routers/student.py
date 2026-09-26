@@ -57,7 +57,9 @@ def _attempt_state_out(db: Session, exam: Exam, attempt: ExamAttempt) -> Attempt
                 prompt_image_key=q.prompt_image_key,
                 points=float(q.points),
                 options=[
-                    AttemptOptionOut(id=o.id, order_index=o.order_index, option_text=o.option_text)
+                    AttemptOptionOut(
+                        id=o.id, order_index=o.order_index, option_text=o.option_text, option_image_key=o.option_image_key
+                    )
                     for o in attempt_service.get_ordered_options(attempt, q)
                 ],
                 selected_option_id=answer.selected_option_id if answer else None,

@@ -18,4 +18,5 @@ export type { BarDatum } from "./BarChart";
 export { default as DonutChart } from "./DonutChart";
 export type { DonutSegment } from "./DonutChart";
 export { default as ConfirmButton } from "./ConfirmButton";
+export { default as AuthedImage } from "./AuthedImage";
 import "./field.css";

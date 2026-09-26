@@ -7,6 +7,7 @@ class AttemptOptionOut(BaseModel):
     id: int
     order_index: int
     option_text: str
+    option_image_key: str | None = None
 
 
 class AttemptQuestionOut(BaseModel):

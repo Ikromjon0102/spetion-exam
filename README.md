@@ -48,15 +48,16 @@ Testlarni ishga tushirish (in-memory SQLite'da, Postgres shart emas):
 pytest app/tests -q
 ```
 
-91 test o'tadi (auth, parol almashtirish, admin boshqaruv (jumladan
+96 test o'tadi (auth, parol almashtirish, admin boshqaruv (jumladan
 ro'yxatdan ko'p o'quvchi qo'shish, sinf bo'yicha parolni almashtirish, sinf
 rahbari huquqlari, fan o'qituvchisi uchun ko'rish huquqi va har bir bo'lim
 uchun tahrirlash/o'chirish), nashr etilgan imtihonni qayta tahrirlash,
 parser ishonch darajasining (`parse_confidence`) savolga saqlanishi,
-publish validatsiyasi, taymer/deadline, baholash, imtihon reytingi, sinf/
-parallel sinflar/maktab bo'yicha umumiy reyting, o'quvchining fanlar
-bo'yicha o'zlashtirish ko'rsatkichi, DOCX/PDF parserlar — PDF parser ham
-sinov faylida, ham OCR-fallback yo'lida, ham haqiqiy o'qituvchi fayllarida
+savol/variantga rasm (skrinshot) biriktirish, publish validatsiyasi,
+taymer/deadline, baholash, imtihon reytingi, sinf/parallel sinflar/maktab
+bo'yicha umumiy reyting, o'quvchining fanlar bo'yicha o'zlashtirish
+ko'rsatkichi, DOCX/PDF parserlar — PDF parser ham sinov faylida, ham
+OCR-fallback yo'lida, ham haqiqiy o'qituvchi fayllarida
 tekshirilgan).
 
 ### 3. Frontend
@@ -128,6 +129,15 @@ komil emas" deb belgilagan savollar qizil belgi bilan alohida
 ajratiladi ("Tekshirilmagan" belgisidan mustaqil — bittasi "hali
 ko'rilmagan", ikkinchisi "parser o'zi noaniq o'qigan" degani), shunda
 o'qituvchi qaysi savolga ko'proq e'tibor berish kerakligini bilib oladi.
+
+**Savol/variantga rasm biriktirish** — murakkab formula yoki belgilarni
+qayta yozib o'tirish shart emas: kompyuterning skrinshot vositasi bilan
+kesib olingan rasm avtomatik almashinuv buferiga (clipboard) tushadi,
+savol matni yoki variant maydoniga sichqoncha bilan bosib **Ctrl+V**
+bosish kifoya — matn o'rniga aynan o'sha rasm ko'rsatiladi (parser
+noto'g'ri o'qigan savolni tuzatishda ham, yangi savol qo'shishda ham
+ishlaydi). "Matnga qaytarish" tugmasi bilan istalgan payt yana matn
+kiritish rejimiga qaytish mumkin.
 
 **Tahrirlash va o'chirish** — endi har bir bo'limda (Sinflar, Fanlar,
 O'quvchilar, O'qituvchilar) "Tahrirlash" va "O'chirish" tugmalari bor.

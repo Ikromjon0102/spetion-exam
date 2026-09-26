@@ -633,24 +633,73 @@ Decisions already confirmed with the user, so don't re-litigate them:
      restarted before assuming the code is still broken** — this exact
      thing happened once already (the fix was right, the running process
      just hadn't picked up the new `TESSERACT_CMD` env var yet).
-   - **User's proposed alternative for hard-to-OCR content, floated but not
-     yet built: instead of transcribing a scanned math question to text at
-     all, save the page as an image (`Question.prompt_image_key` — a
-     column that's existed since the original schema design but has never
-     actually been read/rendered by any frontend component, confirmed via
-     `grep`) and let the teacher just type the 4 short option values while
-     looking at it, rather than retyping/correcting a garbled OCR
-     transcription.** Only scoped to work when a page holds exactly one
-     question (true for the real file tested here — 15 pages, 15
-     questions, 1:1) — true per-question cropping *within* a
-     multi-question page is a real image-segmentation problem, not
-     promised. Queued, not built — would need: (1) `pdf_parser.py` to save
-     the already-rendered `page.to_image()` bytes via the existing storage
-     abstraction instead of (or alongside) OCR-ing them, (2) actually
-     wiring `prompt_image_key` into `ExamReviewEditor.tsx`/
-     `ExamTakingPage.tsx`/`ExamResultPage.tsx` as an `<img>` for the first
-     time, (3) some way to serve/sign a URL for a stored file for the
-     frontend to load.
+   - **Paste-a-screenshot-instead-of-typing — built, this replaced the
+     "auto-crop from the PDF" idea above.** The user's own follow-up
+     proposal, and a better one: rather than the app trying to
+     auto-segment a scanned page into per-question images (a real,
+     unsolved image-segmentation problem for a multi-question page), let
+     the *teacher* pick exactly what to screenshot (any OS screenshot
+     tool puts the image straight on the clipboard) and paste it directly
+     into the question prompt or a specific option field — Ctrl+V, no
+     upload dialog. This works for both authoring a brand-new question and
+     fixing an existing garbled/low-confidence OCR'd one, using the exact
+     same mechanism.
+     - `QuestionOption` gained `option_image_key` (migration
+       `d8f3a1c5e9b2`), mirroring `Question.prompt_image_key` (which
+       existed since the original schema design but, per the note above,
+       had never actually been read or rendered by any frontend component
+       until now).
+     - Backend: `POST`/`DELETE .../questions/{id}/prompt-image` and
+       `.../options/{id}/image` in `admin_exams.py` (multipart upload,
+       8MB cap, `image/*` content-type only, gated by the same
+       `ensure_no_attempts`/`ensure_can_manage_exam` as every other
+       question edit) set/clear the key — they never touch `prompt_text`/
+       `option_text`, so reverting to text-mode doesn't lose whatever was
+       last typed there. `storage.upload_question_image` reuses the same
+       local-disk/S3 backend as raw exam-file uploads, just under a
+       `question-images/` key prefix (kept separate from `exam-uploads/`
+       since these are meant to be re-served for display, not parsed).
+     - A **new authenticated image-serving endpoint**
+       (`GET /admin/exams/uploads/image/{key:path}`, gated by plain
+       `get_current_user` — any logged-in role, not just admin/teacher,
+       since students need to see these images while taking an exam too)
+       had to be added — this app had never served any binary content back
+       to the browser before. **`<img src>` cannot send an Authorization
+       header**, so a bearer-token-gated image URL can't be used directly
+       as an `<img>` source; `AuthedImage.tsx` (new, in `components/ui/`)
+       works around this by fetching the URL as a blob through the same
+       `apiClient` every other request uses, then pointing `<img>` at an
+       `URL.createObjectURL(...)` — remember this pattern for any future
+       binary content that needs displaying, don't reach for a plain
+       `<img src={apiUrl}>` and wonder why it 401s.
+     - Frontend: `utils/pasteImage.ts`'s `extractPastedImage` pulls a
+       `File` out of a paste event's `clipboardData`, calling
+       `e.preventDefault()` only when an image was actually found (so
+       pasting plain text into these same fields still works normally).
+       Wired into `ExamReviewEditor.tsx` in two places: the existing
+       per-question edit fields (paste → immediate upload, since the
+       question/option already has a real id) and the "Yangi savol
+       qo'shish" creation form (paste → held as a local `File` + local
+       blob-URL preview via a small `PendingImagePreview` component, since
+       the question doesn't exist yet — actually uploaded only once
+       "Savolni qo'shish" creates the row and returns real ids for the
+       prompt and each option). `ExamTakingPage.tsx` renders
+       `prompt_image_key`/`option_image_key` via the same `AuthedImage`
+       when present, falling back to plain text otherwise.
+     - **Not done**: `ExamResultPage.tsx` (the post-submission
+       correct/selected-answer review) doesn't render these images yet —
+       out of scope for this pass, would need `ResultQuestionOut` to also
+       carry `selected_option_image_key`/`correct_option_image_key`. Ask
+       before adding.
+     - Verified end-to-end against a real low-confidence OCR'd question
+       from the scanned-PDF test above (garbled formula text → pasted
+       screenshot → real image displayed → "Matnga qaytarish" correctly
+       reverts to the original text, unchanged) via a synthetic
+       `ClipboardEvent` dispatch (real OS clipboard access isn't
+       reachable from this environment) — see
+       `app/tests/test_question_images.py` for the backend-side coverage
+       of the same flow (upload/clear, both prompt and option, non-image/
+       oversized rejection, locked-after-attempts, auth-required).
 4. **AI-graded short-answer questions** (re-introducing `short_answer`,
    which was previously deferred entirely). Confirmed design: the AI grade
    is **final immediately** (no teacher approval gate before it counts) but

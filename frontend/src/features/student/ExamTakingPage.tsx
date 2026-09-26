@@ -9,8 +9,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { getMyAttempt, startExam, submitAnswer, submitExam, type AttemptState } from "../../api/studentApi";
 import { useExamTimer } from "../../hooks/useExamTimer";
-import { AnswerOption, AppHeader, Button, Card } from "../../components/ui";
+import { AnswerOption, AppHeader, AuthedImage, Button, Card } from "../../components/ui";
 import { useLanguage } from "../../i18n/LanguageContext";
+import { questionImageUrl } from "../../utils/questionImage";
 import "../../components/ui/examtimer.css";
 
 const FAR_FUTURE = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
@@ -155,9 +156,15 @@ export default function ExamTakingPage() {
               <div className="data-eyebrow" style={{ marginBottom: "var(--space-2)" }}>
                 {t("taking.question")} {idx + 1} / {attempt.questions.length}
               </div>
-              <p className="body-lg" style={{ marginBottom: "var(--space-4)" }}>
-                {q.prompt_text}
-              </p>
+              {q.prompt_image_key ? (
+                <div style={{ marginBottom: "var(--space-4)" }}>
+                  <AuthedImage src={questionImageUrl(q.prompt_image_key)} maxHeight={320} />
+                </div>
+              ) : (
+                <p className="body-lg" style={{ marginBottom: "var(--space-4)" }}>
+                  {q.prompt_text}
+                </p>
+              )}
               <div className="stack" style={{ gap: "var(--space-2)" }}>
                 {q.options.map((opt, optIdx) => (
                   <AnswerOption
@@ -167,7 +174,11 @@ export default function ExamTakingPage() {
                     disabled={submitting}
                     onClick={() => selectOption(q.id, opt.id)}
                   >
-                    {opt.option_text}
+                    {opt.option_image_key ? (
+                      <AuthedImage src={questionImageUrl(opt.option_image_key)} maxHeight={80} />
+                    ) : (
+                      opt.option_text
+                    )}
                   </AnswerOption>
                 ))}
               </div>

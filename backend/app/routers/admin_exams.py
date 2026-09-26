@@ -3,11 +3,12 @@ monitoring. See docs/spec.md sections 2-4.
 """
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
-from app.core.storage import upload_exam_file
+from app.core.storage import download_exam_file, upload_exam_file, upload_question_image
 from app.db.base import get_db
-from app.dependencies import require_role
+from app.dependencies import get_current_user, require_role
 from app.models.attempt import ExamAttempt
 from app.models.exam import (
     Exam,
@@ -53,7 +54,13 @@ def _question_out(question: Question) -> QuestionOut:
         needs_review=question.needs_review,
         parse_confidence=question.parse_confidence,
         options=[
-            QuestionOptionOut(id=o.id, order_index=o.order_index, option_text=o.option_text, is_correct=o.is_correct)
+            QuestionOptionOut(
+                id=o.id,
+                order_index=o.order_index,
+                option_text=o.option_text,
+                option_image_key=o.option_image_key,
+                is_correct=o.is_correct,
+            )
             for o in question.options
         ],
     )
@@ -304,7 +311,151 @@ def update_question_option(
         setattr(option, field, value)
     db.commit()
     db.refresh(option)
-    return QuestionOptionOut(id=option.id, order_index=option.order_index, option_text=option.option_text, is_correct=option.is_correct)
+    return QuestionOptionOut(
+        id=option.id,
+        order_index=option.order_index,
+        option_text=option.option_text,
+        option_image_key=option.option_image_key,
+        is_correct=option.is_correct,
+    )
+
+
+_ALLOWED_IMAGE_TYPES = {"image/png", "image/jpeg", "image/webp", "image/gif"}
+_MAX_IMAGE_BYTES = 8 * 1024 * 1024  # a pasted screenshot, not a scan dump
+_IMAGE_MEDIA_TYPES = {"png": "image/png", "jpg": "image/jpeg", "webp": "image/webp", "gif": "image/gif"}
+
+
+async def _read_and_validate_image(file: UploadFile) -> bytes:
+    if file.content_type not in _ALLOWED_IMAGE_TYPES:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Faqat rasm fayllari qabul qilinadi")
+    file_bytes = await file.read()
+    if len(file_bytes) > _MAX_IMAGE_BYTES:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Rasm juda katta (8MB dan oshmasin)")
+    return file_bytes
+
+
+def _option_out(option: QuestionOption) -> QuestionOptionOut:
+    return QuestionOptionOut(
+        id=option.id,
+        order_index=option.order_index,
+        option_text=option.option_text,
+        option_image_key=option.option_image_key,
+        is_correct=option.is_correct,
+    )
+
+
+@router.post("/{exam_id}/questions/{question_id}/prompt-image", response_model=QuestionOut)
+async def set_question_prompt_image(
+    exam_id: int,
+    question_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role("teacher", "admin")),
+):
+    """A teacher pastes a screenshot (e.g. a formula too complex/slow to
+    retype) straight into the prompt field instead of typing it — see
+    Question.prompt_image_key. Doesn't touch prompt_text; the frontend
+    shows the image instead of the text when this key is set, but the text
+    (even if just left empty) is never overwritten here."""
+    exam = _get_exam_or_404(db, exam_id)
+    exam_service.ensure_can_manage_exam(db, user, exam)
+    exam_service.ensure_no_attempts(db, exam)
+
+    question = db.get(Question, question_id)
+    if question is None or question.exam_id != exam_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Savol topilmadi")
+
+    file_bytes = await _read_and_validate_image(file)
+    question.prompt_image_key = upload_question_image(file_bytes, file.content_type)
+    db.commit()
+    db.refresh(question)
+    return _question_out(question)
+
+
+@router.delete("/{exam_id}/questions/{question_id}/prompt-image", response_model=QuestionOut)
+def clear_question_prompt_image(
+    exam_id: int,
+    question_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role("teacher", "admin")),
+):
+    exam = _get_exam_or_404(db, exam_id)
+    exam_service.ensure_can_manage_exam(db, user, exam)
+    exam_service.ensure_no_attempts(db, exam)
+
+    question = db.get(Question, question_id)
+    if question is None or question.exam_id != exam_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Savol topilmadi")
+    question.prompt_image_key = None
+    db.commit()
+    db.refresh(question)
+    return _question_out(question)
+
+
+@router.post("/{exam_id}/questions/{question_id}/options/{option_id}/image", response_model=QuestionOptionOut)
+async def set_option_image(
+    exam_id: int,
+    question_id: int,
+    option_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role("teacher", "admin")),
+):
+    exam = _get_exam_or_404(db, exam_id)
+    exam_service.ensure_can_manage_exam(db, user, exam)
+    exam_service.ensure_no_attempts(db, exam)
+
+    option = db.get(QuestionOption, option_id)
+    if option is None or option.question_id != question_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Variant topilmadi")
+
+    file_bytes = await _read_and_validate_image(file)
+    option.option_image_key = upload_question_image(file_bytes, file.content_type)
+    db.commit()
+    db.refresh(option)
+    return _option_out(option)
+
+
+@router.delete("/{exam_id}/questions/{question_id}/options/{option_id}/image", response_model=QuestionOptionOut)
+def clear_option_image(
+    exam_id: int,
+    question_id: int,
+    option_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role("teacher", "admin")),
+):
+    exam = _get_exam_or_404(db, exam_id)
+    exam_service.ensure_can_manage_exam(db, user, exam)
+    exam_service.ensure_no_attempts(db, exam)
+
+    option = db.get(QuestionOption, option_id)
+    if option is None or option.question_id != question_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Variant topilmadi")
+    option.option_image_key = None
+    db.commit()
+    db.refresh(option)
+    return _option_out(option)
+
+
+@router.get("/uploads/image/{key:path}")
+def get_question_image(key: str, _user: User = Depends(get_current_user)):
+    """Serves a pasted question/option image back for display. Behind
+    plain auth (any logged-in role), not per-exam ownership-checked — same
+    looseness as the rest of this app's authenticated-but-not-finely-scoped
+    endpoints; the key itself is an unguessable UUID either way. <img> tags
+    can't send an Authorization header, so the frontend fetches this as a
+    blob and builds an object URL rather than using the URL directly as
+    `src` — see AuthedImage.tsx."""
+    if not key.startswith("question-images/"):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Topilmadi")
+    try:
+        file_bytes = download_exam_file(key)
+    except (FileNotFoundError, OSError):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Topilmadi")
+    except Exception:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Topilmadi")
+    ext = key.rsplit(".", 1)[-1].lower()
+    return Response(content=file_bytes, media_type=_IMAGE_MEDIA_TYPES.get(ext, "application/octet-stream"))
 
 
 @router.delete("/{exam_id}/questions/{question_id}", status_code=status.HTTP_204_NO_CONTENT)

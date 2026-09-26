@@ -15,6 +15,7 @@ export interface AttemptOption {
   id: number;
   order_index: number;
   option_text: string;
+  option_image_key: string | null;
 }
 
 export interface AttemptQuestion {

@@ -131,6 +131,33 @@ export interface ClassRanking {
   rankings: ClassRankingRow[];
 }
 
+export interface OverallRankingRow {
+  rank: number;
+  student_id: number;
+  full_name: string;
+  class_id: number;
+  class_name: string;
+  exams_taken_count: number;
+  average_percent: number;
+}
+
+export interface OverallRanking {
+  scope: "class" | "school";
+  class_id: number | null;
+  class_name: string | null;
+  rankings: OverallRankingRow[];
+}
+
+export async function getClassOverallRanking(classId: number): Promise<OverallRanking> {
+  const { data } = await apiClient.get<OverallRanking>(`/admin/classes/${classId}/overall-ranking`);
+  return data;
+}
+
+export async function getSchoolOverallRanking(): Promise<OverallRanking> {
+  const { data } = await apiClient.get<OverallRanking>("/admin/school/overall-ranking");
+  return data;
+}
+
 export async function listAdminClasses(): Promise<ClassOut[]> {
   const { data } = await apiClient.get<ClassOut[]>("/admin/classes");
   return data;

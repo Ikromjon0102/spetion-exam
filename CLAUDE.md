@@ -501,6 +501,69 @@ ranking recomputed → `student_subject_stats` updated incrementally.
   auto-approval logic without discussing it first, grading integrity
   depends on this.
 
+- **Overall ranking (class-wide and school-wide, not per-exam)** — requested
+  after the first demo to school leadership, alongside 5 other post-launch
+  asks (see "Post-launch roadmap" below for the full list and status).
+  `ExamRanking`/`RankingPage.tsx` already covered *per-exam* leaderboards;
+  this adds an aggregate view across every subject a student has taken.
+  `ranking_service.compute_overall_ranking(db, class_id)` sums each
+  student's `StudentSubjectStats` rows (`total_points_earned`/
+  `total_points_possible` across *all* subjects, not an average-of-averages
+  — a student who only took one easy exam shouldn't outrank someone with a
+  full, consistent record) and ranks with the same tie-handling as
+  `_recompute_class_ranks` (RANK() semantics: ties share a rank, next rank
+  skips accordingly). Students with `total_points_possible == 0` (no graded
+  exam yet) are excluded rather than ranked last at 0% — that would
+  misrepresent "no data yet" as "failed everything".
+  - Two endpoints in `results.py`: `GET /admin/classes/{id}/overall-ranking`
+    (view-scoped via the existing `_ensure_class_view_access` — admin or any
+    teacher connected to that class, same as class detail) and `GET
+    /admin/school/overall-ranking` (**admin-only** — a teacher seeing the
+    whole school's ranked roster would leak every other class/teacher's
+    data, which the homeroom/view-access model has deliberately never
+    allowed elsewhere; don't loosen this without re-discussing).
+  - Frontend: new `/ranking` page (`OverallRankingPage.tsx`), its own
+    top-level sidebar link (between Sinflar and Fanlar) visible to both
+    roles — admin gets a Sinf/Maktab toggle plus a class picker, a teacher
+    only ever sees their own connected classes in that picker (same
+    visibility-scoping pattern as `ClassesPage.tsx`, copied deliberately
+    rather than abstracted — only two call sites so far).
+  - Covered by `app/tests/test_overall_ranking.py`.
+
+## Post-launch roadmap (requested after first demo to school leadership)
+
+Six items came in together; building and testing locally one at a time
+before anything goes to the VPS, per the user's own stated preference.
+Decisions already confirmed with the user, so don't re-litigate them:
+
+1. **Student portfolio** — full line-graph view per subject (upgrade from
+   the existing `Sparkline` on `ProfilePage.tsx`), both for a student's own
+   view and for admin/teacher looking up any student. Not yet built.
+2. **Telegram sharing of class results** — explicitly **not** a bot
+   integration (rejected for now, revisit later): homeroom teacher clicks a
+   "download as image" button and shares it themselves via their own
+   Telegram. Needs a client-side HTML→image export (e.g. `html2canvas`) of
+   a "today's results for this class" view. Not yet built.
+3. **Real scanned-PDF/math-exam parsing** — the user tried a real
+   image-only scanned PDF of a complex math test and it parsed *zero*
+   questions. Blocked on the user attaching the actual file; investigate
+   once it arrives (likely needs `tesseract-ocr` installed locally too —
+   confirmed **not installed** on this dev machine, same known gap as prod).
+4. **AI-graded short-answer questions** (re-introducing `short_answer`,
+   which was previously deferred entirely). Confirmed design: the AI grade
+   is **final immediately** (no teacher approval gate before it counts) but
+   a teacher can go back and override it afterward. Critically, **the
+   teacher must supply a reference/model answer when authoring the
+   question** — the AI grades by comparing the student's answer against
+   that reference, it never judges from the prompt alone. Needs an
+   Anthropic API key in `backend/.env` (ask the user to add it themselves
+   rather than pasting it in chat) before this can be built/tested. Not yet
+   built.
+5. **Low/high performer visibility for admin/teacher** — e.g. "which
+   subjects is this student weak/strong in." Backend data already exists
+   (`StudentSubjectStats`), just needs frontend surfacing. Not yet built.
+6. **Overall ranking** — done, see the bullet above.
+
 ## Next steps (in order)
 
 1. User will stand up real Postgres on a DigitalOcean VPS (not local
@@ -513,16 +576,11 @@ ranking recomputed → `student_subject_stats` updated incrementally.
    marked correct/`confidence="low"`, and a blank/no-text-layer page to
    prove the OCR fallback never crashes) and was also manually driven
    through the full upload → S3(local) → Celery(eager) → materialize
-   pipeline. It has **not** been tried against a real scanned/photographed
-   exam PDF, or a complex math exam (formulas, fractions, roots — unclear
-   how these come through as text vs. images), from a teacher yet — the
-   user is actively looking for real sample files to test with; when they
-   arrive, run them through the same upload pipeline and check both parse
-   accuracy and whether `patterns.py`'s question-splitting regex still
-   holds up against math notation.
-3. Short-answer manual grading — deferred by the user for now, not
-   current work (see "Known gaps" above for the AI-grading idea floated
-   for later).
+   pipeline. It has now been tried against a real scanned/photographed math
+   exam PDF and **failed to parse any questions** — see "Post-launch
+   roadmap" item 3 above, waiting on the actual file from the user.
+3. Short-answer manual grading — see "Post-launch roadmap" item 4 above,
+   now actually wanted (with AI grading), waiting on an Anthropic API key.
 
 ## Production deployment (live)
 

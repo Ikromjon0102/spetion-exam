@@ -10,6 +10,7 @@ import AdminExamListPage from "../features/admin/ExamListPage";
 import ExamUploadPage from "../features/admin/ExamUploadPage";
 import ExamReviewEditor from "../features/admin/ExamReviewEditor";
 import RankingPage from "../features/admin/RankingPage";
+import OverallRankingPage from "../features/admin/OverallRankingPage";
 import ChangePasswordPage from "../features/shared/ChangePasswordPage";
 import ClassesPage from "../features/admin/manage/ClassesPage";
 import ClassDetailPage from "../features/admin/manage/ClassDetailPage";
@@ -108,6 +109,14 @@ export default function AppRouter() {
           }
         />
 
+        <Route
+          path="/ranking"
+          element={
+            <RequireRole roles={["teacher", "admin"]}>
+              <OverallRankingPage />
+            </RequireRole>
+          }
+        />
         <Route
           path="/classes"
           element={

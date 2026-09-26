@@ -44,3 +44,20 @@ class ClassSubjectPerformanceOut(BaseModel):
     class_id: int
     subject_id: int
     exams: list[ClassSubjectExamPointOut]
+
+
+class OverallRankingRowOut(BaseModel):
+    rank: int
+    student_id: int
+    full_name: str
+    class_id: int
+    class_name: str
+    exams_taken_count: int
+    average_percent: float
+
+
+class OverallRankingOut(BaseModel):
+    scope: str  # "class" | "school"
+    class_id: int | None = None
+    class_name: str | None = None
+    rankings: list[OverallRankingRowOut]

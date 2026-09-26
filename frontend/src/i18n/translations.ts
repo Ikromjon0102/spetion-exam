@@ -53,6 +53,7 @@ export const translations: Record<string, Record<Lang, string>> = {
 
   // --- Admin management panel ---
   "adminNav.classes": { uz: "Sinflar", ru: "Классы" },
+  "adminNav.ranking": { uz: "Reyting", ru: "Рейтинг" },
   "adminNav.subjects": { uz: "Fanlar", ru: "Предметы" },
   "adminNav.students": { uz: "O'quvchilar", ru: "Ученики" },
   "adminNav.teachers": { uz: "O'qituvchilar", ru: "Учителя" },
@@ -127,6 +128,19 @@ export const translations: Record<string, Record<Lang, string>> = {
   "ranking.started": { uz: "Boshlagan", ru: "Начали" },
   "ranking.finished": { uz: "Tugatgan", ru: "Завершили" },
   "ranking.expired": { uz: "Muddati o'tgan", ru: "Истёк срок" },
+  "overallRanking.title": { uz: "Reyting", ru: "Рейтинг" },
+  "overallRanking.subtitle": {
+    uz: "Barcha imtihonlar bo'yicha o'rtacha foizga ko'ra saralangan",
+    ru: "Отсортировано по среднему проценту по всем экзаменам",
+  },
+  "overallRanking.byClass": { uz: "Sinf bo'yicha", ru: "По классу" },
+  "overallRanking.bySchool": { uz: "Maktab bo'yicha", ru: "По школе" },
+  "overallRanking.examsCount": { uz: "imtihon", ru: "экзаменов" },
+  "overallRanking.empty": {
+    uz: "Hali baholangan imtihon yo'q",
+    ru: "Пока нет оценённых экзаменов",
+  },
+  "overallRanking.loadError": { uz: "Reytingni yuklab bo'lmadi", ru: "Не удалось загрузить рейтинг" },
   "sidebar.collapse": { uz: "Menyuni yig'ish", ru: "Свернуть меню" },
   "sidebar.expand": { uz: "Menyuni yozish", ru: "Развернуть меню" },
   "adminClasses.noneForTeacher": {

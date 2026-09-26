@@ -11,14 +11,18 @@ from app.dependencies import require_role
 from app.models.exam import Exam
 from app.models.ranking import ExamRanking, StudentSubjectStats
 from app.models.user import Student, Subject, User
+from app.routers.admin_management import _ensure_class_view_access
 from app.schemas.results import (
     ClassRankingOut,
     ClassRankingRowOut,
     ClassSubjectExamPointOut,
     ClassSubjectPerformanceOut,
+    OverallRankingOut,
+    OverallRankingRowOut,
     StudentPerformanceOut,
     StudentPerformanceSubjectOut,
 )
+from app.services import ranking_service
 
 router = APIRouter(prefix="/api/v1/admin", tags=["results"])
 
@@ -100,3 +104,23 @@ def get_class_subject_performance(
             )
         )
     return ClassSubjectPerformanceOut(class_id=class_id, subject_id=subject_id, exams=points)
+
+
+@router.get("/classes/{class_id}/overall-ranking", response_model=OverallRankingOut)
+def get_class_overall_ranking(
+    class_id: int, db: Session = Depends(get_db), user: User = Depends(require_role("teacher", "admin"))
+):
+    klass = _ensure_class_view_access(db, user, class_id)
+    rows = ranking_service.compute_overall_ranking(db, class_id=class_id)
+    return OverallRankingOut(
+        scope="class",
+        class_id=klass.id,
+        class_name=klass.display_name,
+        rankings=[OverallRankingRowOut(**row) for row in rows],
+    )
+
+
+@router.get("/school/overall-ranking", response_model=OverallRankingOut)
+def get_school_overall_ranking(db: Session = Depends(get_db), _user: User = Depends(require_role("admin"))):
+    rows = ranking_service.compute_overall_ranking(db, class_id=None)
+    return OverallRankingOut(scope="school", rankings=[OverallRankingRowOut(**row) for row in rows])

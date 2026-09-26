@@ -64,6 +64,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     { to: "/admin/dashboard", label: t("header.dashboard"), icon: "home" },
     { to: "/admin/exams", label: t("adminExamList.title"), icon: "list" },
     { to: "/classes", label: t("adminNav.classes"), icon: "grid" },
+    { to: "/ranking", label: t("adminNav.ranking"), icon: "bar-chart" },
     ...(isAdmin
       ? ([
           { to: "/admin/manage/subjects", label: t("adminNav.subjects"), icon: "book" },

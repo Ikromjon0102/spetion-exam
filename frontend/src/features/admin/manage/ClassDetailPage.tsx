@@ -402,9 +402,18 @@ export default function ClassDetailPage() {
                   title={s.full_name}
                   subtitle={`${s.username} · ${s.student_code}`}
                   trailing={
-                    <Badge status={s.is_active ? "success" : "neutral"}>
-                      {s.is_active ? t("adminStudents.active") : t("adminStudents.inactive")}
-                    </Badge>
+                    <>
+                      <Badge status={s.is_active ? "success" : "neutral"}>
+                        {s.is_active ? t("adminStudents.active") : t("adminStudents.inactive")}
+                      </Badge>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => navigate(`/students/${s.id}/performance`)}
+                      >
+                        {t("studentPerformance.viewButton")}
+                      </Button>
+                    </>
                   }
                 />
               ))}
@@ -602,6 +611,13 @@ export default function ClassDetailPage() {
                           <Badge status={s.is_active ? "success" : "neutral"}>
                             {s.is_active ? t("adminStudents.active") : t("adminStudents.inactive")}
                           </Badge>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => navigate(`/students/${s.id}/performance`)}
+                          >
+                            {t("studentPerformance.viewButton")}
+                          </Button>
                           <Button variant="ghost" size="sm" onClick={() => handleToggleActive(s)}>
                             {s.is_active ? t("adminStudents.deactivate") : t("adminStudents.activate")}
                           </Button>

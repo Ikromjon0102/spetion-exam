@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   bulkImportStudents,
   createAdminStudent,
@@ -16,6 +17,7 @@ import { useLanguage } from "../../../i18n/LanguageContext";
 import { errorDetail } from "../../../utils/errorDetail";
 
 export default function StudentsPage() {
+  const navigate = useNavigate();
   const [classes, setClasses] = useState<ClassOut[]>([]);
   const [students, setStudents] = useState<StudentRow[]>([]);
   const [filterClassId, setFilterClassId] = useState<number | "">("");
@@ -461,6 +463,13 @@ export default function StudentsPage() {
                       <Badge status={s.is_active ? "success" : "neutral"}>
                         {s.is_active ? t("adminStudents.active") : t("adminStudents.inactive")}
                       </Badge>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => navigate(`/students/${s.id}/performance`)}
+                      >
+                        {t("studentPerformance.viewButton")}
+                      </Button>
                       <Button variant="ghost" size="sm" onClick={() => handleToggleActive(s)}>
                         {s.is_active ? t("adminStudents.deactivate") : t("adminStudents.activate")}
                       </Button>

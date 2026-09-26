@@ -143,6 +143,19 @@ export const translations: Record<string, Record<Lang, string>> = {
     ru: "Пока нет оценённых экзаменов",
   },
   "overallRanking.loadError": { uz: "Reytingni yuklab bo'lmadi", ru: "Не удалось загрузить рейтинг" },
+  "studentPerformance.title": { uz: "O'quvchi natijalari", ru: "Результаты ученика" },
+  "studentPerformance.subtitle": {
+    uz: "Har bir fan bo'yicha o'rtacha natija va tendensiya",
+    ru: "Средний результат и тенденция по каждому предмету",
+  },
+  "studentPerformance.back": { uz: "O'quvchilar ro'yxatiga qaytish", ru: "Вернуться к списку учеников" },
+  "studentPerformance.examsCount": { uz: "ta imtihon", ru: "экз." },
+  "studentPerformance.empty": { uz: "Hali baholangan imtihon yo'q", ru: "Пока нет оценённых экзаменов" },
+  "studentPerformance.loadError": {
+    uz: "Natijalarni yuklab bo'lmadi",
+    ru: "Не удалось загрузить результаты",
+  },
+  "studentPerformance.viewButton": { uz: "Natijalar", ru: "Результаты" },
   "sidebar.collapse": { uz: "Menyuni yig'ish", ru: "Свернуть меню" },
   "sidebar.expand": { uz: "Menyuni yozish", ru: "Развернуть меню" },
   "adminClasses.noneForTeacher": {

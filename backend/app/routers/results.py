@@ -53,11 +53,17 @@ def get_exam_ranking(
 
 @router.get("/students/{student_id}/performance", response_model=StudentPerformanceOut)
 def get_student_performance(
-    student_id: int, db: Session = Depends(get_db), _user: User = Depends(require_role("teacher", "admin"))
+    student_id: int, db: Session = Depends(get_db), user: User = Depends(require_role("teacher", "admin"))
 ):
     student = db.get(Student, student_id)
     if student is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="O'quvchi topilmadi")
+    # Same view-access scoping as class detail/roster: admin unrestricted,
+    # a teacher only for a class they're connected to (homeroom or teach a
+    # subject there) — this endpoint existed since early on but was never
+    # actually reachable from the UI until the "past/yaxshi o'zlashtirish"
+    # feature wired it up, so it had never been scoped; don't leave it open.
+    _ensure_class_view_access(db, user, student.class_id)
 
     subjects = []
     for s in db.query(StudentSubjectStats).filter_by(student_id=student_id):

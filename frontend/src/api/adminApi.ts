@@ -436,3 +436,23 @@ export async function getClassRanking(examId: number): Promise<ClassRanking> {
   const { data } = await apiClient.get<ClassRanking>(`/admin/exams/${examId}/ranking`);
   return data;
 }
+
+export interface StudentPerformanceSubject {
+  subject_id: number;
+  subject_name: string;
+  exams_taken_count: number;
+  average_percent: number | null;
+  trend: "improving" | "declining" | "stable" | null;
+  last_exam_at: string | null;
+}
+
+export interface StudentPerformance {
+  student_id: number;
+  full_name: string;
+  subjects: StudentPerformanceSubject[];
+}
+
+export async function getStudentPerformance(studentId: number): Promise<StudentPerformance> {
+  const { data } = await apiClient.get<StudentPerformance>(`/admin/students/${studentId}/performance`);
+  return data;
+}

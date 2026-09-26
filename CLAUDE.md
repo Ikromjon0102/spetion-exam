@@ -628,7 +628,29 @@ Decisions already confirmed with the user, so don't re-litigate them:
      (`app/config.py`, applied in `PdfParser._ocr_page`) as an explicit
      override for exactly this situation — see `.env.example`. Never
      needed in prod (`apt install tesseract-ocr` puts it on `PATH`
-     correctly).
+     correctly). **If a real upload still shows 0 questions after a code
+     change here, check whether the dev backend process was actually
+     restarted before assuming the code is still broken** — this exact
+     thing happened once already (the fix was right, the running process
+     just hadn't picked up the new `TESSERACT_CMD` env var yet).
+   - **User's proposed alternative for hard-to-OCR content, floated but not
+     yet built: instead of transcribing a scanned math question to text at
+     all, save the page as an image (`Question.prompt_image_key` — a
+     column that's existed since the original schema design but has never
+     actually been read/rendered by any frontend component, confirmed via
+     `grep`) and let the teacher just type the 4 short option values while
+     looking at it, rather than retyping/correcting a garbled OCR
+     transcription.** Only scoped to work when a page holds exactly one
+     question (true for the real file tested here — 15 pages, 15
+     questions, 1:1) — true per-question cropping *within* a
+     multi-question page is a real image-segmentation problem, not
+     promised. Queued, not built — would need: (1) `pdf_parser.py` to save
+     the already-rendered `page.to_image()` bytes via the existing storage
+     abstraction instead of (or alongside) OCR-ing them, (2) actually
+     wiring `prompt_image_key` into `ExamReviewEditor.tsx`/
+     `ExamTakingPage.tsx`/`ExamResultPage.tsx` as an `<img>` for the first
+     time, (3) some way to serve/sign a URL for a stored file for the
+     frontend to load.
 4. **AI-graded short-answer questions** (re-introducing `short_answer`,
    which was previously deferred entirely). Confirmed design: the AI grade
    is **final immediately** (no teacher approval gate before it counts) but
@@ -639,9 +661,27 @@ Decisions already confirmed with the user, so don't re-litigate them:
    Anthropic API key in `backend/.env` (ask the user to add it themselves
    rather than pasting it in chat) before this can be built/tested. Not yet
    built.
-5. **Low/high performer visibility for admin/teacher** — e.g. "which
-   subjects is this student weak/strong in." Backend data already exists
-   (`StudentSubjectStats`), just needs frontend surfacing. Not yet built.
+5. **Low/high performer visibility for admin/teacher** — done. New
+   `StudentPerformancePage.tsx` (`/students/{id}/performance`) reads the
+   already-existing `GET /admin/students/{id}/performance` endpoint
+   (`StudentSubjectStats` per subject) — this endpoint had existed since
+   early on but was **never actually reachable from any UI and had never
+   been access-scoped** (any teacher could look up any student school-wide
+   by guessing an ID); fixed by adding the same `_ensure_class_view_access`
+   check used everywhere else before wiring it up for the first time, don't
+   assume an old, already-defined-but-unused endpoint is safe to expose
+   as-is without re-checking its authorization. Subjects are sorted
+   weakest-first and the percent number is color-coded (red <50%, amber
+   50-70%, green ≥70%) so a teacher immediately sees which subjects need
+   attention. Reachable via a "Natijalar" button on each student row in
+   both `StudentsPage.tsx` (whole-school) and `ClassDetailPage.tsx` (both
+   the manage and view-only roster branches) — **not** via making the whole
+   `ListRow` clickable, because `ListRow` renders as a single `<button>`
+   when given an `onClick`, and the manage-view row already has several
+   real `<button>`s (edit/deactivate/delete) in its `trailing` slot —
+   nesting a button inside a button is invalid HTML and breaks click
+   handling, so a separate explicit button was added instead. Covered by
+   `app/tests/test_student_performance.py`.
 6. **Overall ranking** — done (class, grade/parallel-classes, and school
    scopes), see the bullet above.
 

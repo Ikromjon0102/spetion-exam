@@ -344,6 +344,8 @@ export const translations: Record<string, Record<Lang, string>> = {
     ru: "В каждое поле введите текст или вставьте изображение (Ctrl+V)",
   },
   "review.addQuestionSubmit": { uz: "Savolni qo'shish", ru: "Добавить вопрос" },
+  "review.addOption": { uz: "Variant qo'shish", ru: "Добавить вариант" },
+  "review.removeOption": { uz: "O'chirish", ru: "Удалить" },
   "review.publish": { uz: "Nashr qilish", ru: "Опубликовать" },
   "review.lockedHint": {
     uz: "Bu imtihonni allaqachon boshlagan o'quvchilar bor, endi tahrirlab bo'lmaydi.",

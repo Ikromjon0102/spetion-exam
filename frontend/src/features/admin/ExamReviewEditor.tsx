@@ -259,6 +259,31 @@ export default function ExamReviewEditor() {
     });
   }
 
+  // Publishing only requires >=2 options now (was a fixed 4) — a
+  // True/False question, a 3-option one, a 5-option one, whatever the
+  // teacher's source material actually has.
+  const MAX_NEW_OPTIONS = 8;
+
+  function addOptionSlot() {
+    setNewQuestion((prev) =>
+      prev.options.length >= MAX_NEW_OPTIONS
+        ? prev
+        : { ...prev, options: [...prev.options, ""], optionImageFiles: [...prev.optionImageFiles, null] }
+    );
+  }
+
+  function removeOptionSlot(index: number) {
+    setNewQuestion((prev) => {
+      if (prev.options.length <= 2) return prev;
+      const options = prev.options.filter((_, i) => i !== index);
+      const optionImageFiles = prev.optionImageFiles.filter((_, i) => i !== index);
+      let correctIndex = prev.correctIndex;
+      if (correctIndex === index) correctIndex = 0;
+      else if (correctIndex > index) correctIndex -= 1;
+      return { ...prev, options, optionImageFiles, correctIndex };
+    });
+  }
+
   async function handlePublish() {
     setMessage(null);
     setError(null);
@@ -500,8 +525,18 @@ export default function ExamReviewEditor() {
                       onPaste={(e) => handleNewOptionPaste(i, e)}
                     />
                   )}
+                  {newQuestion.options.length > 2 && (
+                    <Button variant="ghost" size="sm" onClick={() => removeOptionSlot(i)}>
+                      {t("review.removeOption")}
+                    </Button>
+                  )}
                 </div>
               ))}
+              {newQuestion.options.length < MAX_NEW_OPTIONS && (
+                <Button type="button" variant="ghost" size="sm" onClick={addOptionSlot}>
+                  + {t("review.addOption")}
+                </Button>
+              )}
               <Button type="submit" variant="secondary">
                 {t("review.addQuestionSubmit")}
               </Button>

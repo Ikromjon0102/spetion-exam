@@ -48,7 +48,7 @@ Testlarni ishga tushirish (in-memory SQLite'da, Postgres shart emas):
 pytest app/tests -q
 ```
 
-96 test o'tadi (auth, parol almashtirish, admin boshqaruv (jumladan
+99 test o'tadi (auth, parol almashtirish, admin boshqaruv (jumladan
 ro'yxatdan ko'p o'quvchi qo'shish, sinf bo'yicha parolni almashtirish, sinf
 rahbari huquqlari, fan o'qituvchisi uchun ko'rish huquqi va har bir bo'lim
 uchun tahrirlash/o'chirish), nashr etilgan imtihonni qayta tahrirlash,
@@ -138,6 +138,12 @@ bosish kifoya — matn o'rniga aynan o'sha rasm ko'rsatiladi (parser
 noto'g'ri o'qigan savolni tuzatishda ham, yangi savol qo'shishda ham
 ishlaydi). "Matnga qaytarish" tugmasi bilan istalgan payt yana matn
 kiritish rejimiga qaytish mumkin.
+
+**Har qanday miqdordagi variant** — yangi savol qo'shishda endi aynan 4 ta
+variant shart emas: "Variant qo'shish" va har bir qator yonidagi
+"O'chirish" tugmalari bilan 2 tadan (masalan To'g'ri/Noto'g'ri) 8 tagacha
+variant qo'yish mumkin — faqat aynan bitta to'g'ri javob belgilanishi
+shart.
 
 **Tahrirlash va o'chirish** — endi har bir bo'limda (Sinflar, Fanlar,
 O'quvchilar, O'qituvchilar) "Tahrirlash" va "O'chirish" tugmalari bor.

@@ -80,7 +80,11 @@ class DocxParser(BaseParser):
                 is_correct = (correct_letter == letter) if correct_letter else opt["bold"]
                 options.append(ParsedOption(text=opt["text"], is_correct=is_correct))
 
-            confidence = "high" if (correct_letter and len(options) == 4) else "low"
+            # "high" no longer requires exactly 4 options — publish_exam
+            # only requires >=2 now (the fixed-4-option rule was relaxed on
+            # the user's explicit request), so a clean 3- or 5-option parse
+            # with a matched answer-key letter deserves "high" just as much.
+            confidence = "high" if (correct_letter and len(options) >= 2) else "low"
             questions.append(ParsedQuestion(prompt=prompt, options=options, confidence=confidence))
 
         return questions

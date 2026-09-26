@@ -65,7 +65,9 @@ class PdfParser(BaseParser):
                 ParsedOption(text=opt["text"], is_correct=(correct_letter == chr(ord("A") + i)))
                 for i, opt in enumerate(option_lines)
             ]
-            confidence = "high" if (correct_letter and len(option_lines) == 4 and not ocr_used) else "low"
+            # "high" no longer requires exactly 4 options — see docx_parser.py's
+            # matching comment, publish_exam only requires >=2 now.
+            confidence = "high" if (correct_letter and len(option_lines) >= 2 and not ocr_used) else "low"
             questions.append(ParsedQuestion(prompt=prompt, options=options, confidence=confidence))
 
         return questions

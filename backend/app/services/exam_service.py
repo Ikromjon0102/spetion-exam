@@ -3,7 +3,10 @@
 publish_exam(db, exam) enforces, server-side (never trust the frontend to
 have checked this):
   - every question.needs_review is False
-  - every mcq question has exactly 4 options with exactly 1 is_correct=True
+  - every mcq question has at least 2 options with exactly 1 is_correct=True
+    (originally a hard "exactly 4" — relaxed on the user's explicit request
+    so True/False, 3-option, 5-option etc. all work; a single correct
+    answer is still required either way, that part wasn't up for debate)
   - exam.start_at < exam.end_at
   - exam.duration_minutes <= (end_at - start_at) in minutes
   - at least 1 question exists
@@ -86,10 +89,10 @@ def publish_exam(db: Session, exam: Exam) -> Exam:
                 detail=f"Savol #{q.order_index + 1} hali tekshirilmagan (needs_review)",
             )
         if q.question_type == QuestionType.mcq:
-            if len(q.options) != 4:
+            if len(q.options) < 2:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Savol #{q.order_index + 1} aynan 4 ta variantga ega bo'lishi kerak",
+                    detail=f"Savol #{q.order_index + 1} kamida 2 ta variantga ega bo'lishi kerak",
                 )
             correct_count = sum(1 for o in q.options if o.is_correct)
             if correct_count != 1:

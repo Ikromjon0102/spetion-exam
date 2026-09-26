@@ -480,9 +480,11 @@ Rules that must not be violated by any future code:
 upload → Celery parses PDF/DOCX → draft questions created (`needs_review=
 true`) → teacher reviews/edits/approves each → teacher sets `duration_minutes`
 + `start_at`/`end_at` → publish (validates: all questions reviewed, each MCQ
-has exactly 4 options with exactly 1 correct) → students take it inside the
-window with a server-issued deadline → auto-grade on submit → per-class
-ranking recomputed → `student_subject_stats` updated incrementally.
+has **at least 2** options with exactly 1 correct — relaxed from a fixed
+"exactly 4" on the user's explicit request, see "Post-launch roadmap"
+below) → students take it inside the window with a server-issued
+deadline → auto-grade on submit → per-class ranking recomputed →
+`student_subject_stats` updated incrementally.
 
 ## Parsing approach
 
@@ -700,6 +702,30 @@ Decisions already confirmed with the user, so don't re-litigate them:
        `app/tests/test_question_images.py` for the backend-side coverage
        of the same flow (upload/clear, both prompt and option, non-image/
        oversized rejection, locked-after-attempts, auth-required).
+   - **Immediate follow-up from testing the above: the fixed "exactly 4
+     options" publish rule was hit and explicitly relaxed to "at least 2"
+     on the user's request** — manually-authored questions (including
+     paste-image ones) shouldn't be forced into a 4-option MCQ shape;
+     True/False (2 options), 3-option, 5-option etc. should all just work,
+     as long as exactly one option is still marked correct (that part
+     wasn't up for debate). Changed in exactly three places, all now
+     `>= 2` instead of `== 4`: `exam_service.publish_exam`'s validation,
+     and both parsers' (`docx_parser.py`/`pdf_parser.py`) `confidence`
+     heuristic (a clean parse with a matched answer-key letter deserves
+     "high" regardless of option count, not just when it happens to be 4).
+     `ExamReviewEditor.tsx`'s "Yangi savol qo'shish" form gained "+
+     Variant qo'shish"/"O'chirish" controls (min 2, capped at 8 just as a
+     sane UI limit, not a business rule) — removing an option correctly
+     re-targets `correctIndex` if it pointed at the removed slot or shifts
+     it down if a slot before it was removed. **Not done**: an
+     already-created (e.g. parsed) question's option *count* still can't
+     be changed after creation — only `PUT .../options/{id}` (edit
+     existing option text/correctness) exists, there's no add-option-to-
+     existing-question or delete-one-option-from-existing-question
+     endpoint. Ask before adding those; out of scope for this pass, which
+     only covered the "Yangi savol qo'shish" creation form. Covered by
+     three new tests in `test_exam_publish.py` (2-option, 5-option,
+     and a 1-option rejection to confirm the floor still holds).
 4. **AI-graded short-answer questions** (re-introducing `short_answer`,
    which was previously deferred entirely). Confirmed design: the AI grade
    is **final immediately** (no teacher approval gate before it counts) but

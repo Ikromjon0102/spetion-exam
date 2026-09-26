@@ -48,14 +48,15 @@ Testlarni ishga tushirish (in-memory SQLite'da, Postgres shart emas):
 pytest app/tests -q
 ```
 
-86 test o'tadi (auth, parol almashtirish, admin boshqaruv (jumladan
+89 test o'tadi (auth, parol almashtirish, admin boshqaruv (jumladan
 ro'yxatdan ko'p o'quvchi qo'shish, sinf bo'yicha parolni almashtirish, sinf
 rahbari huquqlari, fan o'qituvchisi uchun ko'rish huquqi va har bir bo'lim
 uchun tahrirlash/o'chirish), nashr etilgan imtihonni qayta tahrirlash,
 parser ishonch darajasining (`parse_confidence`) savolga saqlanishi,
 publish validatsiyasi, taymer/deadline, baholash, imtihon reytingi, sinf/
-maktab bo'yicha umumiy reyting, DOCX/PDF parserlar — PDF parser ham sinov
-faylida, ham OCR-fallback yo'lida tekshirilgan).
+parallel sinflar/maktab bo'yicha umumiy reyting, DOCX/PDF parserlar — PDF
+parser ham sinov faylida, ham OCR-fallback yo'lida, ham haqiqiy o'qituvchi
+fayllarida tekshirilgan).
 
 ### 3. Frontend
 
@@ -95,12 +96,15 @@ tugmalari ko'rinmaydi, faqat sinf rahbari yoki admin uchun). Admin har
 doim to'liq huquqqa ega. O'quvchi profilida (`/student/profile`) endi
 har bir fan bo'yicha natijalar chizig'i (sparkline) chizib beriladi.
 
-**Reyting** (`/ranking`, chap menyuda) — sinf ichida yoki butun maktab
-bo'yicha o'quvchilarni **barcha imtihonlar o'rtacha foizi** bo'yicha
-saralab ko'rsatadi (bitta imtihon uchun reyting sahifasi — `Sinf reytingi`
-— avvalgidek alohida qoladi). Sinf bo'yicha ko'rish o'sha sinfga aloqasi
-bor har qanday o'qituvchiga ochiq, maktab bo'yicha umumiy reyting esa
-faqat admin uchun.
+**Reyting** (`/ranking`, chap menyuda) — sinf ichida, **parallel sinflar
+bo'yicha** (masalan barcha 7-sinflar — 7B va 7R — birgalikda, "7-sinflarda
+kim eng zo'r" savoliga javob berish uchun) yoki butun maktab bo'yicha
+o'quvchilarni **barcha imtihonlar o'rtacha foizi** bo'yicha saralab
+ko'rsatadi (bitta imtihon uchun reyting sahifasi — `Sinf reytingi` —
+avvalgidek alohida qoladi). Sinf bo'yicha ko'rish o'sha sinfga aloqasi bor
+har qanday o'qituvchiga ochiq, parallel sinflar va maktab bo'yicha umumiy
+reyting esa faqat admin uchun (boshqa sinf/o'qituvchilarning ma'lumotini
+oshkor qilmaslik uchun).
 
 **Nashr etilgan imtihonni qayta tahrirlash** — imtihon "Rejalashtirilgan"
 yoki "Faol" holatga o'tgandan keyin ham, **hech qaysi o'quvchi hali

@@ -7,7 +7,7 @@ bold=False since PDF bold-run detection is unreliable (see pdf_parser.py).
 import re
 
 from app.parsers.patterns import (
-    ANSWER_KEY_ENTRY_PATTERN,
+    ANSWER_KEY_ENTRY_PATTERNS,
     ANSWER_KEY_HEADER_PATTERN,
     PARSER_OPTION_PATTERNS,
     PARSER_QUESTION_PATTERNS,
@@ -58,11 +58,20 @@ def split_off_answer_key(lines: list[dict]) -> tuple[list[dict], list[dict]]:
 
 def extract_answer_key(key_lines: list[dict]) -> dict[int, str]:
     """key_lines: the slice returned as the second element of
-    split_off_answer_key. Returns {question_number: 'A'|'B'|'C'|'D'}."""
+    split_off_answer_key. Returns {question_number: 'A'|'B'|'C'|'D'}.
+    Tries each pattern in ANSWER_KEY_ENTRY_PATTERNS per line, in order,
+    stopping at the first one that matches anything on that line — a
+    plain-text-extracted answer table (no dash/dot separator) is more
+    permissive, so a stricter pattern gets first refusal per line rather
+    than always falling through to the loosest one."""
     key: dict[int, str] = {}
     for line in key_lines:
-        for num, letter in re.findall(ANSWER_KEY_ENTRY_PATTERN, line["text"]):
-            key[int(num)] = letter.upper()
+        for pattern in ANSWER_KEY_ENTRY_PATTERNS:
+            matches = re.findall(pattern, line["text"])
+            if matches:
+                for num, letter in matches:
+                    key[int(num)] = letter.upper()
+                break
     return key
 
 

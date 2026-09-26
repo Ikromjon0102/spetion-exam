@@ -134,6 +134,8 @@ export const translations: Record<string, Record<Lang, string>> = {
     ru: "Отсортировано по среднему проценту по всем экзаменам",
   },
   "overallRanking.byClass": { uz: "Sinf bo'yicha", ru: "По классу" },
+  "overallRanking.byGrade": { uz: "Parallel sinflar bo'yicha", ru: "По параллели" },
+  "overallRanking.gradeSuffix": { uz: "sinflar", ru: "классы" },
   "overallRanking.bySchool": { uz: "Maktab bo'yicha", ru: "По школе" },
   "overallRanking.examsCount": { uz: "imtihon", ru: "экзаменов" },
   "overallRanking.empty": {

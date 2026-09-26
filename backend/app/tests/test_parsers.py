@@ -188,3 +188,55 @@ def test_pdf_parser_blank_page_never_crashes():
 
     questions = PdfParser().parse(buf.getvalue())
     assert questions == []
+
+
+def test_pdf_parser_strips_private_use_area_glyphs_from_embedded_fonts():
+    """A real teacher's PDF (Word→PDF export with an embedded custom font)
+    parsed to *zero* questions. Root cause: the font mapped an invisible
+    spacing glyph into the Unicode Private Use Area, so pdfplumber's text
+    extraction came back as e.g. "● A 198" instead of "● A 198" — the
+    stray PUA codepoint sat directly between the option letter and the
+    value with no whitespace, so PARSER_OPTION_PATTERNS' bullet pattern
+    never matched. reportlab's base-14 fonts can't reproduce this exact
+    byte-for-byte round-trip (they don't have real glyphs for "●"/PUA
+    codepoints either, see the git history for the failed attempt), so this
+    tests pdf_parser's PUA-stripping regex directly rather than faking a
+    round-trip through actual PDF rendering.
+    """
+    from app.parsers.pdf_parser import _PUA_RE
+
+    assert _PUA_RE.sub("", "● A 198") == "● A 198"
+    assert _PUA_RE.sub("", "Hisoblang: 150 : 15 - 144 : 12 - 9") == "Hisoblang: 150 : 15 - 144 : 12 - 9"
+
+
+def test_bullet_marker_option_pattern_and_space_separated_answer_table():
+    """The same real PDF's answer key was a multi-column table ("Savol Javob
+    Savol Javob ..." header, then rows like "1 B 6 B 11 A 16 B") rather than
+    the inline "Javoblar: 1-A, 2-B" format — no dash/dot separator at all.
+    Both new patterns (bullet-marker options, space-separated answer
+    entries) covered directly against text_split.py's real functions.
+    """
+    from app.parsers.text_split import extract_answer_key, is_option_start, split_block, strip_option_marker
+
+    assert is_option_start("● A 198")
+    assert strip_option_marker("● A 198") == "198"
+
+    block = [
+        {"text": "1. Amallar tartibi:", "bold": False},
+        {"text": "Hisoblang: 35 - 4 * 6 + 12", "bold": False},
+        {"text": "● A 198", "bold": False},
+        {"text": "● B 23", "bold": False},
+        {"text": "● C 15", "bold": False},
+        {"text": "● D 27", "bold": False},
+    ]
+    prompt, options = split_block(block)
+    assert "Amallar tartibi" in prompt
+    assert [o["text"] for o in options] == ["198", "23", "15", "27"]
+
+    key_lines = [
+        {"text": "Savol Javob Savol Javob Savol Javob Savol Javob", "bold": False},
+        {"text": "1 B 6 B 11 A 16 B", "bold": False},
+        {"text": "2 A 7 A 12 A 17 B", "bold": False},
+    ]
+    key = extract_answer_key(key_lines)
+    assert key == {1: "B", 6: "B", 11: "A", 16: "B", 2: "A", 7: "A", 12: "A", 17: "B"}

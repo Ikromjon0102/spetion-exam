@@ -27,5 +27,12 @@ class Settings(BaseSettings):
     # default; the decided architecture never parses inline in the request.
     celery_eager: bool = False
 
+    # Explicit path to the tesseract binary, only needed when it isn't on
+    # PATH (e.g. a fresh Windows install via winget doesn't propagate PATH
+    # to already-running parent processes/terminals until they're
+    # restarted) — leave unset once `tesseract --version` works from a
+    # plain shell. Never needed in prod (installed via apt, always on PATH).
+    tesseract_cmd: str | None = None
+
 
 settings = Settings()

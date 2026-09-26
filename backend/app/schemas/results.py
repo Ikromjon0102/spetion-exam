@@ -57,7 +57,8 @@ class OverallRankingRowOut(BaseModel):
 
 
 class OverallRankingOut(BaseModel):
-    scope: str  # "class" | "school"
+    scope: str  # "class" | "grade" | "school"
     class_id: int | None = None
     class_name: str | None = None
+    grade_level: int | None = None
     rankings: list[OverallRankingRowOut]

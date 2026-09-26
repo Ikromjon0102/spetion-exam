@@ -88,14 +88,17 @@ def _update_subject_stats(db, student_id: int, subject_id: int) -> None:
     stats.trend = _compute_trend(attempts)
 
 
-def compute_overall_ranking(db, class_id: int | None = None) -> list[dict]:
+def compute_overall_ranking(db, class_id: int | None = None, grade_level: int | None = None) -> list[dict]:
     """Ranks students by their overall average percent across *all* subjects
     (sum of every StudentSubjectStats row's earned/possible points, not an
     average-of-averages — a student who aced one exam and skipped the rest
-    shouldn't outrank one with a consistent record). class_id=None ranks the
-    whole school; otherwise only that class. Students with no graded exam
-    yet (total_points_possible == 0) are excluded rather than ranked last at
-    0% — that would misrepresent "no data" as "failed everything"."""
+    shouldn't outrank one with a consistent record). class_id/grade_level
+    both None ranks the whole school; class_id ranks one class; grade_level
+    ranks every parallel class sharing that grade together (e.g. 7B + 7R
+    combined, to see who's best across all of "7th grade") — the two are
+    mutually exclusive, pass at most one. Students with no graded exam yet
+    (total_points_possible == 0) are excluded rather than ranked last at 0%
+    — that would misrepresent "no data" as "failed everything"."""
     query = (
         db.query(
             Student.id.label("student_id"),
@@ -111,6 +114,8 @@ def compute_overall_ranking(db, class_id: int | None = None) -> list[dict]:
     )
     if class_id is not None:
         query = query.filter(Student.class_id == class_id)
+    elif grade_level is not None:
+        query = query.filter(Class.grade_level == grade_level)
 
     rows = [r for r in query.all() if r.possible]
     student_ids = [r.student_id for r in rows]

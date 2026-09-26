@@ -142,14 +142,20 @@ export interface OverallRankingRow {
 }
 
 export interface OverallRanking {
-  scope: "class" | "school";
+  scope: "class" | "grade" | "school";
   class_id: number | null;
   class_name: string | null;
+  grade_level: number | null;
   rankings: OverallRankingRow[];
 }
 
 export async function getClassOverallRanking(classId: number): Promise<OverallRanking> {
   const { data } = await apiClient.get<OverallRanking>(`/admin/classes/${classId}/overall-ranking`);
+  return data;
+}
+
+export async function getGradeOverallRanking(gradeLevel: number): Promise<OverallRanking> {
+  const { data } = await apiClient.get<OverallRanking>(`/admin/grades/${gradeLevel}/overall-ranking`);
   return data;
 }
 

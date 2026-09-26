@@ -528,6 +528,20 @@ ranking recomputed → `student_subject_stats` updated incrementally.
     only ever sees their own connected classes in that picker (same
     visibility-scoping pattern as `ClassesPage.tsx`, copied deliberately
     rather than abstracted — only two call sites so far).
+  - **Grade-level ranking added as a follow-up** (`GET
+    /admin/grades/{grade_level}/overall-ranking`, admin-only) — the user's
+    real school has multiple parallel classes per grade (e.g. 7B and 7R)
+    and wanted "who's best across all of 7th grade", not per individual
+    class. `compute_overall_ranking(db, class_id=None, grade_level=None)`
+    now takes either `class_id` *or* `grade_level` (mutually exclusive,
+    both `None` means school-wide) and filters/groups by `Class.grade_level`
+    instead of `Student.class_id` when given. Frontend: `OverallRankingPage`
+    gained a third "Parallel sinflar bo'yicha" toggle with a grade-level
+    picker (options derived from distinct `grade_level`s among all classes);
+    each row's subtitle shows which specific class the student is in
+    (matters here since a grade combines multiple classes, unlike the
+    single-class scope). Admin-only for the same leak-other-classes'-data
+    reason as school-wide.
   - Covered by `app/tests/test_overall_ranking.py`.
 
 ## Post-launch roadmap (requested after first demo to school leadership)
@@ -544,11 +558,77 @@ Decisions already confirmed with the user, so don't re-litigate them:
    "download as image" button and shares it themselves via their own
    Telegram. Needs a client-side HTML→image export (e.g. `html2canvas`) of
    a "today's results for this class" view. Not yet built.
-3. **Real scanned-PDF/math-exam parsing** — the user tried a real
-   image-only scanned PDF of a complex math test and it parsed *zero*
-   questions. Blocked on the user attaching the actual file; investigate
-   once it arrives (likely needs `tesseract-ocr` installed locally too —
-   confirmed **not installed** on this dev machine, same known gap as prod).
+3. **Real scanned-PDF/math-exam parsing — investigated, two real bugs
+   fixed, one genuine remaining limitation identified and accepted.** The
+   user sent two real files: a plain-text math test (options like "● A
+   198", no punctuation after the letter — a bullet-marker format
+   `PARSER_OPTION_PATTERNS` didn't cover at all) and a fully scanned/
+   photographed one (15 pages, zero text layer, one image per page).
+   - **Bug 1 — bullet-marker options never matched.** Fixed by adding
+     `r"^\s*[●•]\s*[A-D]\s+"` to `PARSER_OPTION_PATTERNS` in
+     `patterns.py` — kept as its own pattern rather than loosening the
+     existing `[A-D][\.\)]` ones, so a bare "A " with no marker (too easy
+     to false-positive on ordinary prose) still isn't treated as an option.
+   - **Bug 2 (the actual root cause, found while debugging bug 1) — the
+     PDF's embedded font mapped an invisible spacing glyph into the Unicode
+     Private Use Area**, so pdfplumber's extracted text came back as e.g.
+     `"● A 198"` (a PUA codepoint glued directly onto the option
+     letter, no whitespace) instead of `"● A 198"` — that's a font-encoding
+     artifact from whatever tool generated the PDF (a Word→PDF export with
+     a non-standard font), not something any option-marker regex could ever
+     match no matter how it's written. Fixed at the source in
+     `pdf_parser.py`: every extracted line is now run through `_PUA_RE`
+     (`[-]` stripped) before anything else touches it. **If a
+     future real-world PDF still parses to fewer questions than expected,
+     dump the raw `page.extract_text()` output and look for stray
+     characters like this before assuming the regex patterns are wrong** —
+     this exact bug looked identical to a "our patterns don't cover this
+     format" problem until the raw extracted bytes were actually inspected.
+   - **Bug 3 (same file) — the trailing answer-key table had no
+     dash/dot separator at all**, just a plain-text-extracted multi-column
+     table: a "Savol Javob Savol Javob ..." header row, then data rows like
+     `"1 B 6 B 11 A 16 B"` (four question/answer pairs per line, space-
+     separated, this used to be a real table in the source document before
+     text extraction flattened it). `ANSWER_KEY_ENTRY_PATTERN` (singular)
+     became `ANSWER_KEY_ENTRY_PATTERNS` (a list, tried in order per line in
+     `extract_answer_key`) with a new looser `r"(\d+)\s+([A-D])\b"` pattern
+     added after the original dash/dot one — tried second, so the stricter
+     pattern still gets first refusal per line.
+   - All three together: the plain-text file now parses **20/20 questions
+     correctly**, options and correct answers all matching the source
+     file exactly. Regression-tested in `test_parsers.py` — note the tests
+     exercise `text_split.py`'s functions directly with hand-built line
+     dicts rather than round-tripping through a real generated PDF, because
+     reportlab's base-14 fonts can't reproduce the bullet character or PUA
+     codepoints faithfully (tried; they come back as garbage like "l"/"n"
+     instead of round-tripping) — a synthetic fixture literally cannot
+     reproduce this bug, so don't try to "fix" these tests into using
+     `_sample_pdf_bytes()` later, that's not an oversight.
+   - **The scanned/photographed file — OCR technically works (no crash,
+     found all 15 questions, one per page, matching page count) but
+     accuracy on the actual math notation (square roots, exponents,
+     fractions, special symbols) is poor** with plain Tesseract — e.g. `"√2+2
+     √128-−32+2"`-style garbage, and a per-page watermark/footer
+     ("@MatematikaMilliy Sertifikat...") sometimes bleeding into the last
+     option's text. This is a **real, accepted limitation, not a bug to
+     chase**: generic OCR isn't a math-notation engine, and `pdf_parser.py`'s
+     own docstring already says "we don't invest in OCR accuracy for v1,
+     just don't crash" — every question still correctly comes through with
+     `confidence="low"` and `needs_review=True`, so a teacher reviewing a
+     scanned math exam knows to expect heavy manual correction, which is
+     the intended safety net working as designed. Meaningfully improving
+     this would mean a dedicated math-OCR tool (e.g. Mathpix's API) — a
+     bigger, separate feature decision, not a parser tweak; don't attempt
+     it without discussing with the user first.
+   - `tesseract-ocr` is now installed locally (via `winget install
+     UB-Mannheim.TesseractOCR`) to make the above test possible at all —
+     but winget-installed PATH changes don't reach already-running parent
+     processes (a fresh `tesseract --version` in a brand-new PowerShell
+     still failed), so a new `TESSERACT_CMD` setting was added
+     (`app/config.py`, applied in `PdfParser._ocr_page`) as an explicit
+     override for exactly this situation — see `.env.example`. Never
+     needed in prod (`apt install tesseract-ocr` puts it on `PATH`
+     correctly).
 4. **AI-graded short-answer questions** (re-introducing `short_answer`,
    which was previously deferred entirely). Confirmed design: the AI grade
    is **final immediately** (no teacher approval gate before it counts) but
@@ -562,7 +642,8 @@ Decisions already confirmed with the user, so don't re-litigate them:
 5. **Low/high performer visibility for admin/teacher** — e.g. "which
    subjects is this student weak/strong in." Backend data already exists
    (`StudentSubjectStats`), just needs frontend surfacing. Not yet built.
-6. **Overall ranking** — done, see the bullet above.
+6. **Overall ranking** — done (class, grade/parallel-classes, and school
+   scopes), see the bullet above.
 
 ## Next steps (in order)
 
@@ -571,14 +652,15 @@ Decisions already confirmed with the user, so don't re-litigate them:
    against it themselves; just be ready to help with `DATABASE_URL`/
    connection-string questions when they do.
 2. PDF parsing is now covered by real tests (`app/tests/test_parsers.py`,
-   `reportlab`-generated synthetic PDFs — a normal text PDF with a trailing
-   "Javoblar:" key, one with no key at all so options parse but nothing is
-   marked correct/`confidence="low"`, and a blank/no-text-layer page to
-   prove the OCR fallback never crashes) and was also manually driven
+   `reportlab`-generated synthetic PDFs plus direct `text_split.py` unit
+   tests for the two real-world bugs below) and was also manually driven
    through the full upload → S3(local) → Celery(eager) → materialize
-   pipeline. It has now been tried against a real scanned/photographed math
-   exam PDF and **failed to parse any questions** — see "Post-launch
-   roadmap" item 3 above, waiting on the actual file from the user.
+   pipeline. It has now been tried against two real teacher files — see
+   "Post-launch roadmap" item 3 above for the full story: a plain-text
+   math test now parses 20/20 correctly (two real parser bugs found and
+   fixed), a fully scanned/photographed math test OCRs without crashing
+   but with poor accuracy on math notation specifically (an accepted v1
+   limitation, not a bug).
 3. Short-answer manual grading — see "Post-launch roadmap" item 4 above,
    now actually wanted (with AI grading), waiting on an Anthropic API key.
 

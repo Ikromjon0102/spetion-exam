@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   getClassOverallRanking,
+  getGradeOverallRanking,
   getSchoolOverallRanking,
   listAdminClasses,
   listMyAssignments,
@@ -11,7 +12,7 @@ import { useAuth } from "../../auth/AuthContext";
 import { AdminLayout, Badge, Button, ListRow } from "../../components/ui";
 import { useLanguage } from "../../i18n/LanguageContext";
 
-type Scope = "class" | "school";
+type Scope = "class" | "grade" | "school";
 
 export default function OverallRankingPage() {
   const { user } = useAuth();
@@ -21,6 +22,7 @@ export default function OverallRankingPage() {
   const [classes, setClasses] = useState<ClassOut[]>([]);
   const [visibleIds, setVisibleIds] = useState<Set<number> | null>(null);
   const [selectedClassId, setSelectedClassId] = useState<number | null>(null);
+  const [selectedGrade, setSelectedGrade] = useState<number | null>(null);
   const [scope, setScope] = useState<Scope>("class");
   const [ranking, setRanking] = useState<OverallRanking | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -40,12 +42,20 @@ export default function OverallRankingPage() {
   }, [isAdmin]);
 
   const visibleClasses = isAdmin ? classes : classes.filter((c) => visibleIds?.has(c.id));
+  const grades = Array.from(new Set(classes.map((c) => c.grade_level))).sort((a, b) => a - b);
 
   useEffect(() => {
     if (selectedClassId === null && visibleClasses.length > 0) {
       setSelectedClassId(visibleClasses[0].id);
     }
   }, [visibleClasses, selectedClassId]);
+
+  useEffect(() => {
+    if (selectedGrade === null && grades.length > 0) {
+      setSelectedGrade(grades[0]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [grades.join(",")]);
 
   useEffect(() => {
     setError(null);
@@ -55,12 +65,19 @@ export default function OverallRankingPage() {
         .catch(() => setError(t("overallRanking.loadError")));
       return;
     }
+    if (scope === "grade") {
+      if (selectedGrade === null) return;
+      getGradeOverallRanking(selectedGrade)
+        .then(setRanking)
+        .catch(() => setError(t("overallRanking.loadError")));
+      return;
+    }
     if (selectedClassId === null) return;
     getClassOverallRanking(selectedClassId)
       .then(setRanking)
       .catch(() => setError(t("overallRanking.loadError")));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scope, selectedClassId]);
+  }, [scope, selectedClassId, selectedGrade]);
 
   return (
     <AdminLayout>
@@ -78,6 +95,9 @@ export default function OverallRankingPage() {
               <Button variant={scope === "class" ? "secondary" : "ghost"} onClick={() => setScope("class")}>
                 {t("overallRanking.byClass")}
               </Button>
+              <Button variant={scope === "grade" ? "secondary" : "ghost"} onClick={() => setScope("grade")}>
+                {t("overallRanking.byGrade")}
+              </Button>
               <Button variant={scope === "school" ? "secondary" : "ghost"} onClick={() => setScope("school")}>
                 {t("overallRanking.bySchool")}
               </Button>
@@ -94,6 +114,21 @@ export default function OverallRankingPage() {
               {visibleClasses.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.display_name}
+                </option>
+              ))}
+            </select>
+          )}
+
+          {scope === "grade" && (
+            <select
+              className="sp-input"
+              style={{ maxWidth: 260 }}
+              value={selectedGrade ?? ""}
+              onChange={(e) => setSelectedGrade(Number(e.target.value))}
+            >
+              {grades.map((g) => (
+                <option key={g} value={g}>
+                  {g}-{t("overallRanking.gradeSuffix")}
                 </option>
               ))}
             </select>
@@ -117,7 +152,7 @@ export default function OverallRankingPage() {
                 key={r.student_id}
                 leading={<span className="data-value">#{r.rank}</span>}
                 title={r.full_name}
-                subtitle={scope === "school" ? r.class_name : undefined}
+                subtitle={scope !== "class" ? r.class_name : undefined}
                 trailing={
                   <>
                     <span className="data-value">{r.average_percent}%</span>

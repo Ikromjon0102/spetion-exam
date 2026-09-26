@@ -120,6 +120,18 @@ def get_class_overall_ranking(
     )
 
 
+@router.get("/grades/{grade_level}/overall-ranking", response_model=OverallRankingOut)
+def get_grade_overall_ranking(
+    grade_level: int, db: Session = Depends(get_db), _user: User = Depends(require_role("admin"))
+):
+    # Admin-only: this spans every parallel class in the grade (e.g. 7B +
+    # 7R), which would otherwise leak another class/teacher's students —
+    # the same reasoning as school-wide ranking below, not a class a
+    # teacher is necessarily connected to.
+    rows = ranking_service.compute_overall_ranking(db, grade_level=grade_level)
+    return OverallRankingOut(scope="grade", grade_level=grade_level, rankings=[OverallRankingRowOut(**row) for row in rows])
+
+
 @router.get("/school/overall-ranking", response_model=OverallRankingOut)
 def get_school_overall_ranking(db: Session = Depends(get_db), _user: User = Depends(require_role("admin"))):
     rows = ranking_service.compute_overall_ranking(db, class_id=None)

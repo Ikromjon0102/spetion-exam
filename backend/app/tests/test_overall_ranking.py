@@ -123,6 +123,52 @@ def test_school_overall_ranking_spans_every_class_and_is_admin_only(client, db_s
     assert forbidden.status_code == 403
 
 
+def test_grade_overall_ranking_combines_parallel_classes_and_is_admin_only(client, db_session):
+    """The user's real use case: "7- sinflarni zo'ri kim" — who's best
+    across *all* 7th-grade classes (e.g. 7B and 7R combined), not just one
+    of them. class_id filters to one class; grade_level spans every class
+    sharing that grade_level, mutually exclusive with class_id."""
+    from app.tests.factories import make_admin, make_teacher
+
+    klass_b = make_class(db_session, label="B", grade_level=7)
+    klass_r = make_class(db_session, label="R", grade_level=7)
+    other_grade_class = make_class(db_session, label="A", grade_level=8)
+    subject = make_subject(db_session)
+    make_admin(db_session, username="grade_ranking_admin")
+    teacher = make_teacher(db_session, username="grade_ranking_teacher")
+    db_session.commit()
+
+    top = make_student(db_session, klass_b, username="grade_ranking_top")
+    mid = make_student(db_session, klass_r, username="grade_ranking_mid")
+    other_grade_student = make_student(db_session, other_grade_class, username="grade_ranking_other")
+    db_session.commit()
+
+    exam_b = _make_scored_exam(db_session, klass_b, subject)
+    exam_r = _make_scored_exam(db_session, klass_r, subject)
+    other_exam = _make_scored_exam(db_session, other_grade_class, subject)
+    _take_and_score(db_session, exam_b, top, correct_count=4, total_count=4)
+    _take_and_score(db_session, exam_r, mid, correct_count=2, total_count=4)
+    _take_and_score(db_session, other_exam, other_grade_student, correct_count=4, total_count=4)
+
+    admin_token = _login(client, "grade_ranking_admin")
+    resp = client.get(
+        "/api/v1/admin/grades/7/overall-ranking", headers={"Authorization": f"Bearer {admin_token}"}
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["scope"] == "grade"
+    assert body["grade_level"] == 7
+    ids_in_order = [r["student_id"] for r in body["rankings"]]
+    assert ids_in_order == [top.id, mid.id]  # both 7B and 7R students present, ranked together
+    assert other_grade_student.id not in ids_in_order  # grade 8 excluded
+
+    teacher_token = _login(client, "grade_ranking_teacher")
+    forbidden = client.get(
+        "/api/v1/admin/grades/7/overall-ranking", headers={"Authorization": f"Bearer {teacher_token}"}
+    )
+    assert forbidden.status_code == 403
+
+
 def test_overall_ranking_excludes_students_with_no_graded_exams(client, db_session):
     from app.tests.factories import make_admin
 

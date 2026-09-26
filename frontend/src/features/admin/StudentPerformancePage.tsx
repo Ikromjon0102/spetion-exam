@@ -1,7 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { getStudentPerformance, type StudentPerformance } from "../../api/adminApi";
-import { AdminLayout, Badge, Card, ListRow, type BadgeStatus } from "../../components/ui";
+import {
+  getStudentPerformance,
+  getStudentSubjectHistory,
+  type StudentPerformance,
+  type SubjectHistory,
+} from "../../api/adminApi";
+import { AdminLayout, Badge, Card, LineChart, ListRow, type BadgeStatus } from "../../components/ui";
 import { useLanguage } from "../../i18n/LanguageContext";
 import { formatDateUz } from "../../utils/formatDate";
 
@@ -29,6 +34,7 @@ export default function StudentPerformancePage() {
   const id = Number(studentId);
   const { t } = useLanguage();
   const [performance, setPerformance] = useState<StudentPerformance | null>(null);
+  const [histories, setHistories] = useState<Record<number, SubjectHistory>>({});
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -37,6 +43,15 @@ export default function StudentPerformancePage() {
       .catch(() => setError(t("studentPerformance.loadError")));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  useEffect(() => {
+    performance?.subjects.forEach((s) => {
+      getStudentSubjectHistory(id, s.subject_id)
+        .then((h) => setHistories((prev) => ({ ...prev, [s.subject_id]: h })))
+        .catch(() => undefined);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, performance]);
 
   const subjects = performance
     ? [...performance.subjects].sort((a, b) => (a.average_percent ?? 0) - (b.average_percent ?? 0))
@@ -66,29 +81,42 @@ export default function StudentPerformancePage() {
         )}
 
         <div className="row-stack">
-          {subjects.map((s) => (
-            <Card key={s.subject_id}>
-              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
-                <div>
-                  <h2 className="h4" style={{ marginBottom: "var(--space-1)" }}>
-                    {s.subject_name}
-                  </h2>
-                  <p className="body-sm ink-muted">
-                    {s.exams_taken_count} {t("studentPerformance.examsCount")}
-                    {s.last_exam_at && ` · ${formatDateUz(s.last_exam_at)}`}
-                  </p>
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <div className="data-value" style={{ fontSize: 24, ...percentTone(s.average_percent) }}>
-                    {s.average_percent !== null ? `${s.average_percent}%` : "—"}
+          {subjects.map((s) => {
+            const history = histories[s.subject_id];
+            return (
+              <Card key={s.subject_id}>
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+                  <div>
+                    <h2 className="h4" style={{ marginBottom: "var(--space-1)" }}>
+                      {s.subject_name}
+                    </h2>
+                    <p className="body-sm ink-muted">
+                      {s.exams_taken_count} {t("studentPerformance.examsCount")}
+                      {s.last_exam_at && ` · ${formatDateUz(s.last_exam_at)}`}
+                    </p>
                   </div>
-                  {s.trend && (
-                    <Badge status={TREND_STATUS[s.trend] ?? "neutral"}>{t(TREND_KEYS[s.trend] ?? s.trend)}</Badge>
-                  )}
+                  <div style={{ textAlign: "right" }}>
+                    <div className="data-value" style={{ fontSize: 24, ...percentTone(s.average_percent) }}>
+                      {s.average_percent !== null ? `${s.average_percent}%` : "—"}
+                    </div>
+                    {s.trend && (
+                      <Badge status={TREND_STATUS[s.trend] ?? "neutral"}>{t(TREND_KEYS[s.trend] ?? s.trend)}</Badge>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </Card>
-          ))}
+                {history && history.timeline.length > 1 && (
+                  <div style={{ marginTop: "var(--space-5)" }}>
+                    <LineChart
+                      points={history.timeline.map((p) => ({
+                        label: formatDateUz(p.date),
+                        value: (100 * p.score) / p.max_score,
+                      }))}
+                    />
+                  </div>
+                )}
+              </Card>
+            );
+          })}
         </div>
       </div>
     </AdminLayout>

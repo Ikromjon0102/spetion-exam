@@ -8,10 +8,12 @@ from sqlalchemy.orm import Session
 
 from app.db.base import get_db
 from app.dependencies import require_role
+from app.models.attempt import AttemptStatus, ExamAttempt
 from app.models.exam import Exam
 from app.models.ranking import ExamRanking, StudentSubjectStats
 from app.models.user import Student, Subject, User
 from app.routers.admin_management import _ensure_class_view_access
+from app.schemas.attempt import SubjectHistoryOut, SubjectHistoryPointOut
 from app.schemas.results import (
     ClassRankingOut,
     ClassRankingRowOut,
@@ -79,6 +81,62 @@ def get_student_performance(
             )
         )
     return StudentPerformanceOut(student_id=student.id, full_name=student.user.full_name, subjects=subjects)
+
+
+@router.get("/students/{student_id}/subjects/{subject_id}/history", response_model=SubjectHistoryOut)
+def get_student_subject_history(
+    student_id: int, subject_id: int, db: Session = Depends(get_db), user: User = Depends(require_role("teacher", "admin"))
+):
+    """Same shape and same underlying data as the student's own
+    GET /student/me/subjects/{id}/history (ProfilePage.tsx's Sparkline) —
+    this is that view for admin/teacher looking up *any* student, powering
+    the full LineChart on StudentPerformancePage.tsx. Duplicated rather
+    than sharing a helper with routers/student.py: the two call sites
+    differ in exactly one line (whose student_id) and in access control
+    (self vs. _ensure_class_view_access), not worth a cross-router
+    abstraction for two places."""
+    student = db.get(Student, student_id)
+    if student is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="O'quvchi topilmadi")
+    _ensure_class_view_access(db, user, student.class_id)
+
+    subject = db.get(Subject, subject_id)
+    if subject is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Fan topilmadi")
+
+    stats = db.query(StudentSubjectStats).filter_by(student_id=student_id, subject_id=subject_id).first()
+    attempts = (
+        db.query(ExamAttempt)
+        .join(Exam, Exam.id == ExamAttempt.exam_id)
+        .filter(
+            ExamAttempt.student_id == student_id,
+            Exam.subject_id == subject_id,
+            ExamAttempt.status.in_([AttemptStatus.submitted, AttemptStatus.auto_submitted]),
+            ExamAttempt.score.isnot(None),
+        )
+        .order_by(ExamAttempt.submitted_at)
+        .all()
+    )
+
+    timeline = [
+        SubjectHistoryPointOut(
+            exam_id=a.exam_id,
+            exam_title=db.get(Exam, a.exam_id).title,
+            score=float(a.score or 0),
+            max_score=float(a.max_score or 0),
+            date=a.submitted_at,
+        )
+        for a in attempts
+    ]
+
+    return SubjectHistoryOut(
+        subject_id=subject_id,
+        subject_name=subject.name,
+        exams_taken_count=stats.exams_taken_count if stats else 0,
+        average_percent=float(stats.average_percent) if stats and stats.average_percent is not None else None,
+        trend=stats.trend.value if stats and stats.trend else None,
+        timeline=timeline,
+    )
 
 
 @router.get("/classes/{class_id}/subjects/{subject_id}/performance", response_model=ClassSubjectPerformanceOut)

@@ -93,3 +93,51 @@ def test_connected_teacher_can_view_but_unconnected_teacher_cannot(client, db_se
         headers={"Authorization": f"Bearer {unconnected_token}"},
     )
     assert forbidden.status_code == 403
+
+
+def test_admin_sees_full_exam_by_exam_timeline_for_one_subject(client, db_session):
+    """Backs the student portfolio's LineChart — GET /admin/students/{id}/
+    subjects/{id}/history is the same data (and same access scoping) as
+    the student's own GET /student/me/subjects/{id}/history, just for an
+    arbitrary student_id instead of "me"."""
+    klass = make_class(db_session)
+    subject = make_subject(db_session, name="Fizika")
+    make_admin(db_session, username="history_admin")
+    student = make_student(db_session, klass, username="history_student")
+    db_session.commit()
+
+    _score_exam(db_session, klass, subject, student, correct_count=1, total_count=4)  # 25%
+    _score_exam(db_session, klass, subject, student, correct_count=3, total_count=4)  # 75%
+
+    token = _login(client, "history_admin")
+    resp = client.get(
+        f"/api/v1/admin/students/{student.id}/subjects/{subject.id}/history",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["subject_name"] == "Fizika"
+    assert body["exams_taken_count"] == 2
+    assert len(body["timeline"]) == 2
+    assert body["timeline"][0]["score"] == 1.0
+    assert body["timeline"][0]["max_score"] == 4.0
+    assert body["timeline"][1]["score"] == 3.0
+
+
+def test_subject_history_respects_the_same_class_view_scoping(client, db_session):
+    own_class = make_class(db_session)
+    other_class = make_class(db_session)
+    subject = make_subject(db_session)
+    make_admin(db_session, username="history_scope_admin")
+    unconnected_teacher = make_teacher(db_session, username="history_unconnected_teacher")
+    student = make_student(db_session, own_class, username="history_scoped_student")
+    db_session.commit()
+
+    _score_exam(db_session, own_class, subject, student, correct_count=2, total_count=4)
+
+    token = _login(client, "history_unconnected_teacher")
+    forbidden = client.get(
+        f"/api/v1/admin/students/{student.id}/subjects/{subject.id}/history",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert forbidden.status_code == 403

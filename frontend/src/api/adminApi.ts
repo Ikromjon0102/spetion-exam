@@ -500,3 +500,27 @@ export async function getStudentPerformance(studentId: number): Promise<StudentP
   const { data } = await apiClient.get<StudentPerformance>(`/admin/students/${studentId}/performance`);
   return data;
 }
+
+export interface SubjectHistoryPoint {
+  exam_id: number;
+  exam_title: string;
+  score: number;
+  max_score: number;
+  date: string;
+}
+
+export interface SubjectHistory {
+  subject_id: number;
+  subject_name: string;
+  exams_taken_count: number;
+  average_percent: number | null;
+  trend: "improving" | "declining" | "stable" | null;
+  timeline: SubjectHistoryPoint[];
+}
+
+export async function getStudentSubjectHistory(studentId: number, subjectId: number): Promise<SubjectHistory> {
+  const { data } = await apiClient.get<SubjectHistory>(
+    `/admin/students/${studentId}/subjects/${subjectId}/history`
+  );
+  return data;
+}

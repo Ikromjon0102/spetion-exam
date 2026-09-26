@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../../auth/AuthContext";
 import { getSubjectHistory, listSubjects, type Subject, type SubjectHistory } from "../../api/studentApi";
-import { AppHeader, Badge, Card, ListRow, Sparkline, type BadgeStatus } from "../../components/ui";
+import { AppHeader, Badge, Card, LineChart, ListRow, type BadgeStatus } from "../../components/ui";
 import { formatDateUz } from "../../utils/formatDate";
 import { useLanguage } from "../../i18n/LanguageContext";
 
@@ -76,7 +76,12 @@ export default function ProfilePage() {
               </div>
               {h.timeline.length > 1 && (
                 <div style={{ marginBottom: "var(--space-4)" }}>
-                  <Sparkline points={h.timeline.map((p) => (100 * p.score) / p.max_score)} />
+                  <LineChart
+                    points={h.timeline.map((p) => ({
+                      label: formatDateUz(p.date),
+                      value: (100 * p.score) / p.max_score,
+                    }))}
+                  />
                 </div>
               )}
               <div className="row-stack">

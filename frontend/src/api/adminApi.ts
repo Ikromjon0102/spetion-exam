@@ -520,6 +520,11 @@ export async function closeExam(examId: number): Promise<ExamSummary> {
   return data;
 }
 
+export async function duplicateExam(examId: number, classIds: number[]): Promise<ExamSummary[]> {
+  const { data } = await apiClient.post<ExamSummary[]>(`/admin/exams/${examId}/duplicate`, { class_ids: classIds });
+  return data;
+}
+
 export async function listExamAttempts(examId: number): Promise<AttemptMonitor[]> {
   const { data } = await apiClient.get<AttemptMonitor[]>(`/admin/exams/${examId}/attempts`);
   return data;

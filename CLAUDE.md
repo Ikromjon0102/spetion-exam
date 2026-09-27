@@ -1079,6 +1079,59 @@ Decisions already confirmed with the user, so don't re-litigate them:
    `app/tests/test_student_performance.py`.
 6. **Overall ranking** — done (class, grade/parallel-classes, and school
    scopes), see the bullet above.
+7. **Duplicate an exam into parallel classes — done.** Raised separately,
+   after the roadmap above shipped: a teacher who gives the *identical*
+   lesson to several parallel classes (e.g. 7B and 7R) was stuck
+   re-uploading/re-authoring the same exam once per class. New
+   `POST /admin/exams/{id}/duplicate` (body: `{class_ids: [...]}`) copies
+   the source exam's full content — every `Question` and `QuestionOption`
+   row, `total_points`, `duration_minutes`/`start_at`/`end_at`/
+   `shuffle_questions`/`shuffle_options` — into one brand-new `Exam` per
+   target class, one at a time in a loop (not a bulk-insert, simplicity
+   over performance since this is a handful of classes at most). Each
+   copy always starts as `status="draft"` regardless of the source's
+   status, specifically so a teacher can double check *and adjust that
+   copy's own schedule* before publishing it separately — publishing
+   isn't automatic, matching how every other publish step in this app
+   requires an explicit action. `needs_review` carries over question-by-
+   question as-is (not reset), so duplicating an already-fully-reviewed
+   exam produces copies that can be published immediately, while
+   duplicating a still-partially-reviewed one still requires review per
+   copy, same as authoring fresh. `exam_upload_id` is deliberately set to
+   `None` on every copy (not copied from source) — `ExamUploadOut`'s own
+   `_upload_out` helper resolves an upload's exam via `.first()`,
+   assuming a 1:1 relationship; letting multiple exams share one
+   `exam_upload_id` would make that lookup arbitrary. Image keys
+   (`prompt_image_key`/`option_image_key`) are copied by reference, not
+   re-uploaded — safe, since nothing in this app ever mutates or deletes
+   the underlying stored file once uploaded (the "clear image" endpoints
+   only null out the key on the row, they never delete from storage).
+   Every target `class_id` is independently re-checked with the same
+   `ensure_can_author_exam` used for authoring a fresh exam — a teacher
+   can only duplicate into classes they actually teach this exam's
+   subject in (admin unrestricted, as everywhere else); the exam's own
+   `class_id` is silently filtered out of the target list if included
+   (duplicating an exam into its own class makes no sense), and the
+   request 400s if that filtering empties the list entirely.
+   - Frontend: a "Boshqa sinfga nusxalash" button on `ExamReviewEditor.tsx`
+     opens a `Modal` listing candidate classes as checkboxes — for a
+     teacher, `GET /admin/teachers/me/assignments` filtered to the exam's
+     own `subject_id` (so only classes they actually teach *this subject*
+     in are offered, mirroring the backend's own authorization instead of
+     just hoping the backend rejects a bad pick); for admin, the full
+     `listAdminClasses()` list, matching admin's unrestricted authoring
+     elsewhere. On success, shows a per-class list of links straight to
+     each new copy's own review page (`/admin/exams/{id}/review`) so the
+     teacher can immediately jump in and adjust/publish each one.
+   - Verified end-to-end in-browser against a real published 20-question
+     exam ("26-sent", Informatika · 7B): duplicated into 7R, landed as a
+     draft with all 20 questions and correct answers intact, same
+     schedule — confirmed by opening the copy directly. Covered by
+     `app/tests/test_exam_duplicate.py` (content/schedule copied
+     correctly, multi-class duplication in one request, the source's own
+     class silently excluded vs. rejected when it's the *only* target,
+     unauthorized-class 403, admin unrestricted) — the source exam itself
+     is asserted untouched by the operation.
 
 ## Next steps (in order)
 

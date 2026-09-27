@@ -21,6 +21,14 @@ class ExamCreate(BaseModel):
     exam_upload_id: int | None = None
 
 
+class ExamDuplicateIn(BaseModel):
+    # One new Exam (with its own copy of every question/option) is created
+    # per class_id here — for a teacher giving the identical lesson/exam to
+    # several parallel classes (e.g. 7B and 7R) without re-authoring or
+    # re-uploading the same content per class.
+    class_ids: list[int]
+
+
 class ExamUpdate(BaseModel):
     title: str | None = None
     duration_minutes: int | None = None

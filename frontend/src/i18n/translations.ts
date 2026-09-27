@@ -6,6 +6,7 @@ export const translations: Record<string, Record<Lang, string>> = {
   // --- Common CRUD actions ---
   "common.save": { uz: "Saqlash", ru: "Сохранить" },
   "common.cancel": { uz: "Bekor qilish", ru: "Отмена" },
+  "common.close": { uz: "Yopish", ru: "Закрыть" },
   "common.edit": { uz: "Tahrirlash", ru: "Изменить" },
   "common.delete": { uz: "O'chirish", ru: "Удалить" },
   "common.confirmDelete": { uz: "Ha, o'chirish", ru: "Да, удалить" },
@@ -389,6 +390,22 @@ export const translations: Record<string, Record<Lang, string>> = {
     ru: "Эталонный ответ обязателен — AI оценивает по нему",
   },
   "review.publish": { uz: "Nashr qilish", ru: "Опубликовать" },
+  "review.duplicate": { uz: "Boshqa sinfga nusxalash", ru: "Копировать в другой класс" },
+  "review.duplicateTitle": { uz: "Imtihonni nusxalash", ru: "Копировать экзамен" },
+  "review.duplicateHint": {
+    uz: "Bir xil darsni bir nechta sinfga o'tsangiz (masalan 7B va 7R), shu imtihonni qaytadan yaratmasdan boshqa sinf(lar)ga nusxalab qo'yishingiz mumkin — barcha savollar, variantlar va jadval shu ko'rinishda ko'chadi.",
+    ru: "Если вы ведёте один и тот же урок в нескольких классах (например 7Б и 7В), можно скопировать этот экзамен в другой класс(ы) вместо повторного создания — все вопросы, варианты и расписание переносятся как есть.",
+  },
+  "review.duplicateNoTargets": {
+    uz: "Nusxalash uchun boshqa sinf topilmadi",
+    ru: "Нет других классов для копирования",
+  },
+  "review.duplicateSubmit": { uz: "Nusxalash", ru: "Копировать" },
+  "review.duplicating": { uz: "Nusxalanmoqda...", ru: "Копирование..." },
+  "review.duplicateSuccess": {
+    uz: "{count} ta nusxa yaratildi (qoralama sifatida) — har birini tekshirib, jadvalini moslab, nashr qiling:",
+    ru: "Создано копий: {count} (как черновик) — проверьте каждую, настройте расписание и опубликуйте:",
+  },
   "review.lockedHint": {
     uz: "Bu imtihonni allaqachon boshlagan o'quvchilar bor, endi tahrirlab bo'lmaydi.",
     ru: "Этот экзамен уже начали ученики — больше нельзя редактировать.",

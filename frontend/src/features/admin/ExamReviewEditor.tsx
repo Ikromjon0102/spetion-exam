@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import {
   addQuestion,
   clearOptionImage,
   clearQuestionPromptImage,
   deleteQuestion,
+  duplicateExam,
   getExamDetail,
+  listAdminClasses,
+  listMyAssignments,
   publishExam,
   questionImageUrl,
   setOptionImage,
@@ -13,9 +16,22 @@ import {
   updateExam,
   updateQuestion,
   updateQuestionOption,
+  type ClassOut,
   type ExamDetail,
+  type ExamSummary,
 } from "../../api/adminApi";
-import { AdminLayout, AuthedImage, Badge, Button, Card, CardFoot, CardHead, type BadgeStatus } from "../../components/ui";
+import { useAuth } from "../../auth/AuthContext";
+import {
+  AdminLayout,
+  AuthedImage,
+  Badge,
+  Button,
+  Card,
+  CardFoot,
+  CardHead,
+  Modal,
+  type BadgeStatus,
+} from "../../components/ui";
 import { useLanguage } from "../../i18n/LanguageContext";
 import { errorDetail } from "../../utils/errorDetail";
 import { extractPastedImage } from "../../utils/pasteImage";
@@ -60,6 +76,8 @@ export default function ExamReviewEditor() {
   const { examId } = useParams();
   const id = Number(examId);
   const { t } = useLanguage();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const [exam, setExam] = useState<ExamDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -72,6 +90,17 @@ export default function ExamReviewEditor() {
     optionImageFiles: [null, null, null, null] as (File | null)[],
     reference_answer: "",
   });
+
+  // "Nusxalash" — a teacher teaching the identical lesson to several
+  // parallel classes (e.g. 7B and 7R) can copy this exam's full content
+  // into one or more sibling classes instead of re-authoring/re-uploading
+  // it per class. See POST /admin/exams/{id}/duplicate.
+  const [duplicateOpen, setDuplicateOpen] = useState(false);
+  const [duplicateTargets, setDuplicateTargets] = useState<{ id: number; name: string }[]>([]);
+  const [selectedClassIds, setSelectedClassIds] = useState<Set<number>>(new Set());
+  const [duplicating, setDuplicating] = useState(false);
+  const [duplicateError, setDuplicateError] = useState<string | null>(null);
+  const [duplicateResult, setDuplicateResult] = useState<ExamSummary[] | null>(null);
 
   async function reload() {
     try {
@@ -312,14 +341,76 @@ export default function ExamReviewEditor() {
     }
   }
 
+  async function openDuplicateModal() {
+    if (!exam) return;
+    setDuplicateError(null);
+    setDuplicateResult(null);
+    setSelectedClassIds(new Set());
+    try {
+      if (isAdmin) {
+        const classes: ClassOut[] = await listAdminClasses();
+        setDuplicateTargets(
+          classes.filter((c) => c.id !== exam.class_id).map((c) => ({ id: c.id, name: c.display_name }))
+        );
+      } else {
+        const assignments = await listMyAssignments();
+        const seen = new Map<number, string>();
+        assignments
+          .filter((a) => a.subject_id === exam.subject_id && a.class_id !== exam.class_id)
+          .forEach((a) => seen.set(a.class_id, a.class_name));
+        setDuplicateTargets(Array.from(seen, ([classId, name]) => ({ id: classId, name })));
+      }
+      setDuplicateOpen(true);
+    } catch (e) {
+      setError(errorDetail(e, t("review.genericError")));
+    }
+  }
+
+  function toggleDuplicateTarget(classId: number) {
+    setSelectedClassIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(classId)) next.delete(classId);
+      else next.add(classId);
+      return next;
+    });
+  }
+
+  async function handleDuplicateSubmit() {
+    if (selectedClassIds.size === 0) return;
+    setDuplicating(true);
+    setDuplicateError(null);
+    try {
+      const created = await duplicateExam(id, Array.from(selectedClassIds));
+      setDuplicateResult(created);
+      setSelectedClassIds(new Set());
+    } catch (e) {
+      setDuplicateError(errorDetail(e, t("review.genericError")));
+    } finally {
+      setDuplicating(false);
+    }
+  }
+
   const statusBadge = STATUS_KEY[exam.status];
 
   return (
     <AdminLayout>
       <div className="page">
-        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", marginBottom: "var(--space-1)" }}>
-          <h1 className="h2">{exam.title}</h1>
-          <Badge status={statusBadge?.status ?? "neutral"}>{statusBadge ? t(statusBadge.key) : exam.status}</Badge>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "var(--space-3)",
+            marginBottom: "var(--space-1)",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
+            <h1 className="h2">{exam.title}</h1>
+            <Badge status={statusBadge?.status ?? "neutral"}>{statusBadge ? t(statusBadge.key) : exam.status}</Badge>
+          </div>
+          <Button variant="secondary" size="sm" onClick={openDuplicateModal}>
+            {t("review.duplicate")}
+          </Button>
         </div>
         <p className="body-sm ink-muted" style={{ marginBottom: "var(--space-6)" }}>
           {exam.subject_name} · {exam.class_name}
@@ -617,6 +708,67 @@ export default function ExamReviewEditor() {
           <p className="body-sm ink-muted">{t("review.alreadyPublished")}</p>
         )}
       </div>
+
+      <Modal open={duplicateOpen} onClose={() => setDuplicateOpen(false)} title={t("review.duplicateTitle")}>
+        {duplicateResult ? (
+          <div className="stack">
+            <p className="body-sm" style={{ color: "var(--success)" }}>
+              {t("review.duplicateSuccess", { count: duplicateResult.length })}
+            </p>
+            <div className="row-stack">
+              {duplicateResult.map((created) => (
+                <Link
+                  key={created.id}
+                  to={`/admin/exams/${created.id}/review`}
+                  className="body-sm"
+                  onClick={() => setDuplicateOpen(false)}
+                >
+                  {created.class_name} — {created.title}
+                </Link>
+              ))}
+            </div>
+            <Button variant="secondary" onClick={() => setDuplicateOpen(false)}>
+              {t("common.close")}
+            </Button>
+          </div>
+        ) : (
+          <div className="stack">
+            <p className="body-sm ink-muted">{t("review.duplicateHint")}</p>
+            {duplicateTargets.length === 0 ? (
+              <p className="body-sm ink-muted">{t("review.duplicateNoTargets")}</p>
+            ) : (
+              <div className="stack" style={{ gap: "var(--space-2)" }}>
+                {duplicateTargets.map((target) => (
+                  <label
+                    key={target.id}
+                    className="body-sm"
+                    style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedClassIds.has(target.id)}
+                      onChange={() => toggleDuplicateTarget(target.id)}
+                      style={{ accentColor: "var(--brand-600)" }}
+                    />
+                    {target.name}
+                  </label>
+                ))}
+              </div>
+            )}
+            {duplicateError && (
+              <p role="alert" className="body-sm" style={{ color: "var(--danger)" }}>
+                {duplicateError}
+              </p>
+            )}
+            <Button
+              onClick={handleDuplicateSubmit}
+              disabled={duplicating || selectedClassIds.size === 0}
+            >
+              {duplicating ? t("review.duplicating") : t("review.duplicateSubmit")}
+            </Button>
+          </div>
+        )}
+      </Modal>
     </AdminLayout>
   );
 }

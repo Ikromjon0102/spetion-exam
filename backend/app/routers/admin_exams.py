@@ -29,6 +29,7 @@ from app.schemas.exam import (
     AttemptMonitorOut,
     ExamCreate,
     ExamDetailOut,
+    ExamDuplicateIn,
     ExamOut,
     ExamUpdate,
     ExamUploadOut,
@@ -215,6 +216,91 @@ def get_exam_detail(
     base = _exam_out(db, exam)
     questions = [_question_out(q) for q in exam.questions]
     return ExamDetailOut(**base.model_dump(), questions=questions)
+
+
+@router.post("/{exam_id}/duplicate", response_model=list[ExamOut])
+def duplicate_exam(
+    exam_id: int,
+    body: ExamDuplicateIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role("teacher", "admin")),
+):
+    """A teacher who gives the identical lesson/exam to several parallel
+    classes (e.g. 7B and 7R) shouldn't have to re-upload/re-author the same
+    questions per class — copies this exam's full content (every question,
+    every option, images by storage-key reference since the underlying
+    files are immutable, schedule/shuffle settings) into one brand-new
+    Exam per target class_id. Each new exam starts as a fresh draft (not
+    auto-published) so the teacher can still double-check/adjust each
+    copy's schedule before it goes live; needs_review carries over as-is,
+    so a copy of an already-reviewed exam can be published immediately.
+    Every target class is independently authorization-checked via
+    ensure_can_author_exam — same rule as creating a fresh exam there,
+    so a teacher can only duplicate into classes they actually teach this
+    subject in (admin is unrestricted, as usual)."""
+    source = _get_exam_or_404(db, exam_id)
+    exam_service.ensure_can_manage_exam(db, user, source)
+
+    target_class_ids = [cid for cid in dict.fromkeys(body.class_ids) if cid != source.class_id]
+    if not target_class_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Kamida bitta boshqa sinf tanlang"
+        )
+
+    created: list[Exam] = []
+    for class_id in target_class_ids:
+        exam_service.ensure_can_author_exam(db, user, class_id, source.subject_id)
+
+        new_exam = Exam(
+            title=source.title,
+            subject_id=source.subject_id,
+            class_id=class_id,
+            created_by_id=user.id,
+            exam_upload_id=None,
+            status=ExamStatus.draft,
+            start_at=source.start_at,
+            end_at=source.end_at,
+            duration_minutes=source.duration_minutes,
+            shuffle_questions=source.shuffle_questions,
+            shuffle_options=source.shuffle_options,
+        )
+        db.add(new_exam)
+        db.flush()
+
+        for q in source.questions:
+            new_question = Question(
+                exam_id=new_exam.id,
+                order_index=q.order_index,
+                question_type=q.question_type,
+                prompt_text=q.prompt_text,
+                prompt_image_key=q.prompt_image_key,
+                points=q.points,
+                source=q.source,
+                needs_review=q.needs_review,
+                parse_confidence=q.parse_confidence,
+                reference_answer=q.reference_answer,
+            )
+            db.add(new_question)
+            db.flush()
+            for opt in q.options:
+                db.add(
+                    QuestionOption(
+                        question_id=new_question.id,
+                        order_index=opt.order_index,
+                        option_text=opt.option_text,
+                        is_correct=opt.is_correct,
+                        option_image_key=opt.option_image_key,
+                    )
+                )
+
+        db.flush()
+        exam_service.recompute_total_points(db, new_exam)
+        created.append(new_exam)
+
+    db.commit()
+    for exam in created:
+        db.refresh(exam)
+    return [_exam_out(db, exam) for exam in created]
 
 
 @router.put("/{exam_id}", response_model=ExamOut)

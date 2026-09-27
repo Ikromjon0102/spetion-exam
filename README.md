@@ -48,7 +48,7 @@ Testlarni ishga tushirish (in-memory SQLite'da, Postgres shart emas):
 pytest app/tests -q
 ```
 
-115 test o'tadi (auth, parol almashtirish, admin boshqaruv (jumladan
+120 test o'tadi (auth, parol almashtirish, admin boshqaruv (jumladan
 ro'yxatdan ko'p o'quvchi qo'shish, sinf bo'yicha parolni almashtirish, sinf
 rahbari huquqlari, fan o'qituvchisi uchun ko'rish huquqi va har bir bo'lim
 uchun tahrirlash/o'chirish), nashr etilgan imtihonni qayta tahrirlash,
@@ -60,6 +60,7 @@ ko'rsatkichi, kunlik natijalarni sinf bo'yicha yig'ish (Telegram uchun
 rasm eksporti), AI baholaydigan qisqa javob (short-answer) savollar —
 publish validatsiyasi, AI baholash (Anthropic API bilan haqiqiy chaqiruv
 mock qilinib sinovdan o'tkazilgan), ustoz tomonidan qayta baholash —,
+imtihonni parallel sinflarga nusxalash,
 DOCX/PDF parserlar — PDF parser ham sinov faylida, ham
 OCR-fallback yo'lida, ham haqiqiy o'qituvchi fayllarida
 tekshirilgan).

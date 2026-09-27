@@ -10,6 +10,17 @@
   overflow-y: auto;
 }
 
+/* .page's own max-width (720px) is tuned for the student-facing reading
+   pages (exam taking/result, no sidebar) where a narrow column is more
+   readable. Every admin/teacher page sits inside .sp-shell__content
+   instead — on a real desktop monitor a 720px column left most of the
+   screen empty (the user flagged this after actually using the deployed
+   site on a wide display), so widen it specifically here rather than
+   raising the global default and cramping the student pages. */
+.sp-shell__content .page {
+  max-width: 1400px;
+}
+
 .sp-sidebar {
   width: 220px;
   flex-shrink: 0;

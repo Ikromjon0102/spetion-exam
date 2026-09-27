@@ -972,10 +972,63 @@ Decisions already confirmed with the user, so don't re-litigate them:
         (plain client-side `.filter()` over the already-loaded list, no
         new endpoints) added to `StudentsPage.tsx`, `TeachersPage.tsx`,
         and `ClassesPage.tsx`.
-     7. Read by the user as "the dashboard's look needs to change too" —
-        addressed by point 2 above (every stat card became a real
-        navigation shortcut instead of a static number); no separate
-        broader dashboard redesign was requested or done beyond that.
+     7. Read by the user initially as "the dashboard's look needs to
+        change too" — first addressed by point 2 above (every stat card
+        became a real navigation shortcut); a follow-up message then
+        asked for something much more specific — see the third UI polish
+        round immediately below.
+   - **Third UI polish round, same session, two follow-up asks after
+     trying the second round's build locally.**
+     1. **Every admin/teacher page had a huge empty void on the right on
+        a real desktop monitor** — `.page`'s `max-width: 720px` is tuned
+        for the student-facing reading pages (exam-taking/result, no
+        sidebar, where a narrow column is genuinely more readable), but
+        every admin/teacher page also uses the same class inside
+        `AdminLayout`. Rather than raise the global default (which would
+        widen the student pages too, hurting readability there), added
+        `.sp-shell__content .page { max-width: 1400px; }` to
+        `adminlayout.css` — a descendant-selector override that only ever
+        matches inside `AdminLayout`'s content area, so student pages are
+        completely unaffected.
+     2. **"Dashboardni o'quvchiga nisbatan shakllantiraylik — markazda
+        o'quvchini oldinga qo'y, hammasini shuni atrofiga qur"** (build
+        the dashboard around the student — put the student at the center,
+        everything else around it), specifically wanting to see, at a
+        glance, how many exams are happening *right now* and how many
+        students are currently submitting/taking them. This surfaced a
+        real pre-existing fact worth recording: **`Exam.status` never
+        actually transitions to `"active"` anywhere in the backend** —
+        `publish_exam` sets `"scheduled"` and nothing ever changes it
+        again (closing an exam manually sets `"closed"`, that's the only
+        other transition) — so the exam's live/in-window state has always
+        had to be computed from `start_at`/`end_at` at read time (see
+        `routers/student.py`'s `_window_state`), never read off the stored
+        status. The old "Faol" dashboard stat card filtered on
+        `status === "active"` and was therefore **always showing 0**, in
+        every one of the user's screenshots — not a bug in this round's
+        earlier work, just a card that could never possibly show anything
+        else. Replaced entirely with a new **"Hozir jonli" (Live now)**
+        hero card — `isLiveNow(exam)` in `DashboardPage.tsx` computes the
+        real time-window check client-side; for each currently-live exam,
+        `listExamAttempts(exam.id)` is fetched (parallel `Promise.all`,
+        fine at this school's scale) and aggregated into total/in-progress/
+        submitted/not-started counts, both summed across all live exams
+        (four `StatCard`s) and per-exam (a `ListRow` per live exam with
+        its own progress badges, linking to that exam's ranking/
+        monitoring page). A small pulsing `.sp-live-dot` (new in
+        `global.css`) marks the section only when something is actually
+        live — this is the one place in the app where "pulsing/live" is
+        earned by a real time-computed check, not just a stored status,
+        so don't reuse the dot for anything that's merely "active" in the
+        database sense. This card is now the **first thing on the page**,
+        above the administrative classes/subjects/students/teachers
+        counts, which is what makes this "student-centric" rather than
+        "school-stats-centric" — a manual "Yangilash" (refresh) button
+        re-fetches everything on demand since there's no polling/websocket
+        infra to push live updates automatically. Verified end-to-end
+        against two real leftover test exams whose windows happened to
+        still be open in the local dev DB — confirmed the aggregate counts
+        and per-exam badges both matched actual attempt rows.
 5. **Low/high performer visibility for admin/teacher** — done. New
    `StudentPerformancePage.tsx` (`/students/{id}/performance`) reads the
    already-existing `GET /admin/students/{id}/performance` endpoint

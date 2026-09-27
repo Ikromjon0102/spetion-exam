@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
 import {
@@ -6,6 +6,7 @@ import {
   listAdminStudents,
   listAdminSubjects,
   listAdminTeachers,
+  listExamAttempts,
   listExams,
   listMyAssignments,
   type ClassOut,
@@ -38,6 +39,26 @@ const STATUS_KEY: Record<string, { status: BadgeStatus; key: string }> = {
   archived: { status: "neutral", key: "status.archived" },
 };
 
+// Exam.status never actually transitions to "active" anywhere in the
+// backend (publish_exam sets "scheduled" and it stays there for the
+// exam's whole life, time window included) — so "is this exam happening
+// right now" has to be computed from start_at/end_at, the same way
+// routers/student.py's _window_state does, not read off the stored status.
+function isLiveNow(exam: ExamSummary): boolean {
+  if (exam.status !== "scheduled" && exam.status !== "active") return false;
+  if (!exam.start_at || !exam.end_at) return false;
+  const now = Date.now();
+  return now >= new Date(exam.start_at).getTime() && now < new Date(exam.end_at).getTime();
+}
+
+interface LiveProgress {
+  exam: ExamSummary;
+  total: number;
+  submitted: number;
+  inProgress: number;
+  notStarted: number;
+}
+
 export default function DashboardPage() {
   const { user } = useAuth();
   const { t } = useLanguage();
@@ -52,7 +73,10 @@ export default function DashboardPage() {
   const [assignments, setAssignments] = useState<TeacherAssignment[]>([]);
   const [loaded, setLoaded] = useState(false);
 
-  useEffect(() => {
+  const [liveProgress, setLiveProgress] = useState<LiveProgress[]>([]);
+  const [liveLoaded, setLiveLoaded] = useState(false);
+
+  const loadAll = useCallback(() => {
     const tasks: Promise<unknown>[] = [listExams().then(setExams).catch(() => undefined)];
     if (isAdmin) {
       tasks.push(listAdminClasses().then(setClasses).catch(() => undefined));
@@ -63,8 +87,49 @@ export default function DashboardPage() {
       tasks.push(listMyAssignments().then(setAssignments).catch(() => undefined));
     }
     Promise.allSettled(tasks).then(() => setLoaded(true));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin]);
+
+  useEffect(() => {
+    loadAll();
+  }, [loadAll]);
+
+  const loadLive = useCallback((examList: ExamSummary[]) => {
+    const live = examList.filter(isLiveNow);
+    if (live.length === 0) {
+      setLiveProgress([]);
+      setLiveLoaded(true);
+      return;
+    }
+    setLiveLoaded(false);
+    Promise.all(
+      live.map((exam) =>
+        listExamAttempts(exam.id)
+          .then(
+            (attempts): LiveProgress => ({
+              exam,
+              total: attempts.length,
+              submitted: attempts.filter((a) => a.status === "submitted" || a.status === "auto_submitted").length,
+              inProgress: attempts.filter((a) => a.status === "in_progress").length,
+              notStarted: attempts.filter((a) => a.status === "not_started").length,
+            })
+          )
+          .catch(() => null)
+      )
+    ).then((results) => {
+      setLiveProgress(results.filter((r): r is LiveProgress => r !== null));
+      setLiveLoaded(true);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (loaded) loadLive(exams);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded]);
+
+  function handleRefresh() {
+    loadAll();
+    loadLive(exams);
+  }
 
   const statusCounts: Record<string, number> = {};
   for (const e of exams) statusCounts[e.status] = (statusCounts[e.status] ?? 0) + 1;
@@ -94,6 +159,16 @@ export default function DashboardPage() {
         .slice(0, 10)
     : [];
 
+  const liveTotals = liveProgress.reduce(
+    (acc, p) => ({
+      total: acc.total + p.total,
+      submitted: acc.submitted + p.submitted,
+      inProgress: acc.inProgress + p.inProgress,
+      notStarted: acc.notStarted + p.notStarted,
+    }),
+    { total: 0, submitted: 0, inProgress: 0, notStarted: 0 }
+  );
+
   return (
     <AdminLayout>
       <div className="page">
@@ -103,6 +178,72 @@ export default function DashboardPage() {
         <p className="body-sm ink-muted" style={{ marginBottom: "var(--space-8)" }}>
           {isAdmin ? t("dashboard.subtitleAdmin") : t("dashboard.subtitleTeacher")}
         </p>
+
+        {/* Student-centric hero: what's actually happening with students
+            right now, ahead of any administrative counts below. */}
+        <Card
+          style={{
+            marginBottom: "var(--space-8)",
+            borderColor: liveProgress.length > 0 ? "var(--brand-600)" : undefined,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: "var(--space-5)",
+              gap: "var(--space-3)",
+              flexWrap: "wrap",
+            }}
+          >
+            <h2 className="h3" style={{ margin: 0, display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+              {liveProgress.length > 0 && <span className="sp-live-dot" />}
+              {t("dashboard.liveNow")}
+            </h2>
+            <Button variant="ghost" size="sm" onClick={handleRefresh}>
+              {t("dashboard.refresh")}
+            </Button>
+          </div>
+
+          {!liveLoaded ? (
+            <p className="body-sm ink-muted">{t("taking.loading")}</p>
+          ) : liveProgress.length === 0 ? (
+            <p className="body-sm ink-muted">{t("dashboard.noLiveExams")}</p>
+          ) : (
+            <>
+              <div className="sp-statcard-grid" style={{ marginBottom: "var(--space-5)" }}>
+                <StatCard label={t("dashboard.liveExamsCount")} value={liveProgress.length} />
+                <StatCard label={t("dashboard.liveInProgress")} value={liveTotals.inProgress} tone="warning" />
+                <StatCard label={t("dashboard.liveSubmitted")} value={liveTotals.submitted} tone="success" />
+                <StatCard label={t("dashboard.liveNotStarted")} value={liveTotals.notStarted} />
+              </div>
+              <div className="row-stack">
+                {liveProgress.map(({ exam, total, submitted, inProgress }) => (
+                  <ListRow
+                    key={exam.id}
+                    chevron
+                    onClick={() => navigate(`/admin/exams/${exam.id}/ranking`)}
+                    title={exam.title}
+                    subtitle={`${exam.subject_name} · ${exam.class_name}`}
+                    trailing={
+                      <>
+                        {inProgress > 0 && (
+                          <Badge status="warning">
+                            {inProgress} {t("dashboard.liveInProgress").toLowerCase()}
+                          </Badge>
+                        )}
+                        <Badge status="success">
+                          {submitted}/{total} {t("dashboard.liveSubmittedOf")}
+                        </Badge>
+                      </>
+                    }
+                  />
+                ))}
+              </div>
+            </>
+          )}
+        </Card>
 
         <div className="sp-statcard-grid" style={{ marginBottom: "var(--space-8)" }}>
           {isAdmin ? (
@@ -133,12 +274,6 @@ export default function DashboardPage() {
             value={exams.filter((e) => e.needs_review_count > 0).length}
             tone="danger"
             onClick={() => navigate("/admin/exams?needsReview=1")}
-          />
-          <StatCard
-            label={t("status.active")}
-            value={statusCounts.active ?? 0}
-            tone="warning"
-            onClick={() => navigate("/admin/exams?status=active")}
           />
         </div>
 

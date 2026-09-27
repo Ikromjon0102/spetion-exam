@@ -22,6 +22,7 @@ from app.schemas.results import (
     ClassSubjectPerformanceOut,
     DailyClassResultsOut,
     DailyResultsExamOut,
+    DailyStudentRowOut,
     OverallRankingOut,
     OverallRankingRowOut,
     StudentPerformanceOut,
@@ -212,14 +213,18 @@ def get_class_daily_results(
     db: Session = Depends(get_db),
     user: User = Depends(require_role("teacher", "admin")),
 ):
-    """Backs the "sinf raxbari"'s end-of-day Telegram share: every exam for
-    this class whose window closed on the given calendar day (default:
-    today, school-local time — see local_day_bounds_utc), each with its
-    already-computed ExamRanking rows. View-scoped the same as class
-    detail/roster (_ensure_class_view_access) rather than list_exams'
-    teacher_class_subjects filter — a homeroom teacher who doesn't
-    personally teach any subject in their own class still needs to see
-    every subject's results here, not just ones they're assigned to."""
+    """Backs the "sinf raxbari"'s end-of-day Telegram share. A class
+    routinely takes *several* exams on the same day (one per subject) —
+    the first version of this endpoint returned one ranking table per
+    exam, but the user pointed out that's not what's wanted: one combined
+    table, one row per student, one column per subject, plus an overall
+    total — so a parent/teacher can see "who did best across the whole
+    day" at a glance instead of hunting across several separate tables.
+    View-scoped the same as class detail/roster (_ensure_class_view_access)
+    rather than list_exams' teacher_class_subjects filter — a homeroom
+    teacher who doesn't personally teach any subject in their own class
+    still needs to see every subject's results here, not just ones
+    they're assigned to."""
     klass = _ensure_class_view_access(db, user, class_id)
     resolved_date, day_start, day_end = local_day_bounds_utc(date)
 
@@ -235,29 +240,45 @@ def get_class_daily_results(
         .all()
     )
 
-    exam_results = []
+    exam_outs: list[DailyResultsExamOut] = []
+    # One {student_id: score} map per exam, same order as exam_outs — a
+    # student's row is built by indexing into every map at their id, so a
+    # missing entry (didn't take that particular exam) naturally becomes
+    # None rather than a misleading 0.
+    per_exam_scores: list[dict[int, float]] = []
+    student_names: dict[int, str] = {}
     for exam in exams:
         subject = db.get(Subject, exam.subject_id)
-        rows = db.query(ExamRanking).filter_by(exam_id=exam.id).order_by(ExamRanking.rank_in_class).all()
-        exam_results.append(
+        exam_outs.append(
             DailyResultsExamOut(
-                exam_id=exam.id,
-                exam_title=exam.title,
-                subject_name=subject.name if subject else "",
-                end_at=exam.end_at,
-                rankings=[
-                    ClassRankingRowOut(
-                        rank_in_class=r.rank_in_class,
-                        student_id=r.student_id,
-                        full_name=db.get(Student, r.student_id).user.full_name,
-                        score=float(r.score),
-                        percentile=float(r.percentile) if r.percentile is not None else None,
-                    )
-                    for r in rows
-                ],
+                exam_id=exam.id, exam_title=exam.title, subject_name=subject.name if subject else "", end_at=exam.end_at
             )
+        )
+        rows = db.query(ExamRanking).filter_by(exam_id=exam.id).all()
+        score_map: dict[int, float] = {}
+        for r in rows:
+            score_map[r.student_id] = float(r.score)
+            student_names.setdefault(r.student_id, db.get(Student, r.student_id).user.full_name)
+        per_exam_scores.append(score_map)
+
+    unranked = []
+    for student_id, full_name in student_names.items():
+        scores = [scores_for_exam.get(student_id) for scores_for_exam in per_exam_scores]
+        total = sum(s for s in scores if s is not None)
+        unranked.append((student_id, full_name, scores, total))
+    unranked.sort(key=lambda row: row[3], reverse=True)
+
+    student_outs: list[DailyStudentRowOut] = []
+    prev_total: float | None = None
+    rank = 0
+    for i, (student_id, full_name, scores, total) in enumerate(unranked):
+        if total != prev_total:
+            rank = i + 1
+        prev_total = total
+        student_outs.append(
+            DailyStudentRowOut(rank=rank, student_id=student_id, full_name=full_name, scores=scores, total=total)
         )
 
     return DailyClassResultsOut(
-        class_id=klass.id, class_name=klass.display_name, date=resolved_date, exams=exam_results
+        class_id=klass.id, class_name=klass.display_name, date=resolved_date, exams=exam_outs, students=student_outs
     )

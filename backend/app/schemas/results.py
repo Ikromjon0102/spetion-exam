@@ -69,7 +69,18 @@ class DailyResultsExamOut(BaseModel):
     exam_title: str
     subject_name: str
     end_at: datetime | None = None
-    rankings: list[ClassRankingRowOut]
+
+
+class DailyStudentRowOut(BaseModel):
+    rank: int
+    student_id: int
+    full_name: str
+    # Aligned index-for-index with DailyClassResultsOut.exams — None means
+    # this student has no ExamRanking row for that particular exam (didn't
+    # take it / not yet graded), rendered as a dash rather than a 0 so it
+    # isn't mistaken for a zero score.
+    scores: list[float | None]
+    total: float
 
 
 class DailyClassResultsOut(BaseModel):
@@ -77,3 +88,4 @@ class DailyClassResultsOut(BaseModel):
     class_name: str
     date: str
     exams: list[DailyResultsExamOut]
+    students: list[DailyStudentRowOut]

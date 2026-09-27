@@ -378,7 +378,8 @@ export const translations: Record<string, Record<Lang, string>> = {
   "dailyResults.exporting": { uz: "Tayyorlanmoqda...", ru: "Подготовка..." },
   "dailyResults.empty": { uz: "Bugun bu sinf uchun tugallangan imtihon yo'q", ru: "Сегодня у этого класса нет завершённых экзаменов" },
   "dailyResults.cardSubtitle": { uz: "Bugungi imtihonlar natijalari", ru: "Результаты сегодняшних экзаменов" },
-  "dailyResults.noRankingYet": { uz: "Hali natija yo'q", ru: "Пока нет результатов" },
+  "dailyResults.studentColumn": { uz: "O'quvchi", ru: "Ученик" },
+  "dailyResults.totalColumn": { uz: "Umumiy", ru: "Итого" },
 
   "ranking.fallbackTitle": { uz: "Reyting", ru: "Рейтинг" },
   "ranking.loadError": { uz: "Reytingni yuklab bo'lmadi", ru: "Не удалось загрузить рейтинг" },

@@ -81,7 +81,8 @@ export default function DailyResultsPage() {
                 color: CARD_INK,
                 padding: 32,
                 borderRadius: 12,
-                maxWidth: 640,
+                width: "fit-content",
+                minWidth: 480,
                 border: `1px solid ${CARD_BORDER}`,
                 fontFamily: "Inter, system-ui, sans-serif",
               }}
@@ -97,36 +98,77 @@ export default function DailyResultsPage() {
                 {t("dailyResults.cardSubtitle")}
               </p>
 
-              {data.exams.map((exam) => (
-                <div key={exam.exam_id} style={{ marginBottom: 20 }}>
-                  <h3 style={{ fontSize: 15, margin: 0, marginBottom: 8, color: CARD_BRAND }}>
-                    {exam.subject_name} — {exam.exam_title}
-                  </h3>
-                  {exam.rankings.length === 0 ? (
-                    <p style={{ fontSize: 13, color: CARD_MUTED, margin: 0 }}>{t("dailyResults.noRankingYet")}</p>
-                  ) : (
-                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                      <tbody>
-                        {exam.rankings.map((r) => (
-                          <tr key={r.student_id} style={{ borderBottom: `1px solid ${CARD_BORDER}` }}>
-                            <td style={{ padding: "4px 8px", width: 32, color: CARD_MUTED }}>#{r.rank_in_class}</td>
-                            <td style={{ padding: "4px 8px" }}>{r.full_name}</td>
-                            <td
-                              style={{
-                                padding: "4px 8px",
-                                textAlign: "right",
-                                fontFamily: "'Space Mono', monospace",
-                              }}
-                            >
-                              {r.score}
-                            </td>
-                          </tr>
+              {data.exams.length > 0 && (
+                <table style={{ borderCollapse: "collapse", fontSize: 13 }}>
+                  <thead>
+                    <tr>
+                      <th style={{ padding: "4px 8px" }} />
+                      <th style={{ textAlign: "left", padding: "4px 8px", fontSize: 12, color: CARD_MUTED }}>
+                        {t("dailyResults.studentColumn")}
+                      </th>
+                      {data.exams.map((exam) => (
+                        <th
+                          key={exam.exam_id}
+                          style={{
+                            textAlign: "right",
+                            padding: "4px 8px",
+                            fontSize: 12,
+                            color: CARD_BRAND,
+                            borderLeft: `1px solid ${CARD_BORDER}`,
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {exam.subject_name}
+                        </th>
+                      ))}
+                      <th
+                        style={{
+                          textAlign: "right",
+                          padding: "4px 8px",
+                          fontSize: 12,
+                          fontWeight: 700,
+                          borderLeft: `2px solid ${CARD_INK}`,
+                        }}
+                      >
+                        {t("dailyResults.totalColumn")}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.students.map((row) => (
+                      <tr key={row.student_id} style={{ borderBottom: `1px solid ${CARD_BORDER}` }}>
+                        <td style={{ padding: "4px 8px", width: 32, color: CARD_MUTED }}>#{row.rank}</td>
+                        <td style={{ padding: "4px 8px", whiteSpace: "nowrap" }}>{row.full_name}</td>
+                        {row.scores.map((score, i) => (
+                          <td
+                            key={data.exams[i].exam_id}
+                            style={{
+                              padding: "4px 8px",
+                              textAlign: "right",
+                              fontFamily: "'Space Mono', monospace",
+                              borderLeft: `1px solid ${CARD_BORDER}`,
+                              color: score === null ? CARD_MUTED : CARD_INK,
+                            }}
+                          >
+                            {score === null ? "—" : score}
+                          </td>
                         ))}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
-              ))}
+                        <td
+                          style={{
+                            padding: "4px 8px",
+                            textAlign: "right",
+                            fontFamily: "'Space Mono', monospace",
+                            fontWeight: 700,
+                            borderLeft: `2px solid ${CARD_INK}`,
+                          }}
+                        >
+                          {row.total}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           </>
         )}

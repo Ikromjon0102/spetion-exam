@@ -170,7 +170,16 @@ export interface DailyResultsExam {
   exam_title: string;
   subject_name: string;
   end_at: string | null;
-  rankings: ClassRankingRow[];
+}
+
+export interface DailyStudentRow {
+  rank: number;
+  student_id: number;
+  full_name: string;
+  // Aligned index-for-index with DailyClassResults.exams — null means this
+  // student has no score for that particular exam (didn't take it).
+  scores: (number | null)[];
+  total: number;
 }
 
 export interface DailyClassResults {
@@ -178,6 +187,7 @@ export interface DailyClassResults {
   class_name: string;
   date: string;
   exams: DailyResultsExam[];
+  students: DailyStudentRow[];
 }
 
 export async function getClassDailyResults(classId: number, date?: string): Promise<DailyClassResults> {

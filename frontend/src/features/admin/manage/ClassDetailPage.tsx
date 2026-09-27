@@ -17,7 +17,7 @@ import {
   type TeacherRow,
 } from "../../../api/adminApi";
 import { useAuth } from "../../../auth/AuthContext";
-import { AdminLayout, Badge, Button, Card, ConfirmButton, ListRow } from "../../../components/ui";
+import { AdminLayout, Badge, Button, Card, ConfirmButton, ListRow, PasswordInput } from "../../../components/ui";
 import { useLanguage } from "../../../i18n/LanguageContext";
 import { errorDetail } from "../../../utils/errorDetail";
 
@@ -445,9 +445,7 @@ export default function ClassDetailPage() {
                     onChange={(e) => setUsername(e.target.value)}
                     required
                   />
-                  <input
-                    className="sp-input"
-                    type="password"
+                  <PasswordInput
                     placeholder={t("login.password")}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}

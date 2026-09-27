@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { login } from "../../api/authApi";
 import { useAuth } from "../../auth/AuthContext";
 import { useLanguage } from "../../i18n/LanguageContext";
-import { Button, Card, LanguageSwitcher, Logo, ThemeToggle } from "../../components/ui";
+import { Button, Card, LanguageSwitcher, Logo, PasswordInput, ThemeToggle } from "../../components/ui";
 
 /** Teacher/admin login — no class picker, unlike the student login. */
 export default function StaffLoginPage() {
@@ -58,9 +58,7 @@ export default function StaffLoginPage() {
               />
             </div>
             <div className="sp-field">
-              <input
-                className="sp-input"
-                type="password"
+              <PasswordInput
                 placeholder={t("login.password")}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { changePassword } from "../../api/authApi";
 import { useAuth } from "../../auth/AuthContext";
-import { AdminLayout, AppHeader, Button, Card } from "../../components/ui";
+import { AdminLayout, AppHeader, Button, Card, PasswordInput } from "../../components/ui";
 import { useLanguage } from "../../i18n/LanguageContext";
 import { errorDetail } from "../../utils/errorDetail";
 
@@ -48,9 +48,7 @@ export default function ChangePasswordPage() {
         <form onSubmit={handleSubmit} className="stack">
           <div className="sp-field">
             <label className="sp-field__label">{t("changePassword.current")}</label>
-            <input
-              className="sp-input"
-              type="password"
+            <PasswordInput
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
               required
@@ -58,9 +56,7 @@ export default function ChangePasswordPage() {
           </div>
           <div className="sp-field">
             <label className="sp-field__label">{t("changePassword.new")}</label>
-            <input
-              className="sp-input"
-              type="password"
+            <PasswordInput
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               minLength={6}
@@ -69,9 +65,7 @@ export default function ChangePasswordPage() {
           </div>
           <div className="sp-field">
             <label className="sp-field__label">{t("changePassword.confirm")}</label>
-            <input
-              className="sp-input"
-              type="password"
+            <PasswordInput
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               minLength={6}

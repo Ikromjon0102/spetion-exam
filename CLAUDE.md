@@ -1029,6 +1029,33 @@ Decisions already confirmed with the user, so don't re-litigate them:
         against two real leftover test exams whose windows happened to
         still be open in the local dev DB — confirmed the aggregate counts
         and per-exam badges both matched actual attempt rows.
+   - **Fourth round: two quick follow-ups the same session.**
+     1. **Black-on-black stat card digits, found by the user in real dark
+        mode** (this environment's browser tool defaults to a light
+        preview, which is exactly why the third round's own verification
+        missed it) — giving `StatCard` an `onClick` renders it as a native
+        `<button>`, and unlike a `<div>`, a `<button>` doesn't inherit
+        text color from its ancestors; the browser's own default
+        form-control color wins instead, regardless of the page's dark
+        theme. The same bug existed on the new `ClassesPage.tsx` grid
+        cards (also converted to `<button>`s that round). Fixed both with
+        an explicit `color: inherit` — this is now the standard thing to
+        remember any time a previously-plain `<div>` gets turned into a
+        clickable `<button>` in this codebase.
+     2. **Password fields had no show/hide toggle.** New
+        `components/ui/PasswordInput.tsx` — a drop-in replacement for
+        `<input type="password" className="sp-input" />` (same props,
+        wraps in a `.sp-password-field` positioning container) with an
+        eye/eye-off icon button that toggles the input's `type` between
+        `password`/`text`. Two new `Icon` paths (`eye`, `eye-off`,
+        standard Feather icon shapes). Replaced all 6 real password
+        fields app-wide: both login pages, `ChangePasswordPage.tsx` (all
+        3 fields), and the admin-created-account forms on `StudentsPage`/
+        `TeachersPage`/`ClassDetailPage`. The bulk class-password-reset
+        field on `StudentsPage`/`ClassDetailPage` was deliberately left
+        as a plain visible text input, not converted — it was never
+        masked in the first place (the admin is choosing a shared temp
+        password to hand out, not entering a secret they need hidden).
 5. **Low/high performer visibility for admin/teacher** — done. New
    `StudentPerformancePage.tsx` (`/students/{id}/performance`) reads the
    already-existing `GET /admin/students/{id}/performance` endpoint

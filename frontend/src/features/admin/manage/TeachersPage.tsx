@@ -10,7 +10,7 @@ import {
   type SubjectOut,
   type TeacherRow,
 } from "../../../api/adminApi";
-import { AdminLayout, Badge, Button, Card, ConfirmButton, ListRow, Modal } from "../../../components/ui";
+import { AdminLayout, Badge, Button, Card, ConfirmButton, ListRow, Modal, PasswordInput } from "../../../components/ui";
 import { useLanguage } from "../../../i18n/LanguageContext";
 import { errorDetail } from "../../../utils/errorDetail";
 import TeacherAssignmentEditor from "./TeacherAssignmentEditor";
@@ -231,9 +231,7 @@ export default function TeachersPage() {
               onChange={(e) => setUsername(e.target.value)}
               required
             />
-            <input
-              className="sp-input"
-              type="password"
+            <PasswordInput
               placeholder={t("login.password")}
               value={password}
               onChange={(e) => setPassword(e.target.value)}

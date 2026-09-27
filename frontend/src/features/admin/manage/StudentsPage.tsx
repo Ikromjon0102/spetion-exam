@@ -12,7 +12,17 @@ import {
   type ClassOut,
   type StudentRow,
 } from "../../../api/adminApi";
-import { AdminLayout, Badge, Button, Card, ConfirmButton, ListRow, Modal, StatCard } from "../../../components/ui";
+import {
+  AdminLayout,
+  Badge,
+  Button,
+  Card,
+  ConfirmButton,
+  ListRow,
+  Modal,
+  PasswordInput,
+  StatCard,
+} from "../../../components/ui";
 import { useLanguage } from "../../../i18n/LanguageContext";
 import { errorDetail } from "../../../utils/errorDetail";
 
@@ -389,9 +399,7 @@ export default function StudentsPage() {
               onChange={(e) => setUsername(e.target.value)}
               required
             />
-            <input
-              className="sp-input"
-              type="password"
+            <PasswordInput
               placeholder={t("login.password")}
               value={password}
               onChange={(e) => setPassword(e.target.value)}

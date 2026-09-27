@@ -31,7 +31,7 @@ export default function StaffLoginPage() {
   }
 
   return (
-    <div className="center-screen">
+    <div className="center-screen login-screen">
       <div style={{ width: "100%", maxWidth: 380 }}>
         <div style={{ display: "flex", justifyContent: "center", gap: "var(--space-2)", marginBottom: "var(--space-4)" }}>
           <LanguageSwitcher />
@@ -40,7 +40,7 @@ export default function StaffLoginPage() {
         <div style={{ display: "flex", justifyContent: "center", marginBottom: "var(--space-8)" }}>
           <Logo variant="stacked" tone="red" height={96} />
         </div>
-        <Card>
+        <Card className="login-card">
           <h1 className="h3" style={{ marginBottom: "var(--space-1)" }}>
             {t("login.staffTitle")}
           </h1>

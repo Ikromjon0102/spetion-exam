@@ -171,3 +171,49 @@ p {
   justify-content: center;
   padding: var(--space-6) var(--space-4);
 }
+
+/* Login screens only — a plain .center-screen elsewhere (e.g. an empty
+   state) stays untouched. Two large, softly blurred color blobs behind
+   the card so the login page isn't just a card floating in a void; the
+   card itself sits in a stacking context above them via z-index. Alpha
+   values are low enough to read as a gentle wash on both the near-white
+   light surface and the near-black dark one, so no per-theme overrides
+   are needed here (unlike tokens.css's solid colors). */
+.login-screen {
+  position: relative;
+  overflow: hidden;
+}
+
+.login-screen::before,
+.login-screen::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(70px);
+  pointer-events: none;
+}
+
+.login-screen::before {
+  width: 560px;
+  height: 560px;
+  top: -180px;
+  right: -140px;
+  background: radial-gradient(circle, rgba(221, 24, 8, 0.24), transparent 70%);
+}
+
+.login-screen::after {
+  width: 440px;
+  height: 440px;
+  bottom: -160px;
+  left: -120px;
+  background: radial-gradient(circle, rgba(54, 111, 236, 0.16), transparent 70%);
+}
+
+.login-screen > * {
+  position: relative;
+  z-index: 1;
+}
+
+.login-card {
+  box-shadow: 0 24px 60px -20px rgba(221, 24, 8, 0.25);
+}

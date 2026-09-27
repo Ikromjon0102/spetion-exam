@@ -880,6 +880,25 @@ Decisions already confirmed with the user, so don't re-litigate them:
      picks up even under pytest — every test that exercises grading must
      mock this function or it will make a real, billed network call), plus
      two direct unit tests of the service's own fallback behavior.
+   - **Post-hoc UI cleanup on `StudentsPage.tsx`, requested after the user
+     looked at the page again**: the add-student/bulk-import/reset-password
+     forms (each a full `Card`) used to sit above the roster, pushing it
+     down and dominating the page even though — per the user's own
+     framing — they're used far less often than just *looking at* the
+     roster. Moved all three into a new `Modal` component
+     (`components/ui/Modal.tsx` + `modal.css` — overlay + centered card,
+     closes on backdrop click/`Escape`/the × button, first modal this
+     codebase has needed), triggered by three toolbar buttons
+     ("+ Yangi o'quvchi qo'shish", "+ Ro'yxatdan ko'p o'quvchi qo'shish",
+     "Sinf bo'yicha parolni almashtirish") next to the page title. The
+     class filter + a `StatCard` student count now sit directly above the
+     roster, which is the actual visual focus of the page. Each modal
+     resets its own error/success state and defaults its class picker to
+     the current filter when opened (`openAddModal`/`openBulkModal`/
+     `openResetModal`), so reopening one doesn't show a stale error from
+     last time. All the underlying handlers/logic are unchanged — this was
+     a pure layout change, no new backend calls. Two new `Icon` paths
+     (`x`, `plus`) were added for the close button and toolbar "+" prefix.
 5. **Low/high performer visibility for admin/teacher** — done. New
    `StudentPerformancePage.tsx` (`/students/{id}/performance`) reads the
    already-existing `GET /admin/students/{id}/performance` endpoint

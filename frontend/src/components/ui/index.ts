@@ -20,4 +20,5 @@ export { default as DonutChart } from "./DonutChart";
 export type { DonutSegment } from "./DonutChart";
 export { default as ConfirmButton } from "./ConfirmButton";
 export { default as AuthedImage } from "./AuthedImage";
+export { default as Modal } from "./Modal";
 import "./field.css";

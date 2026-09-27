@@ -12,15 +12,18 @@ import {
   type ClassOut,
   type StudentRow,
 } from "../../../api/adminApi";
-import { AdminLayout, Badge, Button, Card, ConfirmButton, ListRow } from "../../../components/ui";
+import { AdminLayout, Badge, Button, Card, ConfirmButton, ListRow, Modal, StatCard } from "../../../components/ui";
 import { useLanguage } from "../../../i18n/LanguageContext";
 import { errorDetail } from "../../../utils/errorDetail";
+
+type OpenModal = "add" | "bulk" | "reset" | null;
 
 export default function StudentsPage() {
   const navigate = useNavigate();
   const [classes, setClasses] = useState<ClassOut[]>([]);
   const [students, setStudents] = useState<StudentRow[]>([]);
   const [filterClassId, setFilterClassId] = useState<number | "">("");
+  const [openModal, setOpenModal] = useState<OpenModal>(null);
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -69,6 +72,33 @@ export default function StudentsPage() {
     await reloadStudents(classId);
   }
 
+  function openAddModal() {
+    setError(null);
+    setUsername("");
+    setPassword("");
+    setFullName("");
+    setStudentCode("");
+    setNewClassId(filterClassId);
+    setOpenModal("add");
+  }
+
+  function openBulkModal() {
+    setBulkError(null);
+    setBulkResult(null);
+    setBulkNames("");
+    setBulkClassId(filterClassId);
+    setOpenModal("bulk");
+  }
+
+  function openResetModal() {
+    setResetError(null);
+    setResetSuccess(null);
+    setResetConfirming(false);
+    setResetPassword("");
+    setResetClassId(filterClassId);
+    setOpenModal("reset");
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -82,11 +112,7 @@ export default function StudentsPage() {
         class_id: Number(newClassId),
         student_code: studentCode,
       });
-      setUsername("");
-      setPassword("");
-      setFullName("");
-      setStudentCode("");
-      setNewClassId("");
+      setOpenModal(null);
       await reloadStudents(filterClassId);
     } catch (err) {
       setError(errorDetail(err, t("adminStudents.addError")));
@@ -190,234 +216,60 @@ export default function StudentsPage() {
   return (
     <AdminLayout>
       <div className="page">
-        <h1 className="h2" style={{ marginBottom: "var(--space-6)" }}>
-          {t("adminStudents.title")}
-        </h1>
-
-        <Card style={{ marginBottom: "var(--space-8)" }}>
-          <h2 className="h4" style={{ marginBottom: "var(--space-4)" }}>
-            {t("adminStudents.addTitle")}
-          </h2>
-          <form onSubmit={handleSubmit} className="stack">
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-3)" }}>
-              <input
-                className="sp-input"
-                placeholder={t("login.username")}
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required
-              />
-              <input
-                className="sp-input"
-                type="password"
-                placeholder={t("login.password")}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-              <input
-                className="sp-input"
-                placeholder={t("adminStudents.fullName")}
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                required
-              />
-              <input
-                className="sp-input"
-                placeholder={t("adminStudents.studentCode")}
-                value={studentCode}
-                onChange={(e) => setStudentCode(e.target.value)}
-                required
-              />
-              <select
-                className="sp-select"
-                value={newClassId}
-                onChange={(e) => setNewClassId(Number(e.target.value))}
-                required
-              >
-                <option value="">{t("upload.selectClass")}</option>
-                {classes.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.display_name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            {error && (
-              <p role="alert" className="body-sm" style={{ color: "var(--danger)" }}>
-                {error}
-              </p>
-            )}
-            <Button type="submit" disabled={submitting}>
-              {t("adminStudents.add")}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: "var(--space-3)",
+            marginBottom: "var(--space-6)",
+          }}
+        >
+          <h1 className="h2" style={{ margin: 0 }}>
+            {t("adminStudents.title")}
+          </h1>
+          <div style={{ display: "flex", gap: "var(--space-2)", flexWrap: "wrap" }}>
+            <Button variant="secondary" size="sm" onClick={openAddModal}>
+              + {t("adminStudents.addTitle")}
             </Button>
-          </form>
-        </Card>
-
-        <Card style={{ marginBottom: "var(--space-8)" }}>
-          <h2 className="h4" style={{ marginBottom: "var(--space-2)" }}>
-            {t("adminStudents.bulkTitle")}
-          </h2>
-          <p className="body-sm" style={{ color: "var(--text-secondary)", marginBottom: "var(--space-4)" }}>
-            {t("adminStudents.bulkHint")}
-          </p>
-          <form onSubmit={handleBulkSubmit} className="stack">
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 220px", gap: "var(--space-3)" }}>
-              <textarea
-                className="sp-input"
-                rows={6}
-                placeholder={t("adminStudents.bulkPlaceholder")}
-                value={bulkNames}
-                onChange={(e) => setBulkNames(e.target.value)}
-                style={{ resize: "vertical", fontFamily: "inherit" }}
-              />
-              <div className="stack" style={{ gap: "var(--space-3)" }}>
-                <select
-                  className="sp-select"
-                  value={bulkClassId}
-                  onChange={(e) => setBulkClassId(e.target.value === "" ? "" : Number(e.target.value))}
-                  required
-                >
-                  <option value="">{t("adminStudents.bulkClass")}</option>
-                  {classes.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.display_name}
-                    </option>
-                  ))}
-                </select>
-                <Button type="submit" disabled={bulkSubmitting || bulkClassId === "" || !bulkNames.trim()}>
-                  {t("adminStudents.bulkSubmit")}
-                </Button>
-              </div>
-            </div>
-            {bulkError && (
-              <p role="alert" className="body-sm" style={{ color: "var(--danger)" }}>
-                {bulkError}
-              </p>
-            )}
-          </form>
-
-          {bulkResult && (
-            <div style={{ marginTop: "var(--space-4)" }}>
-              {bulkResult.created.length > 0 && (
-                <>
-                  <h3 className="h5" style={{ marginBottom: "var(--space-1)" }}>
-                    {t("adminStudents.bulkResultTitle")} ({bulkResult.created.length})
-                  </h3>
-                  <p className="body-sm" style={{ color: "var(--text-secondary)", marginBottom: "var(--space-3)" }}>
-                    {t("adminStudents.bulkResultHint")}
-                  </p>
-                  <div style={{ overflowX: "auto" }}>
-                    <table className="body-sm" style={{ width: "100%", borderCollapse: "collapse" }}>
-                      <thead>
-                        <tr style={{ textAlign: "left", borderBottom: "1px solid var(--border)" }}>
-                          <th style={{ padding: "var(--space-2)" }}>{t("adminStudents.fullName")}</th>
-                          <th style={{ padding: "var(--space-2)" }}>{t("login.username")}</th>
-                          <th style={{ padding: "var(--space-2)" }}>{t("login.password")}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {bulkResult.created.map((row) => (
-                          <tr key={row.username} style={{ borderBottom: "1px solid var(--border)" }}>
-                            <td style={{ padding: "var(--space-2)" }}>{row.full_name}</td>
-                            <td style={{ padding: "var(--space-2)", fontFamily: "var(--font-mono)" }}>{row.username}</td>
-                            <td style={{ padding: "var(--space-2)", fontFamily: "var(--font-mono)" }}>{row.password}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </>
-              )}
-              {bulkResult.errors.length > 0 && (
-                <div style={{ marginTop: "var(--space-3)" }}>
-                  <h3 className="h5" style={{ color: "var(--danger)", marginBottom: "var(--space-1)" }}>
-                    {t("adminStudents.bulkErrorsTitle")}
-                  </h3>
-                  <ul className="body-sm">
-                    {bulkResult.errors.map((e, i) => (
-                      <li key={i}>{e}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          )}
-        </Card>
-
-        <Card style={{ marginBottom: "var(--space-8)" }}>
-          <h2 className="h4" style={{ marginBottom: "var(--space-2)" }}>
-            {t("adminStudents.resetPwTitle")}
-          </h2>
-          <p className="body-sm" style={{ color: "var(--text-secondary)", marginBottom: "var(--space-4)" }}>
-            {t("adminStudents.resetPwHint")}
-          </p>
-          <form onSubmit={handleResetSubmit} className="stack">
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: "var(--space-3)" }}>
-              <select
-                className="sp-select"
-                value={resetClassId}
-                onChange={(e) => {
-                  setResetClassId(e.target.value === "" ? "" : Number(e.target.value));
-                  handleResetFormChange();
-                }}
-                required
-              >
-                <option value="">{t("adminStudents.resetPwClass")}</option>
-                {classes.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.display_name}
-                  </option>
-                ))}
-              </select>
-              <input
-                className="sp-input"
-                placeholder={t("adminStudents.resetPwNewPassword")}
-                value={resetPassword}
-                onChange={(e) => {
-                  setResetPassword(e.target.value);
-                  handleResetFormChange();
-                }}
-                required
-              />
-              <Button
-                type="submit"
-                variant={resetConfirming ? "danger" : "primary"}
-                disabled={resetSubmitting || resetClassId === "" || !resetPassword.trim()}
-              >
-                {resetConfirming ? t("adminStudents.resetPwConfirmButton") : t("adminStudents.resetPwSubmit")}
-              </Button>
-            </div>
-            {resetConfirming && (
-              <p className="body-sm" style={{ color: "var(--danger)" }}>
-                {t("adminStudents.resetPwConfirm", {
-                  className: classes.find((c) => c.id === resetClassId)?.display_name ?? "",
-                })}
-              </p>
-            )}
-            {resetError && (
-              <p role="alert" className="body-sm" style={{ color: "var(--danger)" }}>
-                {resetError}
-              </p>
-            )}
-            {resetSuccess && (
-              <p className="body-sm" style={{ color: "var(--success)" }}>
-                {resetSuccess}
-              </p>
-            )}
-          </form>
-        </Card>
-
-        <div className="sp-field" style={{ maxWidth: 260, marginBottom: "var(--space-4)" }}>
-          <select className="sp-select" value={filterClassId} onChange={(e) => handleFilterChange(e.target.value)}>
-            <option value="">{t("adminStudents.filterAll")}</option>
-            {classes.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.display_name}
-              </option>
-            ))}
-          </select>
+            <Button variant="secondary" size="sm" onClick={openBulkModal}>
+              + {t("adminStudents.bulkTitle")}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={openResetModal}>
+              {t("adminStudents.resetPwTitle")}
+            </Button>
+          </div>
         </div>
+
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: "var(--space-4)",
+            marginBottom: "var(--space-6)",
+          }}
+        >
+          <div className="sp-field" style={{ maxWidth: 260, margin: 0 }}>
+            <select className="sp-select" value={filterClassId} onChange={(e) => handleFilterChange(e.target.value)}>
+              <option value="">{t("adminStudents.filterAll")}</option>
+              {classes.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.display_name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <StatCard label={t("dashboard.students")} value={students.length} />
+        </div>
+
+        {error && (
+          <p role="alert" className="body-sm" style={{ color: "var(--danger)", marginBottom: "var(--space-4)" }}>
+            {error}
+          </p>
+        )}
 
         <div className="row-stack">
           {students.map((s) =>
@@ -501,6 +353,211 @@ export default function StudentsPage() {
           )}
         </div>
       </div>
+
+      <Modal open={openModal === "add"} onClose={() => setOpenModal(null)} title={t("adminStudents.addTitle")}>
+        <form onSubmit={handleSubmit} className="stack">
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-3)" }}>
+            <input
+              className="sp-input"
+              placeholder={t("login.username")}
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              required
+            />
+            <input
+              className="sp-input"
+              type="password"
+              placeholder={t("login.password")}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+            <input
+              className="sp-input"
+              placeholder={t("adminStudents.fullName")}
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              required
+            />
+            <input
+              className="sp-input"
+              placeholder={t("adminStudents.studentCode")}
+              value={studentCode}
+              onChange={(e) => setStudentCode(e.target.value)}
+              required
+            />
+            <select
+              className="sp-select"
+              value={newClassId}
+              onChange={(e) => setNewClassId(Number(e.target.value))}
+              required
+            >
+              <option value="">{t("upload.selectClass")}</option>
+              {classes.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.display_name}
+                </option>
+              ))}
+            </select>
+          </div>
+          {error && (
+            <p role="alert" className="body-sm" style={{ color: "var(--danger)" }}>
+              {error}
+            </p>
+          )}
+          <Button type="submit" disabled={submitting}>
+            {t("adminStudents.add")}
+          </Button>
+        </form>
+      </Modal>
+
+      <Modal open={openModal === "bulk"} onClose={() => setOpenModal(null)} title={t("adminStudents.bulkTitle")}>
+        <p className="body-sm" style={{ color: "var(--text-secondary)", marginBottom: "var(--space-4)" }}>
+          {t("adminStudents.bulkHint")}
+        </p>
+        <form onSubmit={handleBulkSubmit} className="stack">
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 220px", gap: "var(--space-3)" }}>
+            <textarea
+              className="sp-input"
+              rows={6}
+              placeholder={t("adminStudents.bulkPlaceholder")}
+              value={bulkNames}
+              onChange={(e) => setBulkNames(e.target.value)}
+              style={{ resize: "vertical", fontFamily: "inherit" }}
+            />
+            <div className="stack" style={{ gap: "var(--space-3)" }}>
+              <select
+                className="sp-select"
+                value={bulkClassId}
+                onChange={(e) => setBulkClassId(e.target.value === "" ? "" : Number(e.target.value))}
+                required
+              >
+                <option value="">{t("adminStudents.bulkClass")}</option>
+                {classes.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.display_name}
+                  </option>
+                ))}
+              </select>
+              <Button type="submit" disabled={bulkSubmitting || bulkClassId === "" || !bulkNames.trim()}>
+                {t("adminStudents.bulkSubmit")}
+              </Button>
+            </div>
+          </div>
+          {bulkError && (
+            <p role="alert" className="body-sm" style={{ color: "var(--danger)" }}>
+              {bulkError}
+            </p>
+          )}
+        </form>
+
+        {bulkResult && (
+          <div style={{ marginTop: "var(--space-4)" }}>
+            {bulkResult.created.length > 0 && (
+              <>
+                <h3 className="h5" style={{ marginBottom: "var(--space-1)" }}>
+                  {t("adminStudents.bulkResultTitle")} ({bulkResult.created.length})
+                </h3>
+                <p className="body-sm" style={{ color: "var(--text-secondary)", marginBottom: "var(--space-3)" }}>
+                  {t("adminStudents.bulkResultHint")}
+                </p>
+                <div style={{ overflowX: "auto" }}>
+                  <table className="body-sm" style={{ width: "100%", borderCollapse: "collapse" }}>
+                    <thead>
+                      <tr style={{ textAlign: "left", borderBottom: "1px solid var(--border)" }}>
+                        <th style={{ padding: "var(--space-2)" }}>{t("adminStudents.fullName")}</th>
+                        <th style={{ padding: "var(--space-2)" }}>{t("login.username")}</th>
+                        <th style={{ padding: "var(--space-2)" }}>{t("login.password")}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {bulkResult.created.map((row) => (
+                        <tr key={row.username} style={{ borderBottom: "1px solid var(--border)" }}>
+                          <td style={{ padding: "var(--space-2)" }}>{row.full_name}</td>
+                          <td style={{ padding: "var(--space-2)", fontFamily: "var(--font-mono)" }}>{row.username}</td>
+                          <td style={{ padding: "var(--space-2)", fontFamily: "var(--font-mono)" }}>{row.password}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+            {bulkResult.errors.length > 0 && (
+              <div style={{ marginTop: "var(--space-3)" }}>
+                <h3 className="h5" style={{ color: "var(--danger)", marginBottom: "var(--space-1)" }}>
+                  {t("adminStudents.bulkErrorsTitle")}
+                </h3>
+                <ul className="body-sm">
+                  {bulkResult.errors.map((e, i) => (
+                    <li key={i}>{e}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
+
+      <Modal open={openModal === "reset"} onClose={() => setOpenModal(null)} title={t("adminStudents.resetPwTitle")}>
+        <p className="body-sm" style={{ color: "var(--text-secondary)", marginBottom: "var(--space-4)" }}>
+          {t("adminStudents.resetPwHint")}
+        </p>
+        <form onSubmit={handleResetSubmit} className="stack">
+          <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "var(--space-3)" }}>
+            <select
+              className="sp-select"
+              value={resetClassId}
+              onChange={(e) => {
+                setResetClassId(e.target.value === "" ? "" : Number(e.target.value));
+                handleResetFormChange();
+              }}
+              required
+            >
+              <option value="">{t("adminStudents.resetPwClass")}</option>
+              {classes.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.display_name}
+                </option>
+              ))}
+            </select>
+            <input
+              className="sp-input"
+              placeholder={t("adminStudents.resetPwNewPassword")}
+              value={resetPassword}
+              onChange={(e) => {
+                setResetPassword(e.target.value);
+                handleResetFormChange();
+              }}
+              required
+            />
+            <Button
+              type="submit"
+              variant={resetConfirming ? "danger" : "primary"}
+              disabled={resetSubmitting || resetClassId === "" || !resetPassword.trim()}
+            >
+              {resetConfirming ? t("adminStudents.resetPwConfirmButton") : t("adminStudents.resetPwSubmit")}
+            </Button>
+          </div>
+          {resetConfirming && (
+            <p className="body-sm" style={{ color: "var(--danger)" }}>
+              {t("adminStudents.resetPwConfirm", {
+                className: classes.find((c) => c.id === resetClassId)?.display_name ?? "",
+              })}
+            </p>
+          )}
+          {resetError && (
+            <p role="alert" className="body-sm" style={{ color: "var(--danger)" }}>
+              {resetError}
+            </p>
+          )}
+          {resetSuccess && (
+            <p className="body-sm" style={{ color: "var(--success)" }}>
+              {resetSuccess}
+            </p>
+          )}
+        </form>
+      </Modal>
     </AdminLayout>
   );
 }

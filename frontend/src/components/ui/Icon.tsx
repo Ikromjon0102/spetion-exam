@@ -11,6 +11,8 @@ const PATHS: Record<string, string> = {
   "chevron-right": "M9 18l6-6-6-6",
   "arrow-left": "M19 12H5 M12 19l-7-7 7-7",
   "bar-chart": "M18 20V10 M12 20V4 M6 20v-6",
+  x: "M18 6L6 18 M6 6l12 12",
+  plus: "M12 5v14 M5 12h14",
 };
 
 interface Props {

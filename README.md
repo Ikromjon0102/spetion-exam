@@ -48,7 +48,7 @@ Testlarni ishga tushirish (in-memory SQLite'da, Postgres shart emas):
 pytest app/tests -q
 ```
 
-105 test o'tadi (auth, parol almashtirish, admin boshqaruv (jumladan
+115 test o'tadi (auth, parol almashtirish, admin boshqaruv (jumladan
 ro'yxatdan ko'p o'quvchi qo'shish, sinf bo'yicha parolni almashtirish, sinf
 rahbari huquqlari, fan o'qituvchisi uchun ko'rish huquqi va har bir bo'lim
 uchun tahrirlash/o'chirish), nashr etilgan imtihonni qayta tahrirlash,
@@ -57,7 +57,10 @@ savol/variantga rasm (skrinshot) biriktirish, publish validatsiyasi,
 taymer/deadline, baholash, imtihon reytingi, sinf/parallel sinflar/maktab
 bo'yicha umumiy reyting, o'quvchining fanlar bo'yicha o'zlashtirish
 ko'rsatkichi, kunlik natijalarni sinf bo'yicha yig'ish (Telegram uchun
-rasm eksporti), DOCX/PDF parserlar — PDF parser ham sinov faylida, ham
+rasm eksporti), AI baholaydigan qisqa javob (short-answer) savollar —
+publish validatsiyasi, AI baholash (Anthropic API bilan haqiqiy chaqiruv
+mock qilinib sinovdan o'tkazilgan), ustoz tomonidan qayta baholash —,
+DOCX/PDF parserlar — PDF parser ham sinov faylida, ham
 OCR-fallback yo'lida, ham haqiqiy o'qituvchi fayllarida
 tekshirilgan).
 
@@ -273,9 +276,6 @@ har doim MinIO + Celery worker ishlatiladi.
   sqlite'da strukturaviy va funksional to'liq tekshirilgan, VPS tayyor
   bo'lgach `alembic upgrade head`ni o'sha yerga qarshi ishga tushirish
   kifoya.
-- Short-answer savollar uchun qo'lda baholash endpointi — hozircha kerak
-  emas (spec 4-bo'lim, v1.1 sifatida belgilangan); kelajakda buni AI orqali
-  avtomatik tekshirish g'oyasi ham bor, hali qaror qilinmagan.
 - PDF parser sintetik (reportlab bilan generatsiya qilingan) fayllarda va
   OCR-fallback yo'lida sinovdan o'tkazilgan, lekin haqiqiy skanerlangan/
   suratga olingan imtihon PDF faylida va murakkab matematik testlarda

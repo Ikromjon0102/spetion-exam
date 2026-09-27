@@ -96,37 +96,59 @@ export default function ExamResultPage() {
               <p className="body" style={{ marginBottom: "var(--space-4)", fontWeight: 600 }}>
                 {q.prompt_text}
               </p>
-              <div className="stack" style={{ gap: "var(--space-2)" }}>
-                {/* We only have the student's selected + correct option ids/text, not the
-                    full option list here — render those two, not a full option set.
-                    While the exam window is still open (!answers_revealed), the backend
-                    withholds the text entirely — don't reveal it via a bubble that names
-                    "correct", and don't show the picked option's text either (a correct
-                    pick would otherwise reveal the answer just as directly). */}
-                {result.answers_revealed && q.correct_option_id !== null && q.correct_option_id !== q.selected_option_id && (
-                  <AnswerOption letter="✓" correct disabled>
-                    <strong>{t("result.correctAnswer")}:</strong> {q.correct_option_text}
-                  </AnswerOption>
-                )}
-                {q.selected_option_id !== null ? (
-                  <AnswerOption letter={q.is_correct ? "✓" : "✕"} correct={!!q.is_correct} incorrect={!q.is_correct} disabled>
-                    {result.answers_revealed ? (
+              {q.question_type === "short_answer" ? (
+                <div className="stack" style={{ gap: "var(--space-2)" }}>
+                  <AnswerOption
+                    letter={q.answer_text ? (q.is_correct ? "✓" : "✕") : "—"}
+                    correct={!!q.answer_text && !!q.is_correct}
+                    incorrect={!!q.answer_text && !q.is_correct}
+                    disabled
+                  >
+                    {q.answer_text ? (
                       <>
-                        <strong>{q.is_correct ? t("result.yourAnswerCorrect") : t("result.yourAnswer")}:</strong>{" "}
-                        {q.selected_option_text}
+                        <strong>{t("result.yourAnswer")}:</strong> {q.answer_text}
                       </>
-                    ) : q.is_correct ? (
-                      t("result.answeredCorrectHidden")
                     ) : (
-                      t("result.answeredIncorrectHidden")
+                      t("result.noAnswer")
                     )}
                   </AnswerOption>
-                ) : (
-                  <AnswerOption letter="—" incorrect disabled>
-                    {t("result.noAnswer")}
-                  </AnswerOption>
-                )}
-              </div>
+                  {result.answers_revealed && q.ai_feedback && (
+                    <p className="body-sm ink-muted">{q.ai_feedback}</p>
+                  )}
+                </div>
+              ) : (
+                <div className="stack" style={{ gap: "var(--space-2)" }}>
+                  {/* We only have the student's selected + correct option ids/text, not the
+                      full option list here — render those two, not a full option set.
+                      While the exam window is still open (!answers_revealed), the backend
+                      withholds the text entirely — don't reveal it via a bubble that names
+                      "correct", and don't show the picked option's text either (a correct
+                      pick would otherwise reveal the answer just as directly). */}
+                  {result.answers_revealed && q.correct_option_id !== null && q.correct_option_id !== q.selected_option_id && (
+                    <AnswerOption letter="✓" correct disabled>
+                      <strong>{t("result.correctAnswer")}:</strong> {q.correct_option_text}
+                    </AnswerOption>
+                  )}
+                  {q.selected_option_id !== null ? (
+                    <AnswerOption letter={q.is_correct ? "✓" : "✕"} correct={!!q.is_correct} incorrect={!q.is_correct} disabled>
+                      {result.answers_revealed ? (
+                        <>
+                          <strong>{q.is_correct ? t("result.yourAnswerCorrect") : t("result.yourAnswer")}:</strong>{" "}
+                          {q.selected_option_text}
+                        </>
+                      ) : q.is_correct ? (
+                        t("result.answeredCorrectHidden")
+                      ) : (
+                        t("result.answeredIncorrectHidden")
+                      )}
+                    </AnswerOption>
+                  ) : (
+                    <AnswerOption letter="—" incorrect disabled>
+                      {t("result.noAnswer")}
+                    </AnswerOption>
+                  )}
+                </div>
+              )}
               <p className="caption" style={{ marginTop: "var(--space-3)" }}>
                 {q.points_awarded ?? 0} / {q.points} {t("result.points")}
               </p>

@@ -198,6 +198,7 @@ def get_result(exam_id: int, db: Session = Depends(get_db), student: Student = D
         questions_out.append(
             ResultQuestionOut(
                 question_id=question.id,
+                question_type=question.question_type.value,
                 prompt_text=question.prompt_text,
                 points=float(question.points),
                 selected_option_id=selected_option_id,
@@ -210,6 +211,8 @@ def get_result(exam_id: int, db: Session = Depends(get_db), student: Student = D
                 correct_option_text=(
                     option_texts.get(correct_option_id) if answers_revealed and correct_option_id else None
                 ),
+                answer_text=answer.answer_text if answer else None,
+                ai_feedback=(answer.ai_feedback if answer and answers_revealed else None),
                 is_correct=answer.is_correct if answer else False,
                 points_awarded=float(answer.points_awarded) if answer and answer.points_awarded is not None else 0.0,
             )

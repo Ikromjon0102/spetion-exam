@@ -50,6 +50,7 @@ class QuestionOut(BaseModel):
     source: str
     needs_review: bool
     parse_confidence: str | None = None
+    reference_answer: str | None = None
     options: list[QuestionOptionOut] = []
 
 
@@ -84,6 +85,7 @@ class QuestionUpdate(BaseModel):
     points: float | None = None
     needs_review: bool | None = None
     order_index: int | None = None
+    reference_answer: str | None = None
 
 
 class QuestionOptionCreate(BaseModel):
@@ -95,6 +97,7 @@ class QuestionCreate(BaseModel):
     question_type: str = "mcq"
     prompt_text: str
     points: float = 1
+    reference_answer: str | None = None
     options: list[QuestionOptionCreate] = []
 
 
@@ -106,3 +109,24 @@ class AttemptMonitorOut(BaseModel):
     deadline_at: datetime | None = None
     submitted_at: datetime | None = None
     score: float | None = None
+
+
+class AttemptAnswerReviewOut(BaseModel):
+    question_id: int
+    question_type: str
+    prompt_text: str
+    points: float
+    # short_answer only — the teacher's own model answer, shown alongside
+    # the student's answer_text so they can judge the AI's grade.
+    reference_answer: str | None = None
+    selected_option_id: int | None = None
+    selected_option_text: str | None = None
+    answer_text: str | None = None
+    is_correct: bool | None = None
+    points_awarded: float | None = None
+    ai_feedback: str | None = None
+    graded_by: str | None = None
+
+
+class AttemptAnswerOverrideIn(BaseModel):
+    points_awarded: float

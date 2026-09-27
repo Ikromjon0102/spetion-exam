@@ -64,11 +64,13 @@ export default function ExamReviewEditor() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [newQuestion, setNewQuestion] = useState({
+    question_type: "mcq" as "mcq" | "short_answer",
     prompt_text: "",
     options: ["", "", "", ""],
     correctIndex: 0,
     promptImageFile: null as File | null,
     optionImageFiles: [null, null, null, null] as (File | null)[],
+    reference_answer: "",
   });
 
   async function reload() {
@@ -122,7 +124,7 @@ export default function ExamReviewEditor() {
 
   async function saveQuestion(
     questionId: number,
-    patch: Partial<{ prompt_text: string; points: number; needs_review: boolean }>
+    patch: Partial<{ prompt_text: string; points: number; needs_review: boolean; reference_answer: string }>
   ) {
     try {
       await updateQuestion(id, questionId, patch);
@@ -210,16 +212,28 @@ export default function ExamReviewEditor() {
       setError(t("review.needsTextOrImage"));
       return;
     }
-    for (let i = 0; i < newQuestion.options.length; i++) {
-      if (!newQuestion.options[i].trim() && !newQuestion.optionImageFiles[i]) {
-        setError(t("review.needsTextOrImage"));
+    if (newQuestion.question_type === "short_answer") {
+      if (!newQuestion.reference_answer.trim()) {
+        setError(t("review.needsReferenceAnswer"));
         return;
+      }
+    } else {
+      for (let i = 0; i < newQuestion.options.length; i++) {
+        if (!newQuestion.options[i].trim() && !newQuestion.optionImageFiles[i]) {
+          setError(t("review.needsTextOrImage"));
+          return;
+        }
       }
     }
     try {
       const created = await addQuestion(id, {
+        question_type: newQuestion.question_type,
         prompt_text: newQuestion.prompt_text,
-        options: newQuestion.options.map((text, i) => ({ option_text: text, is_correct: i === newQuestion.correctIndex })),
+        reference_answer: newQuestion.question_type === "short_answer" ? newQuestion.reference_answer : undefined,
+        options:
+          newQuestion.question_type === "short_answer"
+            ? []
+            : newQuestion.options.map((text, i) => ({ option_text: text, is_correct: i === newQuestion.correctIndex })),
       });
       if (newQuestion.promptImageFile) {
         await setQuestionPromptImage(id, created.id, newQuestion.promptImageFile);
@@ -229,11 +243,13 @@ export default function ExamReviewEditor() {
         if (file) await setOptionImage(id, created.id, created.options[i].id, file);
       }
       setNewQuestion({
+        question_type: "mcq",
         prompt_text: "",
         options: ["", "", "", ""],
         correctIndex: 0,
         promptImageFile: null,
         optionImageFiles: [null, null, null, null],
+        reference_answer: "",
       });
       await reload();
     } catch (e) {
@@ -406,39 +422,54 @@ export default function ExamReviewEditor() {
                   onPaste={(e) => handlePromptPaste(q.id, e)}
                 />
               )}
-              <div className="stack" style={{ gap: "var(--space-2)" }}>
-                {q.options.map((opt) => (
-                  <div key={opt.id} style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
-                    <input
-                      type="radio"
-                      name={`correct-${q.id}`}
-                      checked={opt.is_correct}
-                      disabled={locked}
-                      onChange={() => setCorrectOption(q.id, opt.id)}
-                      style={{ accentColor: "var(--brand-600)", width: 18, height: 18, flexShrink: 0 }}
-                    />
-                    {opt.option_image_key ? (
-                      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", flex: 1 }}>
-                        <AuthedImage src={questionImageUrl(opt.option_image_key)} maxHeight={60} />
-                        {!locked && (
-                          <Button variant="ghost" size="sm" onClick={() => handleClearOptionImage(q.id, opt.id)}>
-                            {t("review.revertToText")}
-                          </Button>
-                        )}
-                      </div>
-                    ) : (
+              {q.question_type === "short_answer" ? (
+                <div className="sp-field">
+                  <label className="sp-field__label">{t("review.referenceAnswerLabel")}</label>
+                  <textarea
+                    className="sp-input"
+                    defaultValue={q.reference_answer ?? ""}
+                    disabled={locked}
+                    rows={2}
+                    placeholder={t("review.referenceAnswerPlaceholder")}
+                    style={{ resize: "vertical" }}
+                    onBlur={(e) => saveQuestion(q.id, { reference_answer: e.target.value })}
+                  />
+                </div>
+              ) : (
+                <div className="stack" style={{ gap: "var(--space-2)" }}>
+                  {q.options.map((opt) => (
+                    <div key={opt.id} style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
                       <input
-                        className="sp-input"
-                        defaultValue={opt.option_text}
+                        type="radio"
+                        name={`correct-${q.id}`}
+                        checked={opt.is_correct}
                         disabled={locked}
-                        placeholder={t("review.pasteHint")}
-                        onBlur={(e) => saveOptionText(q.id, opt.id, e.target.value)}
-                        onPaste={(e) => handleOptionPaste(q.id, opt.id, e)}
+                        onChange={() => setCorrectOption(q.id, opt.id)}
+                        style={{ accentColor: "var(--brand-600)", width: 18, height: 18, flexShrink: 0 }}
                       />
-                    )}
-                  </div>
-                ))}
-              </div>
+                      {opt.option_image_key ? (
+                        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", flex: 1 }}>
+                          <AuthedImage src={questionImageUrl(opt.option_image_key)} maxHeight={60} />
+                          {!locked && (
+                            <Button variant="ghost" size="sm" onClick={() => handleClearOptionImage(q.id, opt.id)}>
+                              {t("review.revertToText")}
+                            </Button>
+                          )}
+                        </div>
+                      ) : (
+                        <input
+                          className="sp-input"
+                          defaultValue={opt.option_text}
+                          disabled={locked}
+                          placeholder={t("review.pasteHint")}
+                          onBlur={(e) => saveOptionText(q.id, opt.id, e.target.value)}
+                          onPaste={(e) => handleOptionPaste(q.id, opt.id, e)}
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
               <CardFoot>
                 <label className="body-sm" style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
                   <input
@@ -464,6 +495,24 @@ export default function ExamReviewEditor() {
               {t("review.addQuestion")}
             </h3>
             <form onSubmit={handleAddQuestion} className="stack">
+              <div style={{ display: "flex", gap: "var(--space-2)" }}>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={newQuestion.question_type === "mcq" ? "primary" : "secondary"}
+                  onClick={() => setNewQuestion((prev) => ({ ...prev, question_type: "mcq" }))}
+                >
+                  {t("review.typeMcq")}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={newQuestion.question_type === "short_answer" ? "primary" : "secondary"}
+                  onClick={() => setNewQuestion((prev) => ({ ...prev, question_type: "short_answer" }))}
+                >
+                  {t("review.typeShortAnswer")}
+                </Button>
+              </div>
               {newQuestion.promptImageFile ? (
                 <div>
                   <PendingImagePreview file={newQuestion.promptImageFile} maxHeight={280} />
@@ -486,56 +535,72 @@ export default function ExamReviewEditor() {
                   rows={2}
                 />
               )}
-              {newQuestion.options.map((text, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
-                  <input
-                    type="radio"
-                    name="new-correct"
-                    checked={newQuestion.correctIndex === i}
-                    onChange={() => setNewQuestion({ ...newQuestion, correctIndex: i })}
-                    style={{ accentColor: "var(--brand-600)", width: 18, height: 18, flexShrink: 0 }}
+              {newQuestion.question_type === "short_answer" ? (
+                <div className="sp-field">
+                  <label className="sp-field__label">{t("review.referenceAnswerLabel")}</label>
+                  <textarea
+                    className="sp-input"
+                    placeholder={t("review.referenceAnswerPlaceholder")}
+                    value={newQuestion.reference_answer}
+                    onChange={(e) => setNewQuestion({ ...newQuestion, reference_answer: e.target.value })}
+                    rows={2}
+                    style={{ resize: "vertical" }}
                   />
-                  {newQuestion.optionImageFiles[i] ? (
-                    <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", flex: 1 }}>
-                      <PendingImagePreview file={newQuestion.optionImageFiles[i]!} maxHeight={60} />
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() =>
-                          setNewQuestion((prev) => {
-                            const optionImageFiles = [...prev.optionImageFiles];
-                            optionImageFiles[i] = null;
-                            return { ...prev, optionImageFiles };
-                          })
-                        }
-                      >
-                        {t("review.revertToText")}
-                      </Button>
+                </div>
+              ) : (
+                <>
+                  {newQuestion.options.map((text, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
+                      <input
+                        type="radio"
+                        name="new-correct"
+                        checked={newQuestion.correctIndex === i}
+                        onChange={() => setNewQuestion({ ...newQuestion, correctIndex: i })}
+                        style={{ accentColor: "var(--brand-600)", width: 18, height: 18, flexShrink: 0 }}
+                      />
+                      {newQuestion.optionImageFiles[i] ? (
+                        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", flex: 1 }}>
+                          <PendingImagePreview file={newQuestion.optionImageFiles[i]!} maxHeight={60} />
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() =>
+                              setNewQuestion((prev) => {
+                                const optionImageFiles = [...prev.optionImageFiles];
+                                optionImageFiles[i] = null;
+                                return { ...prev, optionImageFiles };
+                              })
+                            }
+                          >
+                            {t("review.revertToText")}
+                          </Button>
+                        </div>
+                      ) : (
+                        <input
+                          className="sp-input"
+                          placeholder={`${t("review.optionPlaceholder")} ${String.fromCharCode(65 + i)}`}
+                          value={text}
+                          onChange={(e) => {
+                            const options = [...newQuestion.options];
+                            options[i] = e.target.value;
+                            setNewQuestion({ ...newQuestion, options });
+                          }}
+                          onPaste={(e) => handleNewOptionPaste(i, e)}
+                        />
+                      )}
+                      {newQuestion.options.length > 2 && (
+                        <Button variant="ghost" size="sm" onClick={() => removeOptionSlot(i)}>
+                          {t("review.removeOption")}
+                        </Button>
+                      )}
                     </div>
-                  ) : (
-                    <input
-                      className="sp-input"
-                      placeholder={`${t("review.optionPlaceholder")} ${String.fromCharCode(65 + i)}`}
-                      value={text}
-                      onChange={(e) => {
-                        const options = [...newQuestion.options];
-                        options[i] = e.target.value;
-                        setNewQuestion({ ...newQuestion, options });
-                      }}
-                      onPaste={(e) => handleNewOptionPaste(i, e)}
-                    />
-                  )}
-                  {newQuestion.options.length > 2 && (
-                    <Button variant="ghost" size="sm" onClick={() => removeOptionSlot(i)}>
-                      {t("review.removeOption")}
+                  ))}
+                  {newQuestion.options.length < MAX_NEW_OPTIONS && (
+                    <Button type="button" variant="ghost" size="sm" onClick={addOptionSlot}>
+                      + {t("review.addOption")}
                     </Button>
                   )}
-                </div>
-              ))}
-              {newQuestion.options.length < MAX_NEW_OPTIONS && (
-                <Button type="button" variant="ghost" size="sm" onClick={addOptionSlot}>
-                  + {t("review.addOption")}
-                </Button>
+                </>
               )}
               <Button type="submit" variant="secondary">
                 {t("review.addQuestionSubmit")}

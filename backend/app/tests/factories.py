@@ -124,3 +124,26 @@ def add_mcq_question(
     db.flush()
     db.refresh(question)
     return question
+
+
+def add_short_answer_question(
+    db,
+    exam: Exam,
+    reference_answer: str = "Namunaviy javob",
+    order_index: int = 0,
+    needs_review: bool = False,
+    points: float = 2,
+) -> Question:
+    question = Question(
+        exam_id=exam.id,
+        order_index=order_index,
+        question_type=QuestionType.short_answer,
+        prompt_text=f"Savol {order_index + 1}?",
+        points=points,
+        needs_review=needs_review,
+        reference_answer=reference_answer,
+    )
+    db.add(question)
+    db.flush()
+    db.refresh(question)
+    return question

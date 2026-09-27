@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { getClassRanking, listExamAttempts, type AttemptMonitor, type ClassRanking } from "../../api/adminApi";
-import { AdminLayout, Badge, ListRow, StatCard, type BadgeStatus } from "../../components/ui";
+import { AdminLayout, Badge, Button, ListRow, StatCard, type BadgeStatus } from "../../components/ui";
 import { formatDateTimeUz } from "../../utils/formatDate";
 import { useLanguage } from "../../i18n/LanguageContext";
 
@@ -20,6 +20,7 @@ export default function RankingPage() {
   const [attempts, setAttempts] = useState<AttemptMonitor[]>([]);
   const [error, setError] = useState<string | null>(null);
   const { t } = useLanguage();
+  const navigate = useNavigate();
 
   useEffect(() => {
     getClassRanking(id)
@@ -117,6 +118,15 @@ export default function RankingPage() {
                       </span>
                     )}
                     <Badge status={badge.status}>{badge.key ? t(badge.key) : a.status}</Badge>
+                    {(a.status === "submitted" || a.status === "auto_submitted") && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => navigate(`/admin/exams/${id}/attempts/${a.student_id}/review`)}
+                      >
+                        {t("ranking.reviewAnswers")}
+                      </Button>
+                    )}
                   </>
                 }
               />

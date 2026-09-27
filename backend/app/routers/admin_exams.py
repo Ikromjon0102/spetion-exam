@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.storage import download_exam_file, upload_exam_file, upload_question_image
 from app.db.base import get_db
 from app.dependencies import get_current_user, require_role
-from app.models.attempt import ExamAttempt
+from app.models.attempt import AttemptStatus, ExamAttempt, StudentAnswer
 from app.models.exam import (
     Exam,
     ExamStatus,
@@ -24,6 +24,8 @@ from app.models.exam import (
 from app.models.org import Class
 from app.models.user import Student, Subject, TeacherClassSubject, User, UserRole
 from app.schemas.exam import (
+    AttemptAnswerOverrideIn,
+    AttemptAnswerReviewOut,
     AttemptMonitorOut,
     ExamCreate,
     ExamDetailOut,
@@ -36,7 +38,7 @@ from app.schemas.exam import (
     QuestionOut,
     QuestionUpdate,
 )
-from app.services import exam_service
+from app.services import exam_service, grading_service, ranking_service
 from app.tasks.parsing_tasks import parse_exam_upload
 
 router = APIRouter(prefix="/api/v1/admin/exams", tags=["admin-exams"])
@@ -53,6 +55,7 @@ def _question_out(question: Question) -> QuestionOut:
         source=question.source.value,
         needs_review=question.needs_review,
         parse_confidence=question.parse_confidence,
+        reference_answer=question.reference_answer,
         options=[
             QuestionOptionOut(
                 id=o.id,
@@ -249,6 +252,7 @@ def add_question(
         question_type=QuestionType(body.question_type),
         prompt_text=body.prompt_text,
         points=body.points,
+        reference_answer=body.reference_answer,
         source=QuestionSource.manual,
         needs_review=False,  # teacher-authored directly, nothing parsed to review
     )
@@ -552,4 +556,118 @@ def get_attempt_detail(
         deadline_at=attempt.deadline_at if attempt else None,
         submitted_at=attempt.submitted_at if attempt else None,
         score=float(attempt.score) if attempt and attempt.score is not None else None,
+    )
+
+
+def _get_graded_attempt_or_404(db: Session, exam_id: int, student_id: int) -> ExamAttempt:
+    attempt = db.query(ExamAttempt).filter_by(exam_id=exam_id, student_id=student_id).first()
+    if attempt is None or attempt.status not in (AttemptStatus.submitted, AttemptStatus.auto_submitted):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bu urinish hali topshirilmagan")
+    return attempt
+
+
+@router.get("/{exam_id}/attempts/{student_id}/answers", response_model=list[AttemptAnswerReviewOut])
+def get_attempt_answers(
+    exam_id: int,
+    student_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role("teacher", "admin")),
+):
+    """Per-question grading detail for one student's submitted attempt —
+    backs the short-answer review UI (ExamReviewEditor's "Natijalarni
+    tekshirish" tab): the teacher sees the student's answer_text, the AI's
+    points_awarded/feedback, and the reference_answer it graded against, so
+    they can judge the AI's call before overriding it. MCQ rows are
+    included too (selected_option_text only, no AI fields) so the teacher
+    doesn't need a second endpoint to see the whole attempt."""
+    exam = _get_exam_or_404(db, exam_id)
+    exam_service.ensure_can_manage_exam(db, user, exam)
+    attempt = _get_graded_attempt_or_404(db, exam_id, student_id)
+
+    answers_by_question = {a.question_id: a for a in attempt.answers}
+    out = []
+    for q in sorted(exam.questions, key=lambda q: q.order_index):
+        answer = answers_by_question.get(q.id)
+        option_texts = {o.id: o.option_text for o in q.options}
+        out.append(
+            AttemptAnswerReviewOut(
+                question_id=q.id,
+                question_type=q.question_type.value,
+                prompt_text=q.prompt_text,
+                points=float(q.points),
+                reference_answer=q.reference_answer,
+                selected_option_id=answer.selected_option_id if answer else None,
+                selected_option_text=(
+                    option_texts.get(answer.selected_option_id) if answer and answer.selected_option_id else None
+                ),
+                answer_text=answer.answer_text if answer else None,
+                is_correct=answer.is_correct if answer else None,
+                points_awarded=(
+                    float(answer.points_awarded) if answer and answer.points_awarded is not None else None
+                ),
+                ai_feedback=answer.ai_feedback if answer else None,
+                graded_by=answer.graded_by if answer else None,
+            )
+        )
+    return out
+
+
+@router.put(
+    "/{exam_id}/attempts/{student_id}/answers/{question_id}",
+    response_model=AttemptAnswerReviewOut,
+)
+def override_attempt_answer(
+    exam_id: int,
+    student_id: int,
+    question_id: int,
+    body: AttemptAnswerOverrideIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role("teacher", "admin")),
+):
+    """A teacher overrides one answer's points_awarded — the AI grade counts
+    immediately on submit (see grading_service/ai_grading_service), but the
+    user's explicit design lets a teacher go back and correct it afterward.
+    Uses grading_service.recompute_score_from_answers (sums existing
+    points_awarded), not grade_attempt, so this doesn't re-run AI grading
+    over every other answer and silently discard past overrides."""
+    exam = _get_exam_or_404(db, exam_id)
+    exam_service.ensure_can_manage_exam(db, user, exam)
+    attempt = _get_graded_attempt_or_404(db, exam_id, student_id)
+
+    question = db.get(Question, question_id)
+    if question is None or question.exam_id != exam_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Savol topilmadi")
+    if body.points_awarded < 0 or body.points_awarded > float(question.points):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Ball 0 va {question.points} oralig'ida bo'lishi kerak",
+        )
+
+    answer = db.query(StudentAnswer).filter_by(attempt_id=attempt.id, question_id=question_id).first()
+    if answer is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bu savolga javob topilmadi")
+
+    answer.points_awarded = body.points_awarded
+    answer.is_correct = body.points_awarded >= float(question.points)
+    answer.graded_by = "teacher"
+    db.commit()
+    db.refresh(answer)
+
+    grading_service.recompute_score_from_answers(db, attempt)
+    ranking_service.recompute_for_student(db, attempt.exam_id, attempt.student_id)
+
+    option_texts = {o.id: o.option_text for o in question.options}
+    return AttemptAnswerReviewOut(
+        question_id=question.id,
+        question_type=question.question_type.value,
+        prompt_text=question.prompt_text,
+        points=float(question.points),
+        reference_answer=question.reference_answer,
+        selected_option_id=answer.selected_option_id,
+        selected_option_text=option_texts.get(answer.selected_option_id) if answer.selected_option_id else None,
+        answer_text=answer.answer_text,
+        is_correct=answer.is_correct,
+        points_awarded=float(answer.points_awarded) if answer.points_awarded is not None else None,
+        ai_feedback=answer.ai_feedback,
+        graded_by=answer.graded_by,
     )

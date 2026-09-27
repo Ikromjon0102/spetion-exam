@@ -112,6 +112,12 @@ class Question(Base):
     # added questions. Surfaced in the review UI as a warning badge so a
     # teacher knows which parsed questions deserve extra scrutiny.
     parse_confidence: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    # Required for question_type=short_answer (enforced in exam_service.
+    # publish_exam) — the teacher's model answer. ai_grading_service compares
+    # the student's answer_text against THIS, never against prompt_text
+    # alone, so the AI never has to independently "know" the right answer.
+    # Null/unused for mcq questions.
+    reference_answer: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     exam: Mapped["Exam"] = relationship(back_populates="questions")
     # delete-orphan: deleting a question must take its options with it — the

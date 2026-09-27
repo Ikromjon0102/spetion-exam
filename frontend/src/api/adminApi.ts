@@ -101,6 +101,7 @@ export interface Question {
   source: string;
   needs_review: boolean;
   parse_confidence: "high" | "low" | null;
+  reference_answer: string | null;
   options: QuestionOption[];
 }
 
@@ -423,7 +424,13 @@ export async function updateExam(
 export async function updateQuestion(
   examId: number,
   questionId: number,
-  body: Partial<{ prompt_text: string; points: number; needs_review: boolean; order_index: number }>
+  body: Partial<{
+    prompt_text: string;
+    points: number;
+    needs_review: boolean;
+    order_index: number;
+    reference_answer: string;
+  }>
 ): Promise<Question> {
   const { data } = await apiClient.put<Question>(`/admin/exams/${examId}/questions/${questionId}`, body);
   return data;
@@ -448,6 +455,7 @@ export async function addQuestion(
     question_type?: string;
     prompt_text: string;
     points?: number;
+    reference_answer?: string;
     options: { option_text: string; is_correct: boolean }[];
   }
 ): Promise<Question> {
@@ -514,6 +522,41 @@ export async function closeExam(examId: number): Promise<ExamSummary> {
 
 export async function listExamAttempts(examId: number): Promise<AttemptMonitor[]> {
   const { data } = await apiClient.get<AttemptMonitor[]>(`/admin/exams/${examId}/attempts`);
+  return data;
+}
+
+export interface AttemptAnswerReview {
+  question_id: number;
+  question_type: string;
+  prompt_text: string;
+  points: number;
+  reference_answer: string | null;
+  selected_option_id: number | null;
+  selected_option_text: string | null;
+  answer_text: string | null;
+  is_correct: boolean | null;
+  points_awarded: number | null;
+  ai_feedback: string | null;
+  graded_by: "ai" | "teacher" | null;
+}
+
+export async function getAttemptAnswers(examId: number, studentId: number): Promise<AttemptAnswerReview[]> {
+  const { data } = await apiClient.get<AttemptAnswerReview[]>(
+    `/admin/exams/${examId}/attempts/${studentId}/answers`
+  );
+  return data;
+}
+
+export async function overrideAttemptAnswer(
+  examId: number,
+  studentId: number,
+  questionId: number,
+  pointsAwarded: number
+): Promise<AttemptAnswerReview> {
+  const { data } = await apiClient.put<AttemptAnswerReview>(
+    `/admin/exams/${examId}/attempts/${studentId}/answers/${questionId}`,
+    { points_awarded: pointsAwarded }
+  );
   return data;
 }
 

@@ -443,14 +443,11 @@ Known gaps (see README.md "Hali qilinmagan" for the full list): no live-DB
 migration run yet (the user will run it against a DigitalOcean VPS
 Postgres instance rather than local Docker/WSL2 — give them the
 `alembic upgrade head` command and a `DATABASE_URL` pointed at that VPS
-when they're ready, no code changes needed), no short-answer manual
-grading (explicitly deferred by the user — not needed yet since grading
-free-text answers costs a teacher's time either way; the user floated
-having an AI model grade short-answers automatically as a *future* idea,
-not committed to, so raise it again rather than assuming it's still
-wanted if this comes back up), and the real-world-scanned-PDF /
-complex-math-test parsing accuracy question is still open (the user is
-looking for real sample files to try). `parse_confidence` is no longer a
+when they're ready, no code changes needed), and the real-world-scanned-
+PDF/complex-math-test parsing accuracy question is still open (the user
+is looking for real sample files to try). Short-answer grading is no
+longer a gap — see "AI-graded short-answer questions" under "Post-launch
+roadmap" below. `parse_confidence` is no longer a
 gap — see the bullet under "Current status" above.
 
 ## Database schema (target — see the full write-up in `docs/spec.md`)
@@ -793,16 +790,96 @@ Decisions already confirmed with the user, so don't re-litigate them:
      same "Yangi savol qo'shish" form (paste-image, variable option count,
      etc. all already there) a parsed exam lands on after upload. No
      backend change needed; `POST /admin/exams` was already tested.
-4. **AI-graded short-answer questions** (re-introducing `short_answer`,
-   which was previously deferred entirely). Confirmed design: the AI grade
-   is **final immediately** (no teacher approval gate before it counts) but
-   a teacher can go back and override it afterward. Critically, **the
-   teacher must supply a reference/model answer when authoring the
-   question** — the AI grades by comparing the student's answer against
-   that reference, it never judges from the prompt alone. Needs an
-   Anthropic API key in `backend/.env` (ask the user to add it themselves
-   rather than pasting it in chat) before this can be built/tested. Not yet
-   built.
+4. **AI-graded short-answer questions — done** (re-introducing
+   `short_answer`, which had existed as a bare enum value + unused
+   `answer_text` column since the original schema design, but was never
+   wired up anywhere). Confirmed design: the AI grade is **final
+   immediately** (no teacher approval gate before it counts) but a teacher
+   can go back and override it afterward. Critically, **the teacher must
+   supply a reference/model answer when authoring the question** — the AI
+   grades by comparing the student's answer against that reference, never
+   against the prompt alone.
+   - **Model: Haiku 4.5** — the user's own explicit choice after a cost
+     comparison (~$6/exam sitting at 400 students × 20 questions, vs. ~$12
+     for Sonnet 5) for what is a high-volume, low-complexity-per-call
+     classification task, not one where a bigger model earns its cost.
+   - `app/services/ai_grading_service.py` — `grade_short_answer()` calls
+     `client.messages.parse()` (Pydantic structured output, not manual
+     JSON parsing) with a system prompt that explicitly tells the model to
+     grade *only* against the reference answer, never its own knowledge.
+     Returns `(points_awarded, feedback)`, **never raises** — any failure
+     (no API key, network error, rate limit, malformed/refused response)
+     falls back to `(0.0, "<explanatory Uzbek message>")` so one bad
+     grading call can never break a student's exam submission. An empty/
+     whitespace-only answer short-circuits before ever constructing a
+     client (0 points, "javob yozilmagan", no wasted API call).
+   - New model columns: `Question.reference_answer` (Text, nullable — required
+     by `exam_service.publish_exam` when `question_type == short_answer`,
+     same pattern as the mcq option-count check), `StudentAnswer.ai_feedback`
+     (Text) and `StudentAnswer.graded_by` (`"ai"` | `"teacher"` | `None`,
+     null for mcq since that grading is deterministic) — migration
+     `e4b7c9a2f1d6_add_ai_grading_columns`.
+   - `grading_service.grade_attempt()` (called identically from the manual
+     `/submit` endpoint and the beat auto-submit sweep, as it always has
+     been) now branches on `question_type`: mcq scoring unchanged, short_answer
+     calls `ai_grading_service.grade_short_answer()` **inline, synchronously**
+     — no Celery task wraps it, unlike PDF/DOCX parsing. Deliberate: this
+     app's Celery "tasks" already run synchronously in both dev
+     (`CELERY_EAGER=true`) and prod (same setting, no Redis on the shared
+     VPS — see "Production deployment" below), so wrapping it would add
+     indirection with no actual async benefit today; if that infra ever
+     changes, wrap it then.
+   - **Teacher override**: `PUT /admin/exams/{id}/attempts/{student_id}/
+     answers/{question_id}` (body: `{points_awarded}`, range-checked against
+     `[0, question.points]`) sets `points_awarded`, derives `is_correct =
+     points_awarded >= question.points`, and sets `graded_by="teacher"`.
+     Recomputes `attempt.score` via a new `grading_service.
+     recompute_score_from_answers()` (sums existing `points_awarded`
+     across all answers) rather than re-running `grade_attempt` — reusing
+     `grade_attempt` here would re-invoke AI grading on every other answer
+     too and silently discard past overrides. A companion `GET .../
+     attempts/{student_id}/answers` returns every question's grading detail
+     (both mcq and short_answer rows, so the teacher doesn't need a second
+     endpoint) — `reference_answer`/`answer_text`/`ai_feedback`/`graded_by`
+     included, gated by the same `ensure_can_manage_exam` as every other
+     exam-authoring endpoint.
+   - Frontend: `ExamUploadPage.tsx`'s manual-entry mode and
+     `ExamReviewEditor.tsx`'s "Yangi savol qo'shish" form both gained a
+     "Test (variantli)" / "Qisqa javob" type toggle — short_answer mode
+     swaps the options UI for a single reference-answer textarea, both in
+     the creation form and in each existing question's edit view.
+     `ExamTakingPage.tsx` renders a plain `<textarea>` (saved on blur, same
+     pattern as every other autosave field in this app) instead of
+     `AnswerOption`s for short_answer questions, and `answeredCount` now
+     checks non-empty text for those. `ExamResultPage.tsx` shows the
+     student's own `answer_text` **unconditionally** (unlike
+     `selected_option_text`, this needs no reveal-gating — it's literally
+     what the student themselves wrote, not the answer key) plus
+     `ai_feedback` gated behind `answers_revealed` exactly like MCQ option
+     text, since feedback prose can describe what the correct answer
+     covers. New `AttemptAnswerReviewPage.tsx`
+     (`/admin/exams/{id}/attempts/{studentId}/review`, reachable via a
+     "Javoblarni ko'rish" button next to any submitted/auto_submitted row
+     on `RankingPage.tsx`) is the override UI described above.
+   - Verified end-to-end in-browser against the real Anthropic API (not
+     mocked) with the actual account added this session: manual-entry exam
+     creation → short_answer question authoring → publish → student
+     submission → AI grading called for real (the account had no credit
+     balance yet, so it exercised the graceful-fallback path — 0 points +
+     the explanatory Uzbek message — rather than a real grade; the
+     fallback path is exactly what makes this safe to ship before/without
+     credit) → teacher review page → override to full credit → ranking
+     correctly reflected the override. All temporary exam/subject/class/
+     student rows created for this manual test were cleaned up from the
+     dev DB afterward.
+   - Tests: `app/tests/test_ai_grading.py` — publish validation, AI grading
+     on submit, unanswered-question short-circuit, teacher override
+     (including out-of-range rejection), and access-control, all with
+     `ai_grading_service.grade_short_answer` monkeypatched (a real
+     `ANTHROPIC_API_KEY` now lives in `backend/.env`, which `Settings`
+     picks up even under pytest — every test that exercises grading must
+     mock this function or it will make a real, billed network call), plus
+     two direct unit tests of the service's own fallback behavior.
 5. **Low/high performer visibility for admin/teacher** — done. New
    `StudentPerformancePage.tsx` (`/students/{id}/performance`) reads the
    already-existing `GET /admin/students/{id}/performance` endpoint
@@ -843,8 +920,10 @@ Decisions already confirmed with the user, so don't re-litigate them:
    fixed), a fully scanned/photographed math test OCRs without crashing
    but with poor accuracy on math notation specifically (an accepted v1
    limitation, not a bug).
-3. Short-answer manual grading — see "Post-launch roadmap" item 4 above,
-   now actually wanted (with AI grading), waiting on an Anthropic API key.
+3. AI-graded short-answer questions — done, see "Post-launch roadmap"
+   item 4 above. Live-tested against the real Anthropic API; the account
+   just needs billing credit added (console.anthropic.com) before real
+   grades (rather than the graceful-fallback 0-point path) start flowing.
 
 ## Production deployment (live)
 

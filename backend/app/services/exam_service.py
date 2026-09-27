@@ -100,6 +100,15 @@ def publish_exam(db: Session, exam: Exam) -> Exam:
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Savol #{q.order_index + 1} aynan 1 ta to'g'ri javobga ega bo'lishi kerak",
                 )
+        elif q.question_type == QuestionType.short_answer:
+            # AI grading compares the student's answer against THIS, never
+            # against the prompt alone — without it there's nothing to grade
+            # against, so publish must not be allowed to skip it.
+            if not (q.reference_answer or "").strip():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Savol #{q.order_index + 1} uchun namunaviy javob kiritilmagan",
+                )
 
     if exam.start_at is None or exam.end_at is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="start_at/end_at belgilanmagan")

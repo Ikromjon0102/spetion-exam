@@ -25,6 +25,7 @@ export default function ExamTakingPage() {
 
   const [attempt, setAttempt] = useState<AttemptState | null>(null);
   const [answers, setAnswers] = useState<Record<number, number | null>>({});
+  const [textAnswers, setTextAnswers] = useState<Record<number, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const submittedRef = useRef(false);
@@ -32,10 +33,13 @@ export default function ExamTakingPage() {
   function applyState(state: AttemptState) {
     setAttempt(state);
     const initial: Record<number, number | null> = {};
+    const initialText: Record<number, string> = {};
     state.questions.forEach((q) => {
       initial[q.id] = q.selected_option_id;
+      initialText[q.id] = q.answer_text ?? "";
     });
     setAnswers(initial);
+    setTextAnswers(initialText);
   }
 
   useEffect(() => {
@@ -95,6 +99,14 @@ export default function ExamTakingPage() {
     }
   }
 
+  async function saveTextAnswer(questionId: number, text: string) {
+    try {
+      await submitAnswer(id, questionId, { answer_text: text });
+    } catch {
+      setError(t("taking.answerSaveError"));
+    }
+  }
+
   if (error && !attempt) {
     return (
       <>
@@ -122,7 +134,9 @@ export default function ExamTakingPage() {
   const minutes = Math.floor(remainingSeconds / 60);
   const seconds = remainingSeconds % 60;
   const timerClass = remainingSeconds <= 30 ? "sp-timer--danger" : remainingSeconds <= 120 ? "sp-timer--warning" : "";
-  const answeredCount = Object.values(answers).filter((v) => v !== null && v !== undefined).length;
+  const answeredCount = attempt.questions.filter((q) =>
+    q.question_type === "short_answer" ? (textAnswers[q.id] ?? "").trim().length > 0 : answers[q.id] != null
+  ).length;
 
   return (
     <>
@@ -165,23 +179,36 @@ export default function ExamTakingPage() {
                   {q.prompt_text}
                 </p>
               )}
-              <div className="stack" style={{ gap: "var(--space-2)" }}>
-                {q.options.map((opt, optIdx) => (
-                  <AnswerOption
-                    key={opt.id}
-                    letter={LETTERS[optIdx] ?? String(optIdx + 1)}
-                    selected={answers[q.id] === opt.id}
-                    disabled={submitting}
-                    onClick={() => selectOption(q.id, opt.id)}
-                  >
-                    {opt.option_image_key ? (
-                      <AuthedImage src={questionImageUrl(opt.option_image_key)} maxHeight={80} />
-                    ) : (
-                      opt.option_text
-                    )}
-                  </AnswerOption>
-                ))}
-              </div>
+              {q.question_type === "short_answer" ? (
+                <textarea
+                  className="sp-input"
+                  rows={3}
+                  disabled={submitting}
+                  placeholder={t("taking.shortAnswerPlaceholder")}
+                  value={textAnswers[q.id] ?? ""}
+                  onChange={(e) => setTextAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))}
+                  onBlur={(e) => saveTextAnswer(q.id, e.target.value)}
+                  style={{ resize: "vertical" }}
+                />
+              ) : (
+                <div className="stack" style={{ gap: "var(--space-2)" }}>
+                  {q.options.map((opt, optIdx) => (
+                    <AnswerOption
+                      key={opt.id}
+                      letter={LETTERS[optIdx] ?? String(optIdx + 1)}
+                      selected={answers[q.id] === opt.id}
+                      disabled={submitting}
+                      onClick={() => selectOption(q.id, opt.id)}
+                    >
+                      {opt.option_image_key ? (
+                        <AuthedImage src={questionImageUrl(opt.option_image_key)} maxHeight={80} />
+                      ) : (
+                        opt.option_text
+                      )}
+                    </AnswerOption>
+                  ))}
+                </div>
+              )}
             </Card>
           ))}
         </div>

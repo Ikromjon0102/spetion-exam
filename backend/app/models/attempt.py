@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import JSON, Enum, ForeignKey, Numeric, Text, UniqueConstraint
+from sqlalchemy import JSON, Enum, ForeignKey, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.timeutil import UTCDateTime
@@ -53,5 +53,13 @@ class StudentAnswer(Base):
     is_correct: Mapped[bool | None] = mapped_column(nullable=True)
     points_awarded: Mapped[float | None] = mapped_column(Numeric, nullable=True)
     answered_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    # short_answer only — the AI's brief justification for points_awarded,
+    # shown to the teacher on review so they aren't overriding blind.
+    ai_feedback: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # "ai" | "teacher" | None — None for mcq (deterministic, not applicable).
+    # Set to "ai" by ai_grading_service; a teacher's manual override in the
+    # review UI sets it to "teacher" so it's visible that a human, not the
+    # model, produced the final points_awarded on this answer.
+    graded_by: Mapped[str | None] = mapped_column(String(10), nullable=True)
 
     attempt: Mapped["ExamAttempt"] = relationship(back_populates="answers")

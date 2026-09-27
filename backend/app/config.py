@@ -34,5 +34,11 @@ class Settings(BaseSettings):
     # plain shell. Never needed in prod (installed via apt, always on PATH).
     tesseract_cmd: str | None = None
 
+    # AI grading of short-answer questions (ai_grading_service.py). None
+    # means the feature is unconfigured — grade_attempt then awards 0
+    # points with an explanatory feedback string instead of crashing the
+    # whole submit, since a missing key must never break exam submission.
+    anthropic_api_key: str | None = None
+
 
 settings = Settings()

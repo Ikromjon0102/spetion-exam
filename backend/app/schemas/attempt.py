@@ -55,12 +55,18 @@ class SubmitResultOut(BaseModel):
 
 class ResultQuestionOut(BaseModel):
     question_id: int
+    question_type: str
     prompt_text: str
     points: float
     selected_option_id: int | None = None
     selected_option_text: str | None = None
     correct_option_id: int | None = None
     correct_option_text: str | None = None
+    # short_answer only — answer_text is always the student's own writing
+    # (no reveal-gating needed), ai_feedback is gated the same way option
+    # text is, since it can describe what the correct answer covers.
+    answer_text: str | None = None
+    ai_feedback: str | None = None
     is_correct: bool | None = None
     points_awarded: float | None = None
 

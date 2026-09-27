@@ -41,6 +41,12 @@
   text-align: left;
   width: 100%;
   font-family: inherit;
+  /* A native <button> doesn't inherit text color like a <div> does — the
+     browser's default form-control stylesheet sets its own (effectively
+     black) color, which otherwise wins over the surrounding dark theme
+     regardless of any --ink variable set higher up. Without this, every
+     clickable StatCard's value renders unreadable-black-on-black. */
+  color: inherit;
   transition: border-color 120ms ease, transform 120ms ease;
 }
 .sp-statcard--clickable:hover {

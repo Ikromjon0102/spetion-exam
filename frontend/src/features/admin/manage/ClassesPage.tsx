@@ -128,6 +128,10 @@ export default function ClassesPage() {
                 flexDirection: "column",
                 gap: "var(--space-2)",
                 padding: "var(--space-4)",
+                // A native <button> doesn't inherit text color the way a
+                // <div> does (browser default form-control color wins
+                // otherwise) — same bug already fixed on StatCard.
+                color: "inherit",
               }}
             >
               <div className="h5" style={{ margin: 0 }}>

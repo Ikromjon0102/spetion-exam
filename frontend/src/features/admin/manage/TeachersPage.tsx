@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   createAdminTeacher,
   deleteAdminTeacher,
@@ -10,7 +10,7 @@ import {
   type SubjectOut,
   type TeacherRow,
 } from "../../../api/adminApi";
-import { AdminLayout, Badge, Button, Card, ConfirmButton, ListRow } from "../../../components/ui";
+import { AdminLayout, Badge, Button, Card, ConfirmButton, ListRow, Modal } from "../../../components/ui";
 import { useLanguage } from "../../../i18n/LanguageContext";
 import { errorDetail } from "../../../utils/errorDetail";
 import TeacherAssignmentEditor from "./TeacherAssignmentEditor";
@@ -20,6 +20,8 @@ export default function TeachersPage() {
   const [classes, setClasses] = useState<ClassOut[]>([]);
   const [subjects, setSubjects] = useState<SubjectOut[]>([]);
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [search, setSearch] = useState("");
+  const [addOpen, setAddOpen] = useState(false);
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -64,6 +66,7 @@ export default function TeachersPage() {
       setPassword("");
       setFullName("");
       setSubjectId("");
+      setAddOpen(false);
       await reloadTeachers();
     } catch (err) {
       setError(errorDetail(err, t("adminTeachers.addError")));
@@ -102,70 +105,60 @@ export default function TeachersPage() {
     }
   }
 
+  const filteredTeachers = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return teachers;
+    return teachers.filter(
+      (teacher) => teacher.full_name.toLowerCase().includes(q) || teacher.username.toLowerCase().includes(q)
+    );
+  }, [teachers, search]);
+
   return (
     <AdminLayout>
       <div className="page">
-        <h1 className="h2" style={{ marginBottom: "var(--space-6)" }}>
-          {t("adminTeachers.title")}
-        </h1>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: "var(--space-3)",
+            marginBottom: "var(--space-6)",
+          }}
+        >
+          <h1 className="h2" style={{ margin: 0 }}>
+            {t("adminTeachers.title")}
+          </h1>
+          <Button variant="secondary" size="sm" onClick={() => setAddOpen(true)}>
+            + {t("adminTeachers.addTitle")}
+          </Button>
+        </div>
 
-        <Card style={{ marginBottom: "var(--space-8)" }}>
-          <h2 className="h4" style={{ marginBottom: "var(--space-4)" }}>
-            {t("adminTeachers.addTitle")}
-          </h2>
-          <form onSubmit={handleSubmit} className="stack">
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-3)" }}>
-              <input
-                className="sp-input"
-                placeholder={t("login.username")}
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required
-              />
-              <input
-                className="sp-input"
-                type="password"
-                placeholder={t("login.password")}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-              <input
-                className="sp-input"
-                placeholder={t("adminTeachers.fullName")}
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                required
-              />
-              <select className="sp-select" value={subjectId} onChange={(e) => setSubjectId(Number(e.target.value))}>
-                <option value="">{t("adminTeachers.mainSubject")}</option>
-                {subjects.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            {error && (
-              <p role="alert" className="body-sm" style={{ color: "var(--danger)" }}>
-                {error}
-              </p>
-            )}
-            <Button type="submit" disabled={submitting}>
-              {t("adminTeachers.add")}
-            </Button>
-          </form>
-        </Card>
+        <input
+          className="sp-input"
+          placeholder={t("common.searchPlaceholder")}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          style={{ maxWidth: 320, marginBottom: "var(--space-6)" }}
+        />
+
+        {error && (
+          <p role="alert" className="body-sm" style={{ color: "var(--danger)", marginBottom: "var(--space-4)" }}>
+            {error}
+          </p>
+        )}
+
+        {teachers.length > 0 && filteredTeachers.length === 0 && (
+          <p className="body-sm ink-muted">{t("common.noSearchResults")}</p>
+        )}
 
         <div className="row-stack">
-          {teachers.map((teacher) => (
+          {filteredTeachers.map((teacher) => (
             <div key={teacher.id}>
               <ListRow
                 state={teacher.is_active ? "resting" : "free"}
                 title={teacher.full_name}
                 subtitle={teacher.username}
-                chevron
-                onClick={() => setExpandedId(expandedId === teacher.id ? null : teacher.id)}
                 trailing={
                   <>
                     <Badge status={teacher.is_active ? "success" : "neutral"}>
@@ -174,31 +167,28 @@ export default function TeachersPage() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleToggleActive(teacher);
-                      }}
+                      onClick={() => setExpandedId(expandedId === teacher.id ? null : teacher.id)}
                     >
+                      {t("adminTeachers.assignments")}
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => handleToggleActive(teacher)}>
                       {teacher.is_active ? t("adminTeachers.deactivate") : t("adminTeachers.activate")}
                     </Button>
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
+                      onClick={() => {
                         setEditNameId(teacher.id);
                         setEditName(teacher.full_name);
                       }}
                     >
                       {t("common.edit")}
                     </Button>
-                    <span onClick={(e) => e.stopPropagation()}>
-                      <ConfirmButton
-                        label={t("common.delete")}
-                        confirmLabel={t("common.confirmDelete")}
-                        onConfirm={() => handleDelete(teacher.id)}
-                      />
-                    </span>
+                    <ConfirmButton
+                      label={t("common.delete")}
+                      confirmLabel={t("common.confirmDelete")}
+                      onConfirm={() => handleDelete(teacher.id)}
+                    />
                   </>
                 }
               />
@@ -230,6 +220,51 @@ export default function TeachersPage() {
           ))}
         </div>
       </div>
+
+      <Modal open={addOpen} onClose={() => setAddOpen(false)} title={t("adminTeachers.addTitle")}>
+        <form onSubmit={handleSubmit} className="stack">
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-3)" }}>
+            <input
+              className="sp-input"
+              placeholder={t("login.username")}
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              required
+            />
+            <input
+              className="sp-input"
+              type="password"
+              placeholder={t("login.password")}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+            <input
+              className="sp-input"
+              placeholder={t("adminTeachers.fullName")}
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              required
+            />
+            <select className="sp-select" value={subjectId} onChange={(e) => setSubjectId(Number(e.target.value))}>
+              <option value="">{t("adminTeachers.mainSubject")}</option>
+              {subjects.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          {error && (
+            <p role="alert" className="body-sm" style={{ color: "var(--danger)" }}>
+              {error}
+            </p>
+          )}
+          <Button type="submit" disabled={submitting}>
+            {t("adminTeachers.add")}
+          </Button>
+        </form>
+      </Modal>
     </AdminLayout>
   );
 }

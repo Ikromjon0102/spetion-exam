@@ -899,6 +899,83 @@ Decisions already confirmed with the user, so don't re-litigate them:
      last time. All the underlying handlers/logic are unchanged — this was
      a pure layout change, no new backend calls. Two new `Icon` paths
      (`x`, `plus`) were added for the close button and toolbar "+" prefix.
+   - **Second UI polish round, after the user tried the live site with
+     real data (48 teachers, 37 students) and sent annotated
+     screenshots.** Seven issues, all fixed:
+     1. **Student/teacher names were getting squashed to 2-3 characters**
+        (e.g. "A...") on real rows — `ListRow`'s trailing content (a class
+        `<select>` + badge + several action buttons) was `flex-shrink: 0`
+        while `.sp-row__info` had `min-width: 0`, so a row with enough
+        trailing content could squeeze the name arbitrarily thin instead
+        of wrapping. Fixed globally in `listrow.css`: `.sp-row` now
+        `flex-wrap: wrap`s, `.sp-row__info` has a `min-width: 140px` floor,
+        and `.sp-row__trailing` wraps onto its own line(s) when it doesn't
+        fit — this fixes every `ListRow` in the app at once, not just
+        students/teachers.
+     2. **Dashboard's "Diqqat talab qiladi" (needs review) and "Faol"
+        (active) stat cards weren't clickable**, despite the data they
+        summarize already existing as a filterable list one click away.
+        `StatCard` gained an optional `onClick` (renders as a `<button>`
+        with a hover/active state when passed — `statcard.css`'s
+        `.sp-statcard--clickable`) and `AdminExamListPage.tsx` gained
+        `?status=` / `?needsReview=1` query-param filtering (read via
+        `useSearchParams`, filtered client-side since the exam list was
+        already fetched whole) with a "Filtrni tozalash" (clear filter)
+        link. Every admin stat card on the dashboard is now clickable —
+        classes/subjects/students/teachers link to their management
+        pages, exams/needs-review/active link to the filtered exam list.
+     3. **`ClassesPage.tsx` was one class per row, needing a lot of
+        scrolling** for a real ~27-class school — changed to a responsive
+        card grid (`repeat(auto-fill, minmax(160px, 1fr))`, each cell a
+        `<button className="sp-card">`) plus a search box (filters
+        display_name/label client-side). The "add class" form moved into
+        a `Modal`, same pattern as the Students page.
+     4. **No way to hand a parent a physical/PDF copy of a student's
+        subject-by-subject performance.** Added a "Chop etish" (print)
+        button to `StudentPerformancePage.tsx` calling `window.print()` —
+        no PDF library, browser print-to-PDF already covers "save as PDF"
+        and actual printing in one mechanism. New shared print CSS in
+        `adminlayout.css`: any element with `className="no-print"` is
+        hidden when printing (used for the sidebar, nav, and the print
+        button itself), and `className="print-only"` is hidden on screen
+        but shown on paper (used for a school-logo + generation-date
+        header this page renders at the top). **Pitfall hit and fixed**:
+        the print-only header used an inline `style={{ display: "flex"
+        }}` for its on-screen-hidden layout — inline styles beat a plain
+        stylesheet rule, so `.print-only { display: none; }` without
+        `!important` was silently losing and the header showed on screen
+        too. Fixed by adding `!important` to the base rule (the
+        `@media print` override already had it, so both sides needed it
+        for the later one to still win when printing). Caught by actually
+        taking a screenshot rather than assuming the CSS worked — worth
+        remembering for any future `display`-toggling CSS class paired
+        with an inline `style` prop.
+     5. **`TeachersPage.tsx`, same one-per-row scrolling problem as
+        Classes** (48 teachers) — added a search box (filters full_name/
+        username) and moved "add teacher" into a `Modal`. While fixing
+        this, found and fixed a **real, pre-existing bug**: the row's
+        `ListRow` had `onClick` (making the whole row a `<button>`) *and*
+        rendered more `<Button>`s plus a `<ConfirmButton>` in `trailing` —
+        a `<button>` nested inside a `<button>`, invalid HTML, the exact
+        anti-pattern already documented above for `StudentsPage`/
+        `ClassDetailPage` (never make a `ListRow` clickable when its
+        `trailing` slot has its own buttons). Fixed the same way: removed
+        `ListRow`'s `onClick`, added an explicit
+        `adminTeachers.assignments` ("Biriktirilgan sinf/fanlar") button
+        in `trailing` that toggles the assignment editor instead —
+        confirmed fixed via `document.querySelectorAll('button button')`
+        returning empty after the change (the console-warnings tool kept
+        showing the old warning even after a hard reload, apparently
+        stale/cached — don't trust it over a direct DOM query when
+        verifying a nesting fix).
+     6. **No way to search for one teacher/student by name.** Search boxes
+        (plain client-side `.filter()` over the already-loaded list, no
+        new endpoints) added to `StudentsPage.tsx`, `TeachersPage.tsx`,
+        and `ClassesPage.tsx`.
+     7. Read by the user as "the dashboard's look needs to change too" —
+        addressed by point 2 above (every stat card became a real
+        navigation shortcut instead of a static number); no separate
+        broader dashboard redesign was requested or done beyond that.
 5. **Low/high performer visibility for admin/teacher** — done. New
    `StudentPerformancePage.tsx` (`/students/{id}/performance`) reads the
    already-existing `GET /admin/students/{id}/performance` endpoint

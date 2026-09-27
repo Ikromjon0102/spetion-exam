@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   bulkImportStudents,
@@ -23,6 +23,7 @@ export default function StudentsPage() {
   const [classes, setClasses] = useState<ClassOut[]>([]);
   const [students, setStudents] = useState<StudentRow[]>([]);
   const [filterClassId, setFilterClassId] = useState<number | "">("");
+  const [search, setSearch] = useState("");
   const [openModal, setOpenModal] = useState<OpenModal>(null);
 
   const [username, setUsername] = useState("");
@@ -71,6 +72,17 @@ export default function StudentsPage() {
     setFilterClassId(classId);
     await reloadStudents(classId);
   }
+
+  const filteredStudents = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return students;
+    return students.filter(
+      (s) =>
+        s.full_name.toLowerCase().includes(q) ||
+        s.username.toLowerCase().includes(q) ||
+        s.student_code.toLowerCase().includes(q)
+    );
+  }, [students, search]);
 
   function openAddModal() {
     setError(null);
@@ -252,17 +264,26 @@ export default function StudentsPage() {
             marginBottom: "var(--space-6)",
           }}
         >
-          <div className="sp-field" style={{ maxWidth: 260, margin: 0 }}>
-            <select className="sp-select" value={filterClassId} onChange={(e) => handleFilterChange(e.target.value)}>
-              <option value="">{t("adminStudents.filterAll")}</option>
-              {classes.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.display_name}
-                </option>
-              ))}
-            </select>
+          <div style={{ display: "flex", gap: "var(--space-3)", flexWrap: "wrap", flex: 1 }}>
+            <div className="sp-field" style={{ maxWidth: 260, margin: 0 }}>
+              <select className="sp-select" value={filterClassId} onChange={(e) => handleFilterChange(e.target.value)}>
+                <option value="">{t("adminStudents.filterAll")}</option>
+                {classes.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.display_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <input
+              className="sp-input"
+              placeholder={t("common.searchPlaceholder")}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{ maxWidth: 260 }}
+            />
           </div>
-          <StatCard label={t("dashboard.students")} value={students.length} />
+          <StatCard label={t("dashboard.students")} value={filteredStudents.length} />
         </div>
 
         {error && (
@@ -271,8 +292,12 @@ export default function StudentsPage() {
           </p>
         )}
 
+        {students.length > 0 && filteredStudents.length === 0 && (
+          <p className="body-sm ink-muted">{t("common.noSearchResults")}</p>
+        )}
+
         <div className="row-stack">
-          {students.map((s) =>
+          {filteredStudents.map((s) =>
             editingId === s.id ? (
               <Card key={s.id}>
                 <div className="stack">

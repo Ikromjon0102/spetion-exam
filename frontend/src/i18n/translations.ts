@@ -9,6 +9,9 @@ export const translations: Record<string, Record<Lang, string>> = {
   "common.edit": { uz: "Tahrirlash", ru: "Изменить" },
   "common.delete": { uz: "O'chirish", ru: "Удалить" },
   "common.confirmDelete": { uz: "Ha, o'chirish", ru: "Да, удалить" },
+  "common.searchPlaceholder": { uz: "Qidirish...", ru: "Поиск..." },
+  "common.noSearchResults": { uz: "Hech narsa topilmadi", ru: "Ничего не найдено" },
+  "common.print": { uz: "Chop etish", ru: "Печать" },
 
   // --- Auth / login ---
   "login.studentTitle": { uz: "O'quvchi kirishi", ru: "Вход для ученика" },
@@ -286,6 +289,12 @@ export const translations: Record<string, Record<Lang, string>> = {
     ru: "Загрузите первый экзамен кнопкой выше",
   },
   "adminExamList.needsReview": { uz: "tekshirilmagan", ru: "не проверено" },
+  "adminExamList.filteredNeedsReview": {
+    uz: "Faqat tekshirish talab qiladigan imtihonlar ko'rsatilmoqda",
+    ru: "Показаны только экзамены, требующие проверки",
+  },
+  "adminExamList.filteredStatus": { uz: "Filtr", ru: "Фильтр" },
+  "adminExamList.clearFilter": { uz: "Filtrni tozalash", ru: "Сбросить фильтр" },
   "status.draft": { uz: "Qoralama", ru: "Черновик" },
   "status.review": { uz: "Ko'rib chiqilmoqda", ru: "На проверке" },
   "status.scheduled": { uz: "Rejalashtirilgan", ru: "Запланирован" },

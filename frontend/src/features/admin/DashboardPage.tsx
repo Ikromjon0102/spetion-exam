@@ -107,21 +107,39 @@ export default function DashboardPage() {
         <div className="sp-statcard-grid" style={{ marginBottom: "var(--space-8)" }}>
           {isAdmin ? (
             <>
-              <StatCard label={t("dashboard.classes")} value={classes.length} />
-              <StatCard label={t("dashboard.subjects")} value={subjects.length} />
-              <StatCard label={t("dashboard.students")} value={students.length} />
-              <StatCard label={t("dashboard.teachers")} value={teachers.length} />
+              <StatCard label={t("dashboard.classes")} value={classes.length} onClick={() => navigate("/classes")} />
+              <StatCard
+                label={t("dashboard.subjects")}
+                value={subjects.length}
+                onClick={() => navigate("/admin/manage/subjects")}
+              />
+              <StatCard
+                label={t("dashboard.students")}
+                value={students.length}
+                onClick={() => navigate("/admin/manage/students")}
+              />
+              <StatCard
+                label={t("dashboard.teachers")}
+                value={teachers.length}
+                onClick={() => navigate("/admin/manage/teachers")}
+              />
             </>
           ) : (
             <StatCard label={t("dashboard.myAssignments")} value={assignments.length} />
           )}
-          <StatCard label={t("dashboard.myExams")} value={exams.length} />
+          <StatCard label={t("dashboard.myExams")} value={exams.length} onClick={() => navigate("/admin/exams")} />
           <StatCard
             label={t("dashboard.needsAttention")}
             value={exams.filter((e) => e.needs_review_count > 0).length}
             tone="danger"
+            onClick={() => navigate("/admin/exams?needsReview=1")}
           />
-          <StatCard label={t("status.active")} value={statusCounts.active ?? 0} tone="warning" />
+          <StatCard
+            label={t("status.active")}
+            value={statusCounts.active ?? 0}
+            tone="warning"
+            onClick={() => navigate("/admin/exams?status=active")}
+          />
         </div>
 
         <div style={{ display: "flex", gap: "var(--space-3)", marginBottom: "var(--space-8)" }}>

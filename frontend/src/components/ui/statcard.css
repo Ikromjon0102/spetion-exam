@@ -35,3 +35,17 @@
   grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   gap: var(--space-3);
 }
+
+.sp-statcard--clickable {
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  font-family: inherit;
+  transition: border-color 120ms ease, transform 120ms ease;
+}
+.sp-statcard--clickable:hover {
+  border-color: var(--brand-600);
+}
+.sp-statcard--clickable:active {
+  transform: scale(0.98);
+}

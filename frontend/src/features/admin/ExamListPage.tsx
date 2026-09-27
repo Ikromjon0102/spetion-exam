@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { listExams, type ExamSummary } from "../../api/adminApi";
 import { AdminLayout, Badge, Button, ListRow, type BadgeStatus } from "../../components/ui";
 import { useLanguage } from "../../i18n/LanguageContext";
@@ -18,6 +18,10 @@ export default function AdminExamListPage() {
   const [error, setError] = useState<string | null>(null);
   const { t } = useLanguage();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const statusFilter = searchParams.get("status");
+  const needsReviewFilter = searchParams.get("needsReview") === "1";
 
   useEffect(() => {
     listExams()
@@ -25,6 +29,16 @@ export default function AdminExamListPage() {
       .catch(() => setError(t("adminExamList.loadError")));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const filteredExams = useMemo(() => {
+    return exams.filter((e) => {
+      if (statusFilter && e.status !== statusFilter) return false;
+      if (needsReviewFilter && e.needs_review_count <= 0) return false;
+      return true;
+    });
+  }, [exams, statusFilter, needsReviewFilter]);
+
+  const hasFilter = !!statusFilter || needsReviewFilter;
 
   return (
     <AdminLayout>
@@ -43,6 +57,25 @@ export default function AdminExamListPage() {
           </Button>
         </div>
 
+        {hasFilter && (
+          <p className="body-sm ink-muted" style={{ marginBottom: "var(--space-4)" }}>
+            {needsReviewFilter
+              ? t("adminExamList.filteredNeedsReview")
+              : `${t("adminExamList.filteredStatus")}: ${
+                  statusFilter && STATUS_KEY[statusFilter] ? t(STATUS_KEY[statusFilter].key) : statusFilter
+                }`}{" "}
+            ·{" "}
+            <button
+              type="button"
+              className="body-sm"
+              style={{ color: "var(--brand-600)", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+              onClick={() => setSearchParams({})}
+            >
+              {t("adminExamList.clearFilter")}
+            </button>
+          </p>
+        )}
+
         {error && (
           <p role="alert" style={{ color: "var(--danger)" }}>
             {error}
@@ -51,9 +84,12 @@ export default function AdminExamListPage() {
         {!error && exams.length === 0 && (
           <ListRow state="free" title={t("adminExamList.empty")} subtitle={t("adminExamList.emptySubtitle")} />
         )}
+        {!error && exams.length > 0 && filteredExams.length === 0 && (
+          <ListRow state="free" title={t("common.noSearchResults")} />
+        )}
 
         <div className="row-stack">
-          {exams.map((exam) => {
+          {filteredExams.map((exam) => {
             const badge: { status: BadgeStatus; key: string | null } = STATUS_KEY[exam.status] ?? {
               status: "neutral",
               key: null,

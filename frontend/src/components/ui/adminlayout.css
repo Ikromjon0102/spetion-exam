@@ -125,3 +125,32 @@
   color: var(--ink);
 }
 
+/* Printing a page inside AdminLayout (e.g. a student's performance report
+   for a parent) should show only the page content, not the app chrome —
+   any element that shouldn't appear on paper gets className="no-print".
+   The reverse, className="print-only", is for a header block (school
+   branding, "generated on <date>") that only makes sense on paper. */
+/* !important: some usages set an inline `style={{ display: "flex" }}` for
+   their on-paper layout, which would otherwise beat this base rule (inline
+   styles outrank a plain stylesheet rule — only !important restores the
+   override) and show the block on screen too. */
+.print-only {
+  display: none !important;
+}
+@media print {
+  .sp-sidebar,
+  .no-print {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  .sp-shell,
+  .sp-shell__content {
+    display: block !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+}
+

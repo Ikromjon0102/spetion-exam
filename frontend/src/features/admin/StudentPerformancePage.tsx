@@ -6,7 +6,7 @@ import {
   type StudentPerformance,
   type SubjectHistory,
 } from "../../api/adminApi";
-import { AdminLayout, Badge, Card, LineChart, ListRow, type BadgeStatus } from "../../components/ui";
+import { AdminLayout, Badge, Button, Card, Logo, LineChart, ListRow, type BadgeStatus } from "../../components/ui";
 import { useLanguage } from "../../i18n/LanguageContext";
 import { formatDateUz } from "../../utils/formatDate";
 
@@ -60,12 +60,46 @@ export default function StudentPerformancePage() {
   return (
     <AdminLayout>
       <div className="page">
-        <Link to="/admin/manage/students" className="body-sm" style={{ marginBottom: "var(--space-4)", display: "inline-block" }}>
+        <div
+          className="print-only"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: "var(--space-6)",
+            paddingBottom: "var(--space-4)",
+            borderBottom: "1.5px solid var(--border)",
+          }}
+        >
+          <Logo tone="red" height={28} />
+          <span className="body-sm ink-muted">{formatDateUz(new Date().toISOString())}</span>
+        </div>
+
+        <Link
+          to="/admin/manage/students"
+          className="body-sm no-print"
+          style={{ marginBottom: "var(--space-4)", display: "inline-block" }}
+        >
           ← {t("studentPerformance.back")}
         </Link>
-        <h1 className="h2" style={{ marginBottom: "var(--space-2)" }}>
-          {performance?.full_name ?? t("studentPerformance.title")}
-        </h1>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            gap: "var(--space-3)",
+            marginBottom: "var(--space-2)",
+          }}
+        >
+          <h1 className="h2" style={{ margin: 0 }}>
+            {performance?.full_name ?? t("studentPerformance.title")}
+          </h1>
+          {performance && (
+            <Button variant="secondary" size="sm" className="no-print" onClick={() => window.print()}>
+              {t("common.print")}
+            </Button>
+          )}
+        </div>
         <p className="body-sm ink-muted" style={{ marginBottom: "var(--space-6)" }}>
           {t("studentPerformance.subtitle")}
         </p>

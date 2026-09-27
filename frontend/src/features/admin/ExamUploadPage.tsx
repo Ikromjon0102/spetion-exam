@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
+  createExam,
   getUploadStatus,
   listAdminClasses,
   listAdminSubjects,
@@ -14,6 +15,8 @@ import { AdminLayout, Button, Card, ListRow } from "../../components/ui";
 import { useAuth } from "../../auth/AuthContext";
 import { useLanguage } from "../../i18n/LanguageContext";
 
+type Mode = "upload" | "manual";
+
 export default function ExamUploadPage() {
   const { user } = useAuth();
   const isTeacher = user?.role === "teacher";
@@ -25,6 +28,15 @@ export default function ExamUploadPage() {
   // — e.g. a teacher who teaches both Huquq and Tarix to different classes
   // only ever sees their own combinations, never the whole school's.
   const [assignments, setAssignments] = useState<TeacherAssignment[]>([]);
+
+  // "Fayldan yuklash" was the only way to create an exam — forced every
+  // teacher through a file picker even when they intend to author every
+  // question by hand (typing them in, or pasting screenshots — see
+  // ExamReviewEditor.tsx's "Yangi savol qo'shish" form). "Qo'lda kiritish"
+  // skips straight to POST /admin/exams (no exam_upload_id) and lands on
+  // the same review editor with zero questions, ready to add them one by
+  // one — the backend already supported this, only this page didn't.
+  const [mode, setMode] = useState<Mode>("upload");
 
   const [classId, setClassId] = useState<number | "">("");
   const [subjectId, setSubjectId] = useState<number | "">("");
@@ -65,8 +77,22 @@ export default function ExamUploadPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!file || classId === "" || subjectId === "") return;
+    if (classId === "" || subjectId === "") return;
 
+    if (mode === "manual") {
+      if (!title.trim()) return;
+      setSubmitting(true);
+      try {
+        const exam = await createExam(title.trim(), Number(subjectId), Number(classId));
+        navigate(`/admin/exams/${exam.id}/review`);
+      } catch {
+        setError(t("upload.failed"));
+        setSubmitting(false);
+      }
+      return;
+    }
+
+    if (!file) return;
     setSubmitting(true);
     try {
       const upload = await uploadExamFile(file, Number(subjectId), Number(classId), title || undefined);
@@ -121,6 +147,27 @@ export default function ExamUploadPage() {
         </h1>
         <Card>
           <form onSubmit={handleSubmit} className="stack">
+            <div className="sp-field">
+              <label className="sp-field__label">{t("upload.modeLabel")}</label>
+              <div style={{ display: "flex", gap: "var(--space-2)" }}>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={mode === "upload" ? "primary" : "secondary"}
+                  onClick={() => setMode("upload")}
+                >
+                  {t("upload.modeUpload")}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={mode === "manual" ? "primary" : "secondary"}
+                  onClick={() => setMode("manual")}
+                >
+                  {t("upload.modeManual")}
+                </Button>
+              </div>
+            </div>
             {isTeacher ? (
               <>
                 <div className="sp-field">
@@ -194,24 +241,30 @@ export default function ExamUploadPage() {
               </>
             )}
             <div className="sp-field">
-              <label className="sp-field__label">{t("upload.titleLabel")}</label>
+              <label className="sp-field__label">
+                {mode === "manual" ? t("upload.titleLabelRequired") : t("upload.titleLabel")}
+              </label>
               <input
                 className="sp-input"
                 placeholder={t("upload.titlePlaceholder")}
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
+                required={mode === "manual"}
               />
             </div>
-            <div className="sp-field">
-              <label className="sp-field__label">{t("upload.fileLabel")}</label>
-              <input
-                className="sp-input"
-                type="file"
-                accept=".pdf,.docx"
-                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                required
-              />
-            </div>
+            {mode === "upload" && (
+              <div className="sp-field">
+                <label className="sp-field__label">{t("upload.fileLabel")}</label>
+                <input
+                  className="sp-input"
+                  type="file"
+                  accept=".pdf,.docx"
+                  onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                  required
+                />
+              </div>
+            )}
+            {mode === "manual" && <p className="body-sm ink-muted">{t("upload.manualHint")}</p>}
             {error && (
               <p role="alert" className="body-sm" style={{ color: "var(--danger)" }}>
                 {error}
@@ -219,7 +272,13 @@ export default function ExamUploadPage() {
             )}
             {status && <p className="body-sm ink-muted">{status}</p>}
             <Button type="submit" block disabled={submitting}>
-              {submitting ? t("upload.submitting") : t("upload.submit")}
+              {submitting
+                ? mode === "manual"
+                  ? t("upload.creatingManual")
+                  : t("upload.submitting")
+                : mode === "manual"
+                ? t("upload.submitManual")
+                : t("upload.submit")}
             </Button>
           </form>
         </Card>

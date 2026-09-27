@@ -762,6 +762,20 @@ Decisions already confirmed with the user, so don't re-litigate them:
      only covered the "Yangi savol qo'shish" creation form. Covered by
      three new tests in `test_exam_publish.py` (2-option, 5-option,
      and a 1-option rejection to confirm the floor still holds).
+   - **A real UX gap found while testing the fully-manual authoring flow
+     (paste-image + hand-typed questions): `ExamUploadPage.tsx` forced
+     every exam through the file-picker, even a teacher who intends to
+     type every question by hand.** The backend already supported creating
+     an empty draft exam directly (`POST /admin/exams`, no
+     `exam_upload_id`) — only this page never exposed it. Fixed with a
+     "Fayldan yuklash" / "Qo'lda kiritish" mode toggle at the top of the
+     form: manual mode hides the file input entirely, requires a title
+     (optional in upload mode, where it falls back to the filename), and
+     submits via a new `createExam()` call straight to
+     `/admin/exams/{id}/review` with zero questions — same review editor,
+     same "Yangi savol qo'shish" form (paste-image, variable option count,
+     etc. all already there) a parsed exam lands on after upload. No
+     backend change needed; `POST /admin/exams` was already tested.
 4. **AI-graded short-answer questions** (re-introducing `short_answer`,
    which was previously deferred entirely). Confirmed design: the AI grade
    is **final immediately** (no teacher approval gate before it counts) but

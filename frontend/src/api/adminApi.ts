@@ -372,6 +372,15 @@ export async function getUploadStatus(uploadId: number): Promise<ExamUpload> {
   return data;
 }
 
+export async function createExam(title: string, subjectId: number, classId: number): Promise<ExamSummary> {
+  const { data } = await apiClient.post<ExamSummary>("/admin/exams", {
+    title,
+    subject_id: subjectId,
+    class_id: classId,
+  });
+  return data;
+}
+
 export async function listExams(filters?: {
   exam_status?: string;
   class_id?: number;

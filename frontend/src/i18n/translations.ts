@@ -302,6 +302,7 @@ export const translations: Record<string, Record<Lang, string>> = {
     ru: "Вам не назначен ни один класс/предмет — обратитесь к администратору",
   },
   "upload.titleLabel": { uz: "Sarlavha (ixtiyoriy)", ru: "Заголовок (необязательно)" },
+  "upload.titleLabelRequired": { uz: "Sarlavha", ru: "Заголовок" },
   "upload.titlePlaceholder": { uz: "Masalan: Shanba imtihoni", ru: "Например: Субботний экзамен" },
   "upload.fileLabel": { uz: "Fayl (PDF yoki DOCX)", ru: "Файл (PDF или DOCX)" },
   "upload.failed": { uz: "Yuklab bo'lmadi", ru: "Не удалось загрузить" },
@@ -311,6 +312,15 @@ export const translations: Record<string, Record<Lang, string>> = {
   "upload.statusCheckFailed": { uz: "Holatni tekshirib bo'lmadi", ru: "Не удалось проверить статус" },
   "upload.submitting": { uz: "Yuklanmoqda...", ru: "Загрузка..." },
   "upload.submit": { uz: "Yuklash", ru: "Загрузить" },
+  "upload.modeLabel": { uz: "Savollarni qanday kiritasiz?", ru: "Как вы введёте вопросы?" },
+  "upload.modeUpload": { uz: "Fayldan yuklash", ru: "Загрузить файл" },
+  "upload.modeManual": { uz: "Qo'lda kiritish", ru: "Ввести вручную" },
+  "upload.manualHint": {
+    uz: "Fayl yuklanmaydi — imtihon bo'sh yaratiladi, savollarni keyingi sahifada birma-bir qo'lda (yoki skrinshot joylab) qo'shasiz.",
+    ru: "Файл не загружается — экзамен создаётся пустым, вопросы вы добавите вручную на следующей странице (можно вставлять скриншоты).",
+  },
+  "upload.creatingManual": { uz: "Yaratilmoqda...", ru: "Создание..." },
+  "upload.submitManual": { uz: "Imtihon yaratish", ru: "Создать экзамен" },
 
   // --- Admin review editor ---
   "review.loadError": { uz: "Imtihonni yuklab bo'lmadi", ru: "Не удалось загрузить экзамен" },

@@ -324,18 +324,23 @@ export default function ClassDetailPage() {
                 {detail.grade_level}-daraja · {detail.label}
               </p>
             </div>
-            {isAdmin && (
-              <div style={{ display: "flex", gap: "var(--space-2)", flexShrink: 0 }}>
-                <Button variant="ghost" size="sm" onClick={startEditClass}>
-                  {t("common.edit")}
-                </Button>
-                <ConfirmButton
-                  label={t("common.delete")}
-                  confirmLabel={t("common.confirmDelete")}
-                  onConfirm={handleDeleteClass}
-                />
-              </div>
-            )}
+            <div style={{ display: "flex", gap: "var(--space-2)", flexShrink: 0 }}>
+              <Button variant="ghost" size="sm" onClick={() => navigate(`/classes/${id}/daily-results`)}>
+                {t("dailyResults.navLink")}
+              </Button>
+              {isAdmin && (
+                <>
+                  <Button variant="ghost" size="sm" onClick={startEditClass}>
+                    {t("common.edit")}
+                  </Button>
+                  <ConfirmButton
+                    label={t("common.delete")}
+                    confirmLabel={t("common.confirmDelete")}
+                    onConfirm={handleDeleteClass}
+                  />
+                </>
+              )}
+            </div>
           </div>
         )}
         {deleteClassError && (

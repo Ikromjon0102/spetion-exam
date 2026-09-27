@@ -6,10 +6,11 @@ sections 1.4 and 2.
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.timeutil import local_day_bounds_utc
 from app.db.base import get_db
 from app.dependencies import require_role
 from app.models.attempt import AttemptStatus, ExamAttempt
-from app.models.exam import Exam
+from app.models.exam import Exam, ExamStatus
 from app.models.ranking import ExamRanking, StudentSubjectStats
 from app.models.user import Student, Subject, User
 from app.routers.admin_management import _ensure_class_view_access
@@ -19,6 +20,8 @@ from app.schemas.results import (
     ClassRankingRowOut,
     ClassSubjectExamPointOut,
     ClassSubjectPerformanceOut,
+    DailyClassResultsOut,
+    DailyResultsExamOut,
     OverallRankingOut,
     OverallRankingRowOut,
     StudentPerformanceOut,
@@ -200,3 +203,61 @@ def get_grade_overall_ranking(
 def get_school_overall_ranking(db: Session = Depends(get_db), _user: User = Depends(require_role("admin"))):
     rows = ranking_service.compute_overall_ranking(db, class_id=None)
     return OverallRankingOut(scope="school", rankings=[OverallRankingRowOut(**row) for row in rows])
+
+
+@router.get("/classes/{class_id}/daily-results", response_model=DailyClassResultsOut)
+def get_class_daily_results(
+    class_id: int,
+    date: str | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role("teacher", "admin")),
+):
+    """Backs the "sinf raxbari"'s end-of-day Telegram share: every exam for
+    this class whose window closed on the given calendar day (default:
+    today, school-local time — see local_day_bounds_utc), each with its
+    already-computed ExamRanking rows. View-scoped the same as class
+    detail/roster (_ensure_class_view_access) rather than list_exams'
+    teacher_class_subjects filter — a homeroom teacher who doesn't
+    personally teach any subject in their own class still needs to see
+    every subject's results here, not just ones they're assigned to."""
+    klass = _ensure_class_view_access(db, user, class_id)
+    resolved_date, day_start, day_end = local_day_bounds_utc(date)
+
+    exams = (
+        db.query(Exam)
+        .filter(
+            Exam.class_id == class_id,
+            Exam.status.in_([ExamStatus.scheduled, ExamStatus.active, ExamStatus.closed]),
+            Exam.end_at >= day_start,
+            Exam.end_at < day_end,
+        )
+        .order_by(Exam.end_at)
+        .all()
+    )
+
+    exam_results = []
+    for exam in exams:
+        subject = db.get(Subject, exam.subject_id)
+        rows = db.query(ExamRanking).filter_by(exam_id=exam.id).order_by(ExamRanking.rank_in_class).all()
+        exam_results.append(
+            DailyResultsExamOut(
+                exam_id=exam.id,
+                exam_title=exam.title,
+                subject_name=subject.name if subject else "",
+                end_at=exam.end_at,
+                rankings=[
+                    ClassRankingRowOut(
+                        rank_in_class=r.rank_in_class,
+                        student_id=r.student_id,
+                        full_name=db.get(Student, r.student_id).user.full_name,
+                        score=float(r.score),
+                        percentile=float(r.percentile) if r.percentile is not None else None,
+                    )
+                    for r in rows
+                ],
+            )
+        )
+
+    return DailyClassResultsOut(
+        class_id=klass.id, class_name=klass.display_name, date=resolved_date, exams=exam_results
+    )

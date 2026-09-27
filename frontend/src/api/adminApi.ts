@@ -165,6 +165,28 @@ export async function getSchoolOverallRanking(): Promise<OverallRanking> {
   return data;
 }
 
+export interface DailyResultsExam {
+  exam_id: number;
+  exam_title: string;
+  subject_name: string;
+  end_at: string | null;
+  rankings: ClassRankingRow[];
+}
+
+export interface DailyClassResults {
+  class_id: number;
+  class_name: string;
+  date: string;
+  exams: DailyResultsExam[];
+}
+
+export async function getClassDailyResults(classId: number, date?: string): Promise<DailyClassResults> {
+  const { data } = await apiClient.get<DailyClassResults>(`/admin/classes/${classId}/daily-results`, {
+    params: date ? { date } : undefined,
+  });
+  return data;
+}
+
 export async function listAdminClasses(): Promise<ClassOut[]> {
   const { data } = await apiClient.get<ClassOut[]>("/admin/classes");
   return data;

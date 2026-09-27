@@ -357,6 +357,19 @@ export const translations: Record<string, Record<Lang, string>> = {
   },
 
   // --- Admin ranking / monitoring ---
+  "dailyResults.navLink": { uz: "Kunlik natijalar", ru: "Итоги за день" },
+  "dailyResults.title": { uz: "Kunlik natijalar", ru: "Итоги за день" },
+  "dailyResults.subtitle": {
+    uz: "Bugungi imtihonlar natijalarini rasm sifatida yuklab oling va Telegramga o'zingiz yuboring",
+    ru: "Скачайте итоги сегодняшних экзаменов как изображение и отправьте его в Telegram сами",
+  },
+  "dailyResults.loadError": { uz: "Natijalarni yuklab bo'lmadi", ru: "Не удалось загрузить итоги" },
+  "dailyResults.download": { uz: "Rasm sifatida yuklab olish", ru: "Скачать как изображение" },
+  "dailyResults.exporting": { uz: "Tayyorlanmoqda...", ru: "Подготовка..." },
+  "dailyResults.empty": { uz: "Bugun bu sinf uchun tugallangan imtihon yo'q", ru: "Сегодня у этого класса нет завершённых экзаменов" },
+  "dailyResults.cardSubtitle": { uz: "Bugungi imtihonlar natijalari", ru: "Результаты сегодняшних экзаменов" },
+  "dailyResults.noRankingYet": { uz: "Hali natija yo'q", ru: "Пока нет результатов" },
+
   "ranking.fallbackTitle": { uz: "Reyting", ru: "Рейтинг" },
   "ranking.loadError": { uz: "Reytingni yuklab bo'lmadi", ru: "Не удалось загрузить рейтинг" },
   "ranking.title": { uz: "Reyting", ru: "Рейтинг" },

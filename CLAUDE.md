@@ -555,11 +555,47 @@ Decisions already confirmed with the user, so don't re-litigate them:
 1. **Student portfolio** — full line-graph view per subject (upgrade from
    the existing `Sparkline` on `ProfilePage.tsx`), both for a student's own
    view and for admin/teacher looking up any student. Not yet built.
-2. **Telegram sharing of class results** — explicitly **not** a bot
-   integration (rejected for now, revisit later): homeroom teacher clicks a
-   "download as image" button and shares it themselves via their own
-   Telegram. Needs a client-side HTML→image export (e.g. `html2canvas`) of
-   a "today's results for this class" view. Not yet built.
+2. **Telegram sharing of class results — done.** Explicitly **not** a bot
+   integration (rejected for now, revisit later): the homeroom teacher (or
+   any teacher/admin with view access to the class) clicks a "download as
+   image" button and shares it themselves via their own Telegram.
+   - Backend: `GET /admin/classes/{id}/daily-results?date=YYYY-MM-DD`
+     (`results.py`) — every exam for the class whose `end_at` falls on the
+     given calendar day (default: today), each with its already-computed
+     `ExamRanking` rows. **View-scoped via `_ensure_class_view_access`, not
+     `list_exams`'s `teacher_class_subjects` filter** — a homeroom teacher
+     who doesn't personally teach any subject in their own class still
+     needs to see every subject's results here, not just ones they're
+     assigned to; `list_exams` would have hidden those. "Today" is resolved
+     in the school's local time (`app/core/timeutil.py`'s new
+     `SCHOOL_UTC_OFFSET`/`local_day_bounds_utc` — a fixed UTC+5 offset,
+     Uzbekistan has no DST, so no `zoneinfo`/tzdata dependency needed) —
+     this avoids pushing timezone-window math onto the frontend, and
+     matters because a UTC calendar day and an Uzbekistan calendar day
+     disagree for 5 hours around UTC midnight. Covered by
+     `app/tests/test_daily_results.py`, including the homeroom-sees-a-
+     subject-they-dont-teach case above and an explicit-`date` override.
+   - Frontend: `DailyResultsPage.tsx` (`/classes/:id/daily-results`,
+     reachable via a "Kunlik natijalar" button on `ClassDetailPage.tsx`'s
+     header — visible to any teacher/admin who can view the class, not
+     gated on `can_manage_students` since downloading results is a view
+     action) renders a branded card (Spetion logo + date + class name,
+     then each exam's ranking table) into a ref'd div, and a "Rasm
+     sifatida yuklab olish" button runs `html2canvas` (new dependency —
+     first non-dependency-free UI addition in this codebase, justified
+     because *rendering DOM to a raster image* isn't something a hand-
+     rolled SVG chart can substitute for, unlike the existing charts) over
+     that div and triggers a PNG download via a synthetic `<a>` click.
+     **The card is styled with hard-coded hex colors, not CSS variables**
+     — this image leaves the app entirely (shared to Telegram), so it must
+     render identically regardless of the viewer's light/dark theme and
+     must not depend on html2canvas resolving `var(--...)` tokens.
+     Verified end-to-end in-browser: real ranking data renders correctly,
+     and the download button produces a valid non-trivial `data:image/
+     png;base64,...` (confirmed via a monkey-patched `<a>.click` rather
+     than relying on inspecting an actual downloaded file, since this
+     environment's browser tool has no filesystem access to a downloads
+     folder).
 3. **Real scanned-PDF/math-exam parsing — investigated, two real bugs
    fixed, one genuine remaining limitation identified and accepted.** The
    user sent two real files: a plain-text math test (options like "● A

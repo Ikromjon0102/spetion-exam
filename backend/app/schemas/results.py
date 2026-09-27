@@ -62,3 +62,18 @@ class OverallRankingOut(BaseModel):
     class_name: str | None = None
     grade_level: int | None = None
     rankings: list[OverallRankingRowOut]
+
+
+class DailyResultsExamOut(BaseModel):
+    exam_id: int
+    exam_title: str
+    subject_name: str
+    end_at: datetime | None = None
+    rankings: list[ClassRankingRowOut]
+
+
+class DailyClassResultsOut(BaseModel):
+    class_id: int
+    class_name: str
+    date: str
+    exams: list[DailyResultsExamOut]

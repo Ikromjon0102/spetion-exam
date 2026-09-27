@@ -10,7 +10,7 @@ from app.core.timeutil import local_day_bounds_utc
 from app.db.base import get_db
 from app.dependencies import require_role
 from app.models.attempt import AttemptStatus, ExamAttempt
-from app.models.exam import Exam, ExamStatus
+from app.models.exam import Exam
 from app.models.ranking import ExamRanking, StudentSubjectStats
 from app.models.user import Student, Subject, User
 from app.routers.admin_management import _ensure_class_view_access
@@ -224,20 +224,33 @@ def get_class_daily_results(
     rather than list_exams' teacher_class_subjects filter — a homeroom
     teacher who doesn't personally teach any subject in their own class
     still needs to see every subject's results here, not just ones
-    they're assigned to."""
+    they're assigned to.
+
+    Which exams count as "today's" is keyed off when students actually
+    SUBMITTED (ExamAttempt.submitted_at), not the exam's own end_at — a
+    real production bug found by the user: this school's exam windows are
+    routinely multi-day (end_at days after students actually took it), so
+    filtering by end_at falling in "today" silently returned nothing for
+    almost every exam, even ones the whole class had just finished. A
+    student's own attempt.submitted_at is the only signal that actually
+    means "this happened today"."""
     klass = _ensure_class_view_access(db, user, class_id)
     resolved_date, day_start, day_end = local_day_bounds_utc(date)
 
-    exams = (
-        db.query(Exam)
+    exam_ids_today = [
+        row[0]
+        for row in db.query(ExamAttempt.exam_id)
+        .join(Exam, Exam.id == ExamAttempt.exam_id)
         .filter(
             Exam.class_id == class_id,
-            Exam.status.in_([ExamStatus.scheduled, ExamStatus.active, ExamStatus.closed]),
-            Exam.end_at >= day_start,
-            Exam.end_at < day_end,
+            ExamAttempt.status.in_([AttemptStatus.submitted, AttemptStatus.auto_submitted]),
+            ExamAttempt.submitted_at >= day_start,
+            ExamAttempt.submitted_at < day_end,
         )
-        .order_by(Exam.end_at)
-        .all()
+        .distinct()
+    ]
+    exams = (
+        db.query(Exam).filter(Exam.id.in_(exam_ids_today)).order_by(Exam.start_at).all() if exam_ids_today else []
     )
 
     exam_outs: list[DailyResultsExamOut] = []

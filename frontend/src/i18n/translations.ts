@@ -423,6 +423,10 @@ export const translations: Record<string, Record<Lang, string>> = {
     ru: "Скачайте итоги сегодняшних экзаменов как изображение и отправьте его в Telegram сами",
   },
   "dailyResults.loadError": { uz: "Natijalarni yuklab bo'lmadi", ru: "Не удалось загрузить итоги" },
+  "dailyResults.downloadError": {
+    uz: "Rasmni tayyorlab bo'lmadi, qaytadan urinib ko'ring",
+    ru: "Не удалось подготовить изображение, попробуйте снова",
+  },
   "dailyResults.download": { uz: "Rasm sifatida yuklab olish", ru: "Скачать как изображение" },
   "dailyResults.exporting": { uz: "Tayyorlanmoqda...", ru: "Подготовка..." },
   "dailyResults.empty": { uz: "Bugun bu sinf uchun tugallangan imtihon yo'q", ru: "Сегодня у этого класса нет завершённых экзаменов" },

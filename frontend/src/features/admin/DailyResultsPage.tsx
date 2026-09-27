@@ -34,12 +34,18 @@ export default function DailyResultsPage() {
   async function handleDownload() {
     if (!captureRef.current || !data) return;
     setExporting(true);
+    setError(null);
     try {
-      const canvas = await html2canvas(captureRef.current, { backgroundColor: "#ffffff", scale: 2 });
+      const canvas = await html2canvas(captureRef.current, { backgroundColor: "#ffffff", scale: 2, useCORS: true });
       const link = document.createElement("a");
       link.download = `${data.class_name}-${data.date}.png`;
       link.href = canvas.toDataURL("image/png");
       link.click();
+    } catch {
+      // Previously silent — a failed capture (e.g. a tainted canvas from a
+      // cross-origin resource) just left exporting=false with no feedback,
+      // indistinguishable from "the button doesn't do anything".
+      setError(t("dailyResults.downloadError"));
     } finally {
       setExporting(false);
     }

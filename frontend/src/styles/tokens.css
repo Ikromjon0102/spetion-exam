@@ -1,4 +1,9 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap");
+/* Inter/Space Mono are loaded via a <link crossorigin> tag in index.html,
+   not @import here — a plain @import'd cross-origin stylesheet has no CORS
+   headers, and html2canvas (DailyResultsPage.tsx's "download as image")
+   throws a SecurityError trying to read its cssRules, silently failing the
+   whole capture. crossorigin="anonymous" on the <link> fetches it with
+   CORS so document.styleSheets stays readable. */
 
 :root {
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;

@@ -35,11 +35,12 @@
 }
 .sp-btn--ghost {
   background: transparent;
-  color: var(--brand-600);
+  color: var(--ink-muted);
   padding: var(--space-2) var(--space-3);
 }
 .sp-btn--ghost:hover:not(:disabled) {
-  background: var(--brand-100);
+  background: var(--surface-sunken);
+  color: var(--ink);
 }
 .sp-btn--danger {
   background: var(--danger);

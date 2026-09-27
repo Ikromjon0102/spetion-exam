@@ -47,7 +47,11 @@ export default function ExamResultPage() {
     );
   }
 
-  const passed = result.percent >= 60;
+  // Same red/amber/green thresholds as StudentPerformancePage.tsx's
+  // percentTone — a score page and the subject-performance page disagreeing
+  // on what counts as "good" (this used to be a flat 60% pass/fail cutoff)
+  // sent contradictory signals for the same number.
+  const scoreColor = result.percent < 50 ? "var(--danger)" : result.percent < 70 ? "var(--warning)" : "var(--success)";
 
   return (
     <>
@@ -70,7 +74,7 @@ export default function ExamResultPage() {
               fontSize: 40,
               lineHeight: "44px",
               fontWeight: 800,
-              color: passed ? "var(--success)" : "var(--danger)",
+              color: scoreColor,
             }}
           >
             {result.score} / {result.max_score}

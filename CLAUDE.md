@@ -549,9 +549,11 @@ Six items came in together; building and testing locally one at a time
 before anything goes to the VPS, per the user's own stated preference.
 Decisions already confirmed with the user, so don't re-litigate them:
 
-1. **Student portfolio** — full line-graph view per subject (upgrade from
-   the existing `Sparkline` on `ProfilePage.tsx`), both for a student's own
-   view and for admin/teacher looking up any student. Not yet built.
+1. **Student portfolio — done.** Full line-graph view per subject
+   (`components/ui/LineChart.tsx`), both for a student's own
+   `ProfilePage.tsx` and for admin/teacher looking up any student via
+   `StudentPerformancePage.tsx` (reusing the same `.../subjects/{id}/history`
+   endpoint already described under item 4 below).
 2. **Telegram sharing of class results — done.** Explicitly **not** a bot
    integration (rejected for now, revisit later): the homeroom teacher (or
    any teacher/admin with view access to the class) clicks a "download as
@@ -1135,10 +1137,10 @@ Decisions already confirmed with the user, so don't re-litigate them:
 
 ## Next steps (in order)
 
-1. User will stand up real Postgres on a DigitalOcean VPS (not local
-   Docker/WSL2 — that path is superseded) and run `alembic upgrade head`
-   against it themselves; just be ready to help with `DATABASE_URL`/
-   connection-string questions when they do.
+1. **Done** — the app is live on the DigitalOcean VPS's real Postgres
+   (`spetion_db`/`spetion_user`), migrations at head
+   (confirmed via `alembic current` on the box). See "Production
+   deployment (live)" below for the full setup.
 2. PDF parsing is now covered by real tests (`app/tests/test_parsers.py`,
    `reportlab`-generated synthetic PDFs plus direct `text_split.py` unit
    tests for the two real-world bugs below) and was also manually driven

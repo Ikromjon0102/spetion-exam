@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { listExams, type ExamSummary } from "../../api/adminApi";
-import { AdminLayout, Badge, Button, ListRow, type BadgeStatus } from "../../components/ui";
+import { deleteExam, listExams, type ExamSummary } from "../../api/adminApi";
+import { AdminLayout, Badge, Button, ConfirmButton, ListRow, type BadgeStatus } from "../../components/ui";
 import { useLanguage } from "../../i18n/LanguageContext";
+import { errorDetail } from "../../utils/errorDetail";
 
 const STATUS_KEY: Record<string, { status: BadgeStatus; key: string }> = {
   draft: { status: "neutral", key: "status.draft" },
@@ -39,6 +40,15 @@ export default function AdminExamListPage() {
   }, [exams, statusFilter, needsReviewFilter]);
 
   const hasFilter = !!statusFilter || needsReviewFilter;
+
+  async function handleDelete(examId: number) {
+    try {
+      await deleteExam(examId);
+      setExams((prev) => prev.filter((e) => e.id !== examId));
+    } catch (err) {
+      setError(errorDetail(err, t("adminExamList.deleteError")));
+    }
+  }
 
   return (
     <AdminLayout>
@@ -95,10 +105,13 @@ export default function AdminExamListPage() {
               key: null,
             };
             return (
+              // Row itself isn't clickable (a chevron-navigate ListRow
+              // renders as a <button>, and trailing now holds real buttons
+              // too — the same nested-button conflict already fixed once
+              // on Students/Teachers pages) — an explicit "Ko'rish" button
+              // replaces the old whole-row click.
               <ListRow
                 key={exam.id}
-                chevron
-                onClick={() => navigate(`/admin/exams/${exam.id}/review`)}
                 leading={
                   <>
                     <span className="data-eyebrow">{exam.class_name}</span>
@@ -115,6 +128,14 @@ export default function AdminExamListPage() {
                       </Badge>
                     )}
                     <Badge status={badge.status}>{badge.key ? t(badge.key) : exam.status}</Badge>
+                    <Button variant="ghost" size="sm" onClick={() => navigate(`/admin/exams/${exam.id}/review`)}>
+                      {t("adminExamList.view")}
+                    </Button>
+                    <ConfirmButton
+                      label={t("common.delete")}
+                      confirmLabel={t("common.confirmDelete")}
+                      onConfirm={() => handleDelete(exam.id)}
+                    />
                   </>
                 }
               />

@@ -52,17 +52,18 @@ def has_attempts(db: Session, exam: Exam) -> bool:
 
 
 def ensure_no_attempts(db: Session, exam: Exam) -> None:
-    """Both question/option edits and schedule-field edits (duration/
-    start/end/shuffle) share one rule: allowed on a draft *and* on an
-    already-published (scheduled/active) exam, right up until the moment
-    any student actually starts it. A started attempt snapshots the
-    question/option order and, once submitted, its score — editing
-    content out from under that would desync the student's view or
-    invalidate a grade already recorded, so this is the one hard line."""
+    """Question/option edits, schedule-field edits (duration/start/end/
+    shuffle), and whole-exam deletion all share one rule: allowed on a
+    draft *and* on an already-published (scheduled/active) exam, right up
+    until the moment any student actually starts it. A started attempt
+    snapshots the question/option order and, once submitted, its score —
+    changing or removing the exam out from under that would desync a
+    student's view or destroy a recorded grade, so this is the one hard
+    line for all three operations."""
     if has_attempts(db, exam):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Bu imtihonni allaqachon boshlagan o'quvchilar bor, endi tahrirlab bo'lmaydi",
+            detail="Bu imtihonni allaqachon boshlagan o'quvchilar bor, endi uni o'zgartirib yoki o'chirib bo'lmaydi",
         )
 
 

@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   addQuestion,
   clearOptionImage,
   clearQuestionPromptImage,
+  deleteExam,
   deleteQuestion,
   duplicateExam,
   getExamDetail,
@@ -29,6 +30,7 @@ import {
   Card,
   CardFoot,
   CardHead,
+  ConfirmButton,
   Modal,
   type BadgeStatus,
 } from "../../components/ui";
@@ -76,6 +78,7 @@ export default function ExamReviewEditor() {
   const { examId } = useParams();
   const id = Number(examId);
   const { t } = useLanguage();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
   const [exam, setExam] = useState<ExamDetail | null>(null);
@@ -375,6 +378,15 @@ export default function ExamReviewEditor() {
     });
   }
 
+  async function handleDeleteExam() {
+    try {
+      await deleteExam(id);
+      navigate("/admin/exams");
+    } catch (e) {
+      setError(errorDetail(e, t("review.deleteError")));
+    }
+  }
+
   async function handleDuplicateSubmit() {
     if (selectedClassIds.size === 0) return;
     setDuplicating(true);
@@ -408,9 +420,18 @@ export default function ExamReviewEditor() {
             <h1 className="h2">{exam.title}</h1>
             <Badge status={statusBadge?.status ?? "neutral"}>{statusBadge ? t(statusBadge.key) : exam.status}</Badge>
           </div>
-          <Button variant="secondary" size="sm" onClick={openDuplicateModal}>
-            {t("review.duplicate")}
-          </Button>
+          <div style={{ display: "flex", gap: "var(--space-2)" }}>
+            <Button variant="secondary" size="sm" onClick={openDuplicateModal}>
+              {t("review.duplicate")}
+            </Button>
+            {!locked && (
+              <ConfirmButton
+                label={t("common.delete")}
+                confirmLabel={t("common.confirmDelete")}
+                onConfirm={handleDeleteExam}
+              />
+            )}
+          </div>
         </div>
         <p className="body-sm ink-muted" style={{ marginBottom: "var(--space-6)" }}>
           {exam.subject_name} · {exam.class_name}

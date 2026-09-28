@@ -83,7 +83,12 @@ class Exam(Base):
     published_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, server_default=func.now())
 
-    questions: Mapped[list["Question"]] = relationship(back_populates="exam", order_by="Question.order_index")
+    # cascade="all, delete-orphan" — without it, deleting an Exam row tries
+    # to null out Question.exam_id (a NOT NULL column) instead of deleting
+    # the rows, the exact same bug already found once on Question.options.
+    questions: Mapped[list["Question"]] = relationship(
+        back_populates="exam", order_by="Question.order_index", cascade="all, delete-orphan"
+    )
 
 
 class Question(Base):

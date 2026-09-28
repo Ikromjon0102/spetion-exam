@@ -321,6 +321,26 @@ def update_exam(
     return _exam_out(db, exam)
 
 
+@router.delete("/{exam_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_exam(
+    exam_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role("teacher", "admin")),
+):
+    """Same block/allow rule as editing: a draft, review, or already-
+    scheduled/published exam can be deleted right up until a student
+    actually starts it (ensure_no_attempts) — a started attempt's grade
+    would otherwise vanish along with the exam. Cascades to the exam's
+    own Question/QuestionOption rows (Exam.questions now has
+    cascade="all, delete-orphan"); ExamUpload, if any, is left as-is —
+    harmless once orphaned, same as elsewhere in this router."""
+    exam = _get_exam_or_404(db, exam_id)
+    exam_service.ensure_can_manage_exam(db, user, exam)
+    exam_service.ensure_no_attempts(db, exam)
+    db.delete(exam)
+    db.commit()
+
+
 @router.post("/{exam_id}/questions", response_model=QuestionOut, status_code=status.HTTP_201_CREATED)
 def add_question(
     exam_id: int,

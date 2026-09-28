@@ -178,3 +178,65 @@ def test_reschedule_blocked_once_a_student_starts(client, db_session):
         f"/api/v1/admin/exams/{exam.id}", json={"duration_minutes": 45}, headers=headers
     )
     assert resp.status_code == 409
+
+
+def test_delete_exam_with_no_attempts_succeeds(client, db_session):
+    """Real ask: an admin needs to remove sample/demo exams created while
+    building the platform. Same ensure_no_attempts gate as editing —
+    draft or already-scheduled is fine, as long as nobody's started it."""
+    klass = make_class(db_session)
+    subject = make_subject(db_session)
+    start, end = _window()
+    exam = make_exam(db_session, klass, subject, start_at=start, end_at=end)
+    question = add_mcq_question(db_session, exam, needs_review=False)
+    option_ids = [o.id for o in question.options]
+    _publish(db_session, exam)
+    exam_id = exam.id
+    headers = _admin_headers(client, db_session)
+
+    resp = client.delete(f"/api/v1/admin/exams/{exam_id}", headers=headers)
+    assert resp.status_code == 204
+
+    assert client.get(f"/api/v1/admin/exams/{exam_id}", headers=headers).status_code == 404
+    # cascade: the question and its options are gone too, not orphaned
+    from app.models.exam import Question, QuestionOption
+
+    assert db_session.get(Question, question.id) is None
+    for oid in option_ids:
+        assert db_session.get(QuestionOption, oid) is None
+
+
+def test_delete_exam_blocked_once_a_student_starts(client, db_session):
+    klass = make_class(db_session)
+    subject = make_subject(db_session)
+    start, end = _window()
+    exam = make_exam(db_session, klass, subject, start_at=start, end_at=end)
+    add_mcq_question(db_session, exam, needs_review=False)
+    _publish(db_session, exam)
+    student = make_student(db_session, klass)
+    db_session.add(ExamAttempt(exam_id=exam.id, student_id=student.id, status=AttemptStatus.in_progress))
+    db_session.commit()
+    headers = _admin_headers(client, db_session)
+
+    resp = client.delete(f"/api/v1/admin/exams/{exam.id}", headers=headers)
+    assert resp.status_code == 409
+
+    # untouched
+    assert client.get(f"/api/v1/admin/exams/{exam.id}", headers=headers).status_code == 200
+
+
+def test_delete_exam_forbidden_for_unassigned_teacher(client, db_session):
+    klass = make_class(db_session)
+    subject = make_subject(db_session)
+    start, end = _window()
+    exam = make_exam(db_session, klass, subject, start_at=start, end_at=end)
+    add_mcq_question(db_session, exam, needs_review=False)
+    db_session.commit()
+    from app.tests.factories import make_teacher
+
+    make_teacher(db_session, username="unassigned_delete_teacher")
+    db_session.commit()
+    token = _login(client, "unassigned_delete_teacher")
+
+    resp = client.delete(f"/api/v1/admin/exams/{exam.id}", headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code == 403

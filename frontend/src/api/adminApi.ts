@@ -425,6 +425,10 @@ export async function updateExam(
   return data;
 }
 
+export async function deleteExam(examId: number): Promise<void> {
+  await apiClient.delete(`/admin/exams/${examId}`);
+}
+
 export async function updateQuestion(
   examId: number,
   questionId: number,

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createClass, listAdminClasses, listMyAssignments, type ClassOut } from "../../../api/adminApi";
 import { useAuth } from "../../../auth/AuthContext";
-import { AdminLayout, Badge, Button, ListRow, Modal } from "../../../components/ui";
+import { AdminLayout, Badge, Button, EmptyState, ListRow, Modal } from "../../../components/ui";
 import { useLanguage } from "../../../i18n/LanguageContext";
 import { errorDetail } from "../../../utils/errorDetail";
 
@@ -105,7 +105,7 @@ export default function ClassesPage() {
           <ListRow state="free" title={t("adminClasses.noneForTeacher")} />
         )}
         {visibleClasses.length > 0 && filteredClasses.length === 0 && (
-          <p className="body-sm ink-muted">{t("common.noSearchResults")}</p>
+          <EmptyState icon="search" title={t("common.noSearchResults")} />
         )}
 
         <div

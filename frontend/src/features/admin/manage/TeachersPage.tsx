@@ -10,7 +10,17 @@ import {
   type SubjectOut,
   type TeacherRow,
 } from "../../../api/adminApi";
-import { AdminLayout, Badge, Button, Card, ConfirmButton, ListRow, Modal, PasswordInput } from "../../../components/ui";
+import {
+  AdminLayout,
+  Badge,
+  Button,
+  Card,
+  ConfirmButton,
+  EmptyState,
+  ListRow,
+  Modal,
+  PasswordInput,
+} from "../../../components/ui";
 import { useLanguage } from "../../../i18n/LanguageContext";
 import { errorDetail } from "../../../utils/errorDetail";
 import TeacherAssignmentEditor from "./TeacherAssignmentEditor";
@@ -149,7 +159,7 @@ export default function TeachersPage() {
         )}
 
         {teachers.length > 0 && filteredTeachers.length === 0 && (
-          <p className="body-sm ink-muted">{t("common.noSearchResults")}</p>
+          <EmptyState icon="search" title={t("common.noSearchResults")} />
         )}
 
         <div className="row-stack">

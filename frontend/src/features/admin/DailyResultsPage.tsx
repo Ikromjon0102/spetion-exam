@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import html2canvas from "html2canvas";
 import { Link, useParams } from "react-router-dom";
 import { getClassDailyResults, type DailyClassResults } from "../../api/adminApi";
-import { AdminLayout, Button, Logo } from "../../components/ui";
+import { AdminLayout, Button, EmptyState, Logo } from "../../components/ui";
 import { useLanguage } from "../../i18n/LanguageContext";
 import { formatDateUz } from "../../utils/formatDate";
 
@@ -81,7 +81,7 @@ export default function DailyResultsPage() {
               </Button>
             </div>
 
-            {data.exams.length === 0 && <p className="ink-muted">{t("dailyResults.empty")}</p>}
+            {data.exams.length === 0 && <EmptyState icon="inbox" title={t("dailyResults.empty")} />}
 
             <div
               ref={captureRef}

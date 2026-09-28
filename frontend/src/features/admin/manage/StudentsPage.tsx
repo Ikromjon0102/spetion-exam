@@ -18,6 +18,7 @@ import {
   Button,
   Card,
   ConfirmButton,
+  EmptyState,
   ListRow,
   Modal,
   PasswordInput,
@@ -303,7 +304,7 @@ export default function StudentsPage() {
         )}
 
         {students.length > 0 && filteredStudents.length === 0 && (
-          <p className="body-sm ink-muted">{t("common.noSearchResults")}</p>
+          <EmptyState icon="search" title={t("common.noSearchResults")} />
         )}
 
         <div className="row-stack">

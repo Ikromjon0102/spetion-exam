@@ -1,19 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import html2canvas from "html2canvas";
 import { Link, useParams } from "react-router-dom";
 import { getClassDailyResults, type DailyClassResults } from "../../api/adminApi";
 import { AdminLayout, Button, EmptyState, Logo } from "../../components/ui";
 import { useLanguage } from "../../i18n/LanguageContext";
 import { formatDateUz } from "../../utils/formatDate";
+import { exportA4Image } from "../../utils/exportA4Image";
 import sparkMarkRed from "../../assets/logos/spetion-mark-red.png";
-
-// A4 at 96dpi (CSS px) x2, matching the html2canvas scale below — the
-// exported image is always exactly this size regardless of student count
-// (a small class gets letterboxed white space, a long roster is scaled
-// down to fit), since a shareable/printable result card should be one
-// consistent page, not a table that grows without bound.
-const A4_WIDTH_PX = 1587;
-const A4_HEIGHT_PX = 2245;
 
 // The captured card is styled with hard-coded colors, not CSS variables —
 // this image leaves the app (shared to Telegram by the homeroom teacher),
@@ -60,27 +52,7 @@ export default function DailyResultsPage() {
     setExporting(true);
     setError(null);
     try {
-      const canvas = await html2canvas(captureRef.current, { backgroundColor: "#ffffff", scale: 2, useCORS: true });
-
-      // Compose the (variable-height, depends on student count) capture
-      // onto a fixed A4 canvas — scaled to fit and centered, never cropped,
-      // with white letterboxing on whichever axis has room to spare.
-      const a4Canvas = document.createElement("canvas");
-      a4Canvas.width = A4_WIDTH_PX;
-      a4Canvas.height = A4_HEIGHT_PX;
-      const ctx = a4Canvas.getContext("2d");
-      if (!ctx) throw new Error("no 2d context");
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, A4_WIDTH_PX, A4_HEIGHT_PX);
-      const fitScale = Math.min(A4_WIDTH_PX / canvas.width, A4_HEIGHT_PX / canvas.height);
-      const drawWidth = canvas.width * fitScale;
-      const drawHeight = canvas.height * fitScale;
-      ctx.drawImage(canvas, (A4_WIDTH_PX - drawWidth) / 2, (A4_HEIGHT_PX - drawHeight) / 2, drawWidth, drawHeight);
-
-      const link = document.createElement("a");
-      link.download = `${data.class_name}-${data.date}.png`;
-      link.href = a4Canvas.toDataURL("image/png");
-      link.click();
+      await exportA4Image(captureRef.current, `${data.class_name}-${data.date}.png`);
     } catch {
       // Previously silent — a failed capture (e.g. a tainted canvas from a
       // cross-origin resource) just left exporting=false with no feedback,

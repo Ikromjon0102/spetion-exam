@@ -109,6 +109,18 @@ export const translations: Record<string, Record<Lang, string>> = {
     ru: "Сохраните или распечатайте этот список логинов/паролей — он больше не будет показан. Каждый ученик должен сменить пароль после первого входа.",
   },
   "adminStudents.bulkErrorsTitle": { uz: "Xatoliklar", ru: "Ошибки" },
+  "credentialsSheet.download": { uz: "A4 hujjat sifatida yuklab olish", ru: "Скачать как документ A4" },
+  "credentialsSheet.title": { uz: "{className} — kirish ma'lumotlari", ru: "{className} — данные для входа" },
+  "credentialsSheet.bulkSubtitle": { uz: "Yangi qo'shilgan o'quvchilar", ru: "Новые ученики" },
+  "credentialsSheet.resetSubtitle": { uz: "Yangilangan parollar", ru: "Обновлённые пароли" },
+  "credentialsSheet.footer": {
+    uz: "Jami o'quvchilar: {count} ta   |   Spetion imtihon platformasi",
+    ru: "Всего учеников: {count}   |   Платформа экзаменов Spetion",
+  },
+  "credentialsSheet.exportError": {
+    uz: "Hujjatni tayyorlab bo'lmadi, qaytadan urinib ko'ring",
+    ru: "Не удалось подготовить документ, попробуйте снова",
+  },
   "adminStudents.resetPwTitle": { uz: "Sinf bo'yicha parolni almashtirish", ru: "Сменить пароль всему классу" },
   "adminStudents.resetPwHint": {
     uz: "Tanlangan sinfdagi barcha o'quvchilarning paroli birdaniga shu yangi so'zga o'zgaradi.",
@@ -304,6 +316,8 @@ export const translations: Record<string, Record<Lang, string>> = {
   },
   "adminExamList.filteredStatus": { uz: "Filtr", ru: "Фильтр" },
   "adminExamList.clearFilter": { uz: "Filtrni tozalash", ru: "Сбросить фильтр" },
+  "adminExamList.view": { uz: "Ko'rish", ru: "Открыть" },
+  "adminExamList.deleteError": { uz: "Imtihonni o'chirib bo'lmadi", ru: "Не удалось удалить экзамен" },
   "status.draft": { uz: "Qoralama", ru: "Черновик" },
   "status.review": { uz: "Ko'rib chiqilmoqda", ru: "На проверке" },
   "status.scheduled": { uz: "Rejalashtirilgan", ru: "Запланирован" },
@@ -391,6 +405,7 @@ export const translations: Record<string, Record<Lang, string>> = {
   },
   "review.publish": { uz: "Nashr qilish", ru: "Опубликовать" },
   "review.duplicate": { uz: "Boshqa sinfga nusxalash", ru: "Копировать в другой класс" },
+  "review.deleteError": { uz: "Imtihonni o'chirib bo'lmadi", ru: "Не удалось удалить экзамен" },
   "review.duplicateTitle": { uz: "Imtihonni nusxalash", ru: "Копировать экзамен" },
   "review.duplicateHint": {
     uz: "Bir xil darsni bir nechta sinfga o'tsangiz (masalan 7B va 7R), shu imtihonni qaytadan yaratmasdan boshqa sinf(lar)ga nusxalab qo'yishingiz mumkin — barcha savollar, variantlar va jadval shu ko'rinishda ko'chadi.",

@@ -24,4 +24,6 @@ export { default as Modal } from "./Modal";
 export { default as PasswordInput } from "./PasswordInput";
 export { default as RankBadge } from "./RankBadge";
 export { default as EmptyState } from "./EmptyState";
+export { default as CredentialsSheetCard } from "./CredentialsSheetCard";
+export type { CredentialRow } from "./CredentialsSheetCard";
 import "./field.css";

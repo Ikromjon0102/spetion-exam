@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   bulkImportStudents,
@@ -18,14 +18,17 @@ import {
   Button,
   Card,
   ConfirmButton,
+  CredentialsSheetCard,
   EmptyState,
   ListRow,
   Modal,
   PasswordInput,
   StatCard,
+  type CredentialRow,
 } from "../../../components/ui";
 import { useLanguage } from "../../../i18n/LanguageContext";
 import { errorDetail } from "../../../utils/errorDetail";
+import { exportA4Image } from "../../../utils/exportA4Image";
 
 type OpenModal = "add" | "bulk" | "reset" | null;
 
@@ -63,6 +66,16 @@ export default function StudentsPage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
   const [rowError, setRowError] = useState<Record<number, string>>({});
+
+  // A4 credential sheets — the plaintext password is only ever available
+  // right here in the browser, right after creating/resetting it
+  // (passwords are hashed at rest, never recoverable later), so this is
+  // the only moment a printable sheet can be generated.
+  const bulkSheetRef = useRef<HTMLDivElement>(null);
+  const [bulkExporting, setBulkExporting] = useState(false);
+  const resetSheetRef = useRef<HTMLDivElement>(null);
+  const [resetSheetRows, setResetSheetRows] = useState<CredentialRow[] | null>(null);
+  const [resetExporting, setResetExporting] = useState(false);
 
   async function reloadStudents(classId: number | "") {
     try {
@@ -118,6 +131,7 @@ export default function StudentsPage() {
     setResetSuccess(null);
     setResetConfirming(false);
     setResetPassword("");
+    setResetSheetRows(null);
     setResetClassId(filterClassId);
     setOpenModal("reset");
   }
@@ -172,6 +186,7 @@ export default function StudentsPage() {
     // against the (possibly different) class/password before applying
     setResetConfirming(false);
     setResetSuccess(null);
+    setResetSheetRows(null);
   }
 
   async function handleResetSubmit(e: React.FormEvent) {
@@ -188,12 +203,45 @@ export default function StudentsPage() {
     try {
       const result = await resetClassPasswords(Number(resetClassId), resetPassword);
       setResetSuccess(t("adminStudents.resetPwSuccess", { count: result.updated_count }));
+      // resetClassPasswords only returns a count — re-fetch the roster to
+      // pair each student's name/username with the new shared password
+      // for the printable sheet below.
+      const roster = await listAdminStudents(Number(resetClassId));
+      setResetSheetRows(
+        roster.map((s) => ({ full_name: s.full_name, username: s.username, password: resetPassword }))
+      );
       setResetPassword("");
       setResetConfirming(false);
     } catch (err) {
       setResetError(errorDetail(err, t("adminStudents.resetPwError")));
     } finally {
       setResetSubmitting(false);
+    }
+  }
+
+  async function handleBulkExport() {
+    if (!bulkSheetRef.current || !bulkResult) return;
+    setBulkExporting(true);
+    try {
+      const className = classes.find((c) => c.id === bulkClassId)?.display_name ?? "";
+      await exportA4Image(bulkSheetRef.current, `${className}-yangi-oquvchilar.png`);
+    } catch {
+      setBulkError(t("credentialsSheet.exportError"));
+    } finally {
+      setBulkExporting(false);
+    }
+  }
+
+  async function handleResetExport() {
+    if (!resetSheetRef.current || !resetSheetRows) return;
+    setResetExporting(true);
+    try {
+      const className = classes.find((c) => c.id === resetClassId)?.display_name ?? "";
+      await exportA4Image(resetSheetRef.current, `${className}-parollar.png`);
+    } catch {
+      setResetError(t("credentialsSheet.exportError"));
+    } finally {
+      setResetExporting(false);
     }
   }
 
@@ -495,6 +543,11 @@ export default function StudentsPage() {
                 <p className="body-sm" style={{ color: "var(--text-secondary)", marginBottom: "var(--space-3)" }}>
                   {t("adminStudents.bulkResultHint")}
                 </p>
+                <div style={{ marginBottom: "var(--space-3)" }}>
+                  <Button size="sm" onClick={handleBulkExport} disabled={bulkExporting}>
+                    {bulkExporting ? t("dailyResults.exporting") : t("credentialsSheet.download")}
+                  </Button>
+                </div>
                 <div style={{ overflowX: "auto" }}>
                   <table className="body-sm" style={{ width: "100%", borderCollapse: "collapse" }}>
                     <thead>
@@ -514,6 +567,22 @@ export default function StudentsPage() {
                       ))}
                     </tbody>
                   </table>
+                </div>
+                {/* Off-screen (not display:none — html2canvas can't
+                    capture that), captured by handleBulkExport above. */}
+                <div style={{ position: "fixed", top: 0, left: -9999, zIndex: -1 }}>
+                  <CredentialsSheetCard
+                    ref={bulkSheetRef}
+                    classTitle={t("credentialsSheet.title", {
+                      className: classes.find((c) => c.id === bulkClassId)?.display_name ?? "",
+                    })}
+                    subtitle={t("credentialsSheet.bulkSubtitle")}
+                    rows={bulkResult.created}
+                    studentColumnLabel={t("adminStudents.fullName")}
+                    usernameColumnLabel={t("login.username")}
+                    passwordColumnLabel={t("login.password")}
+                    footerLabel={t("credentialsSheet.footer", { count: bulkResult.created.length })}
+                  />
                 </div>
               </>
             )}
@@ -589,6 +658,27 @@ export default function StudentsPage() {
             <p className="body-sm" style={{ color: "var(--success)" }}>
               {resetSuccess}
             </p>
+          )}
+          {resetSheetRows && (
+            <div>
+              <Button size="sm" onClick={handleResetExport} disabled={resetExporting}>
+                {resetExporting ? t("dailyResults.exporting") : t("credentialsSheet.download")}
+              </Button>
+              <div style={{ position: "fixed", top: 0, left: -9999, zIndex: -1 }}>
+                <CredentialsSheetCard
+                  ref={resetSheetRef}
+                  classTitle={t("credentialsSheet.title", {
+                    className: classes.find((c) => c.id === resetClassId)?.display_name ?? "",
+                  })}
+                  subtitle={t("credentialsSheet.resetSubtitle")}
+                  rows={resetSheetRows}
+                  studentColumnLabel={t("adminStudents.fullName")}
+                  usernameColumnLabel={t("login.username")}
+                  passwordColumnLabel={t("login.password")}
+                  footerLabel={t("credentialsSheet.footer", { count: resetSheetRows.length })}
+                />
+              </div>
+            </div>
           )}
         </form>
       </Modal>

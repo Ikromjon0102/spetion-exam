@@ -410,9 +410,25 @@ export default function ClassDetailPage() {
             <h2 className="h4" style={{ marginBottom: "var(--space-3)" }}>
               {t("classDetail.subjectTeachers")}
             </h2>
-            <div className="row-stack" style={{ marginBottom: "var(--space-8)" }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))",
+                gap: "var(--space-3)",
+                marginBottom: "var(--space-8)",
+              }}
+            >
               {detail.subject_assignments.map((a) => (
-                <ListRow key={a.subject_id} title={a.subject_name} subtitle={a.teacher_name} />
+                <div
+                  key={a.subject_id}
+                  className="sp-card"
+                  style={{ display: "flex", flexDirection: "column", gap: "var(--space-1)", padding: "var(--space-4)" }}
+                >
+                  <div className="h5" style={{ margin: 0 }}>
+                    {a.subject_name}
+                  </div>
+                  <div className="body-sm ink-muted">{a.teacher_name}</div>
+                </div>
               ))}
             </div>
           </>

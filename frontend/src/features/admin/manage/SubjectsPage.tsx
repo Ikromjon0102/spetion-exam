@@ -106,7 +106,10 @@ export default function SubjectsPage() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))",
+            // Wider than ClassesPage's 160px — each card here also carries a
+            // two-button row (Tahrirlash + O'chirish) that needs more room
+            // before it has to wrap onto a second line.
+            gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
             gap: "var(--space-3)",
           }}
         >
@@ -146,7 +149,7 @@ export default function SubjectsPage() {
                     {rowError[s.id]}
                   </p>
                 )}
-                <div style={{ display: "flex", gap: "var(--space-1)", marginTop: "auto" }}>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-1)", marginTop: "auto" }}>
                   <Button variant="ghost" size="sm" onClick={() => startEdit(s)}>
                     {t("common.edit")}
                   </Button>

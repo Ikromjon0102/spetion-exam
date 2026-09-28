@@ -1,6 +1,19 @@
+import re
 from datetime import date
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
+
+
+def _normalize_name(v: str | None) -> str | None:
+    """Collapses internal whitespace runs (not just leading/trailing) to a
+    single space. A plain .strip() alone leaves a name like "Abdukarimova
+    \tShahnoza" intact when it was pasted from Excel — the tab renders as a
+    large, ugly gap everywhere the name is displayed. Applied at the schema
+    boundary so every entry point (single add, edit, bulk import) is covered
+    once, rather than duplicating this in each router function."""
+    if v is None:
+        return v
+    return re.sub(r"\s+", " ", v.strip())
 
 
 class SubjectOut(BaseModel):
@@ -76,6 +89,8 @@ class StudentCreate(BaseModel):
     phone: str | None = None
     enrolled_at: date | None = None
 
+    _clean_full_name = field_validator("full_name")(_normalize_name)
+
 
 class StudentOut(BaseModel):
     id: int
@@ -93,6 +108,8 @@ class StudentUpdate(BaseModel):
     class_id: int | None = None
     is_active: bool | None = None
 
+    _clean_full_name = field_validator("full_name")(_normalize_name)
+
 
 class StudentBulkImportRequest(BaseModel):
     class_id: int
@@ -100,6 +117,11 @@ class StudentBulkImportRequest(BaseModel):
     # username/password/student_code are all auto-generated server-side so
     # the admin never has to invent 400 of each by hand.
     full_names: list[str]
+
+    @field_validator("full_names")
+    @classmethod
+    def _clean_full_names(cls, v: list[str]) -> list[str]:
+        return [_normalize_name(name) or "" for name in v]
 
 
 class StudentBulkImportRow(BaseModel):
@@ -128,6 +150,8 @@ class TeacherCreate(BaseModel):
     subject_id: int | None = None
     phone: str | None = None
 
+    _clean_full_name = field_validator("full_name")(_normalize_name)
+
 
 class TeacherOut(BaseModel):
     id: int
@@ -142,6 +166,8 @@ class TeacherUpdate(BaseModel):
     full_name: str | None = None
     subject_id: int | None = None
     is_active: bool | None = None
+
+    _clean_full_name = field_validator("full_name")(_normalize_name)
 
 
 class TeacherAssignmentOut(BaseModel):

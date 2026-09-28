@@ -96,6 +96,12 @@ def get_or_create_subject(db, name: str) -> Subject:
 
 
 def get_or_create_teacher(db, full_name: str, used_usernames: set[str]) -> Teacher:
+    # Lookup stays keyed on the raw JSON string (matches whatever's already
+    # stored from a prior run) — only the value used to CREATE a brand-new
+    # row is cleaned, so re-running this script never touches already-seeded
+    # rows either way. A source name with an internal tab/double-space (the
+    # JSON was itself generated from a pasted timetable) would otherwise
+    # store that whitespace verbatim, same bug as the bulk-import endpoint.
     user = db.query(User).filter_by(full_name=full_name, role=UserRole.teacher).first()
     if user is not None:
         used_usernames.add(user.username)
@@ -113,7 +119,7 @@ def get_or_create_teacher(db, full_name: str, used_usernames: set[str]) -> Teach
         username=username,
         password_hash=hash_password(DEFAULT_PASSWORD),
         role=UserRole.teacher,
-        full_name=full_name,
+        full_name=re.sub(r"\s+", " ", full_name.strip()),
     )
     db.add(user)
     db.flush()

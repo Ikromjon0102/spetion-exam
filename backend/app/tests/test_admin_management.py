@@ -110,6 +110,27 @@ def test_bulk_import_students_generates_unique_usernames_and_codes(client, db_se
     assert len(codes) == 3  # all unique
 
 
+def test_bulk_import_students_collapses_internal_whitespace_in_names(client, db_session):
+    """Real bug: an Excel-pasted roster column can carry a literal tab (or
+    doubled space) between first/last name instead of a single space —
+    .strip() alone leaves it in place, which then renders as a large ugly
+    gap everywhere the name is shown. The value must come back clean."""
+    klass = make_class(db_session)
+    make_admin(db_session, username="admin_bulk_whitespace")
+    db_session.commit()
+    token = _login(client, "admin_bulk_whitespace")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    resp = client.post(
+        "/api/v1/admin/students/bulk-import",
+        json={"class_id": klass.id, "full_names": ["Aliyev\tVali", "Valiyeva  Nodira"]},
+        headers=headers,
+    )
+    assert resp.status_code == 200
+    names = {row["full_name"] for row in resp.json()["created"]}
+    assert names == {"Aliyev Vali", "Valiyeva Nodira"}
+
+
 def test_bulk_import_students_unknown_class_404s(client, db_session):
     make_admin(db_session, username="admin_bulk_404")
     db_session.commit()

@@ -14,9 +14,35 @@ const CARD_INK = "#1a1a1a";
 const CARD_MUTED = "#6b6b6b";
 const CARD_BRAND = "#dd1808";
 const CARD_BORDER = "#ececec";
+const CARD_ZEBRA = "#fdf5f4";
+const CARD_CALLOUT_BG = "#fdf6e3";
+const CARD_STAR_BG = "#f5a623";
 // Same gold/silver/bronze as RankBadge — duplicated as hex rather than
 // reused, since this component's whole point is hardcoded colors (see above).
 const CARD_MEDAL: Record<number, string> = { 1: "#f0c419", 2: "#c7cbd1", 3: "#d1904a" };
+
+// Same red/amber/green thresholds used everywhere else percent quality is
+// shown (StudentPerformancePage, ExamResultPage) — hardcoded pairs here for
+// the same reason as the rest of this file's colors.
+function percentPill(percent: number): { bg: string; fg: string } {
+  if (percent < 50) return { bg: "#fbe9e7", fg: "#b11306" };
+  if (percent < 70) return { bg: "#fdf0e0", fg: "#b36205" };
+  return { bg: "#e9f6ee", fg: "#2f9e5b" };
+}
+
+// A small tile of the brand's own radiating-dash mark, scattered at a few
+// sizes/rotations and tiled as a low-opacity background — echoes the same
+// pattern idea used on the login screen, applied here as a plain repeating
+// background-image (not a blurred pseudo-element) since this is what
+// html2canvas has to rasterize faithfully.
+const SPARK_TILE = `<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120">
+  <g stroke="${CARD_BRAND}" stroke-width="3" stroke-linecap="round" opacity="0.09">
+    <g transform="translate(20,25) rotate(15) scale(0.8)"><path d="M-8,-8 L8,8 M8,-8 L-8,8 M0,-11 L0,11 M-11,0 L11,0"/></g>
+    <g transform="translate(88,72) rotate(-20) scale(0.6)"><path d="M-8,-8 L8,8 M8,-8 L-8,8 M0,-11 L0,11 M-11,0 L11,0"/></g>
+    <g transform="translate(55,12) rotate(40) scale(0.45)"><path d="M-8,-8 L8,8 M8,-8 L-8,8 M0,-11 L0,11 M-11,0 L11,0"/></g>
+  </g>
+</svg>`;
+const SPARK_BACKGROUND = `url("data:image/svg+xml,${encodeURIComponent(SPARK_TILE)}")`;
 
 export default function DailyResultsPage() {
   const { classId } = useParams();
@@ -54,6 +80,9 @@ export default function DailyResultsPage() {
     }
   }
 
+  const topStudent = data && data.students.length > 0 ? data.students[0] : null;
+  const totalQuestions = data ? data.exams.reduce((sum, e) => sum + e.question_count, 0) : 0;
+
   return (
     <AdminLayout>
       <div className="page">
@@ -86,115 +115,177 @@ export default function DailyResultsPage() {
             <div
               ref={captureRef}
               style={{
-                background: "#ffffff",
+                backgroundImage: SPARK_BACKGROUND,
+                backgroundColor: "#ffffff",
+                backgroundRepeat: "repeat",
+                backgroundSize: "120px 120px",
                 color: CARD_INK,
-                padding: 32,
                 borderRadius: 12,
                 width: "fit-content",
-                minWidth: 480,
+                minWidth: 560,
                 border: `1px solid ${CARD_BORDER}`,
                 fontFamily: "Inter, system-ui, sans-serif",
+                overflow: "hidden",
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
-                <Logo tone="red" height={30} />
-                <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 13, color: CARD_MUTED }}>
-                  {formatDateUz(data.date)}
-                </span>
+              <div style={{ height: 8, background: CARD_BRAND }} />
+
+              <div style={{ padding: "28px 32px 8px", textAlign: "center" }}>
+                <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
+                  <Logo tone="red" height={30} />
+                </div>
+                <h2 style={{ fontSize: 26, letterSpacing: 1, margin: 0, marginBottom: 4 }}>
+                  {t("dailyResults.cardTitle", { className: data.class_name.toUpperCase() })}
+                </h2>
+                <p style={{ fontSize: 14, color: CARD_MUTED, margin: 0, marginBottom: 20 }}>
+                  {t("dailyResults.cardSubtitleWithDate", { date: formatDateUz(data.date) })}
+                </p>
+
+                {topStudent && (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 14,
+                      background: CARD_CALLOUT_BG,
+                      borderLeft: `4px solid ${CARD_BRAND}`,
+                      borderRadius: 8,
+                      padding: "14px 18px",
+                      marginBottom: 20,
+                      textAlign: "left",
+                    }}
+                  >
+                    <span
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: 36,
+                        height: 36,
+                        borderRadius: 999,
+                        background: CARD_STAR_BG,
+                        flexShrink: 0,
+                      }}
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="#ffffff">
+                        <path d="M12 2l2.9 6.6 7.1.6-5.4 4.7 1.6 7-6.2-3.9-6.2 3.9 1.6-7L1.9 9.2l7.1-.6z" />
+                      </svg>
+                    </span>
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: "#b36205", letterSpacing: 0.5 }}>
+                        {t("dailyResults.topResult").toUpperCase()}
+                      </div>
+                      <div style={{ fontSize: 18, fontWeight: 800 }}>
+                        {topStudent.full_name} — {topStudent.percent}%
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
-              <h2 style={{ fontSize: 20, margin: 0, marginBottom: 4 }}>{data.class_name}</h2>
-              <p style={{ fontSize: 13, color: CARD_MUTED, margin: 0, marginBottom: 20 }}>
-                {t("dailyResults.cardSubtitle")}
-              </p>
 
               {data.exams.length > 0 && (
-                <table style={{ borderCollapse: "collapse", fontSize: 13 }}>
-                  <thead>
-                    <tr>
-                      <th style={{ padding: "4px 8px" }} />
-                      <th style={{ textAlign: "left", padding: "4px 8px", fontSize: 12, color: CARD_MUTED }}>
-                        {t("dailyResults.studentColumn")}
-                      </th>
-                      {data.exams.map((exam) => (
-                        <th
-                          key={exam.exam_id}
-                          style={{
-                            textAlign: "right",
-                            padding: "4px 8px",
-                            fontSize: 12,
-                            color: CARD_BRAND,
-                            borderLeft: `1px solid ${CARD_BORDER}`,
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {exam.subject_name}
+                <div style={{ padding: "0 32px 20px" }}>
+                  <table style={{ borderCollapse: "collapse", fontSize: 13, width: "100%", background: "#ffffff" }}>
+                    <thead>
+                      <tr style={{ background: CARD_BRAND, color: "#ffffff" }}>
+                        <th rowSpan={2} style={{ padding: "8px 10px", fontSize: 12 }}>
+                          T/R
                         </th>
-                      ))}
-                      <th
-                        style={{
-                          textAlign: "right",
-                          padding: "4px 8px",
-                          fontSize: 12,
-                          fontWeight: 700,
-                          borderLeft: `2px solid ${CARD_INK}`,
-                        }}
-                      >
-                        {t("dailyResults.totalColumn")}
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.students.map((row) => (
-                      <tr key={row.student_id} style={{ borderBottom: `1px solid ${CARD_BORDER}` }}>
-                        <td style={{ padding: "4px 8px", width: 32 }}>
-                          <span
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              minWidth: 22,
-                              height: 22,
-                              borderRadius: 999,
-                              fontSize: 12,
-                              fontWeight: 700,
-                              background: CARD_MEDAL[row.rank] ?? "transparent",
-                              color: CARD_MEDAL[row.rank] ? "#1a1a1a" : CARD_MUTED,
-                            }}
-                          >
-                            {row.rank}
-                          </span>
-                        </td>
-                        <td style={{ padding: "4px 8px", whiteSpace: "nowrap" }}>{row.full_name}</td>
-                        {row.scores.map((score, i) => (
-                          <td
-                            key={data.exams[i].exam_id}
-                            style={{
-                              padding: "4px 8px",
-                              textAlign: "right",
-                              fontFamily: "'Space Mono', monospace",
-                              borderLeft: `1px solid ${CARD_BORDER}`,
-                              color: score === null ? CARD_MUTED : CARD_INK,
-                            }}
-                          >
-                            {score === null ? "—" : score}
-                          </td>
+                        <th rowSpan={2} style={{ textAlign: "left", padding: "8px 10px", fontSize: 12 }}>
+                          {t("dailyResults.studentColumn")}
+                        </th>
+                        {data.exams.map((exam) => (
+                          <th key={exam.exam_id} style={{ padding: "8px 10px", fontSize: 12, whiteSpace: "nowrap" }}>
+                            {exam.subject_name}
+                          </th>
                         ))}
-                        <td
-                          style={{
-                            padding: "4px 8px",
-                            textAlign: "right",
-                            fontFamily: "'Space Mono', monospace",
-                            fontWeight: 700,
-                            borderLeft: `2px solid ${CARD_INK}`,
-                          }}
-                        >
-                          {row.total}
-                        </td>
+                        <th style={{ padding: "8px 10px", fontSize: 12 }}>{t("dailyResults.totalColumn")}</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                      <tr style={{ background: CARD_BRAND, color: "rgba(255,255,255,0.75)" }}>
+                        {data.exams.map((exam) => (
+                          <th key={exam.exam_id} style={{ padding: "0 10px 8px", fontSize: 11, fontWeight: 400 }}>
+                            {t("dailyResults.questionCountSuffix", { count: exam.question_count })}
+                          </th>
+                        ))}
+                        <th style={{ padding: "0 10px 8px", fontSize: 11, fontWeight: 400 }}>%</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.students.map((row, rowIndex) => {
+                        const pill = percentPill(row.percent);
+                        return (
+                          <tr
+                            key={row.student_id}
+                            style={{ background: rowIndex % 2 === 1 ? CARD_ZEBRA : "#ffffff" }}
+                          >
+                            <td style={{ padding: "8px 10px", textAlign: "center" }}>
+                              <span
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  minWidth: 24,
+                                  height: 24,
+                                  borderRadius: 999,
+                                  fontSize: 12,
+                                  fontWeight: 700,
+                                  background: CARD_MEDAL[row.rank] ?? "transparent",
+                                  color: CARD_MEDAL[row.rank] ? "#1a1a1a" : CARD_MUTED,
+                                }}
+                              >
+                                {row.rank}
+                              </span>
+                            </td>
+                            <td style={{ padding: "8px 10px", whiteSpace: "nowrap", fontWeight: 600 }}>
+                              {row.full_name}
+                            </td>
+                            {row.scores.map((score, i) => (
+                              <td
+                                key={data.exams[i].exam_id}
+                                style={{
+                                  padding: "8px 10px",
+                                  textAlign: "center",
+                                  fontFamily: "'Space Mono', monospace",
+                                  color: score === null ? CARD_MUTED : CARD_INK,
+                                }}
+                              >
+                                {score === null ? "—" : `${score}/${data.exams[i].question_count}`}
+                              </td>
+                            ))}
+                            <td style={{ padding: "8px 10px", textAlign: "center" }}>
+                              <span
+                                style={{
+                                  display: "inline-block",
+                                  padding: "3px 10px",
+                                  borderRadius: 999,
+                                  fontSize: 13,
+                                  fontWeight: 700,
+                                  background: pill.bg,
+                                  color: pill.fg,
+                                }}
+                              >
+                                {row.percent}%
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               )}
+
+              <div
+                style={{
+                  padding: "12px 32px",
+                  borderTop: `1px solid ${CARD_BORDER}`,
+                  textAlign: "center",
+                  fontSize: 12,
+                  color: CARD_MUTED,
+                }}
+              >
+                {t("dailyResults.footerSummary", { students: data.students.length, questions: totalQuestions })}
+              </div>
             </div>
           </>
         )}

@@ -7,10 +7,13 @@ data endpoint is covered here; the image export itself is a pure
 client-side html2canvas render of what this endpoint returns.
 
 The response shape is one combined table (one row per student, one column
-per exam that day, plus a total) rather than one ranking table per exam —
-the user explicitly asked for this after a class routinely takes several
-exams (different subjects) on the same day and wanted "who did best across
-the whole day", not several separate leaderboards to cross-reference.
+per exam that day, plus an overall percent) rather than one ranking table
+per exam — the user explicitly asked for this after a class routinely
+takes several exams (different subjects) on the same day and wanted "who
+did best across the whole day", not several separate leaderboards to
+cross-reference. Ranking is by percent (points earned / points possible,
+summed only over exams a student actually took), not a raw point sum,
+since exams aren't all worth the same total.
 
 Which exams count as "today's" is keyed off ExamAttempt.submitted_at, not
 Exam.end_at — a real production bug: this school's exam windows are
@@ -100,9 +103,11 @@ def test_admin_sees_only_todays_exams(client, db_session):
     assert len(body["exams"]) == 1
     assert body["exams"][0]["exam_id"] == todays_exam.id
     assert body["exams"][0]["subject_name"] == "Matematika"
+    assert body["exams"][0]["question_count"] == 4
+    assert body["exams"][0]["max_score"] == 4.0
     assert body["students"][0]["full_name"] == student.user.full_name
     assert body["students"][0]["scores"] == [3.0]
-    assert body["students"][0]["total"] == 3.0
+    assert body["students"][0]["percent"] == 75.0
 
 
 def test_exam_with_a_multi_day_window_still_counts_as_todays_if_submitted_today(client, db_session):
@@ -144,8 +149,10 @@ def test_exam_with_a_multi_day_window_still_counts_as_todays_if_submitted_today(
 def test_combines_several_same_day_exams_into_one_ranked_table(client, db_session):
     """The core of this feature: a class takes more than one exam (subject)
     on the same day, and the response is one table — one row per student,
-    one score per exam in the same order as `exams`, plus a summed total —
-    ranked by that total, not by any single exam."""
+    one score per exam in the same order as `exams`, plus an overall percent
+    (summed only over exams a student actually took) — ranked by that
+    percent, not by any single exam or a raw point sum (which wouldn't be a
+    fair combined number across differently-weighted exams)."""
     klass = make_class(db_session)
     math = make_subject(db_session, name="Matematika")
     physics = make_subject(db_session, name="Fizika")
@@ -160,11 +167,14 @@ def test_combines_several_same_day_exams_into_one_ranked_table(client, db_sessio
     math_moment = day_start + timedelta(hours=4)
     physics_moment = day_start + timedelta(hours=8)
 
+    # top_student takes both exams with a perfect score each (100%);
+    # partial_student only takes physics, at half credit (50%) — a lower
+    # percent despite never taking a second exam, so this also proves a
+    # partial-attendance student isn't penalized by their untaken exam
+    # counting against them (it's excluded from both sides of the ratio).
     math_exam = _make_scored_exam(db_session, klass, math, top_student, submitted_at=math_moment, correct_count=4)
-    # partial_student only takes the physics exam — should still show up,
-    # with a null (not zero) slot for the math exam they never took.
     physics_exam = _make_multi_scored_exam(
-        db_session, klass, physics, [(top_student, 2), (partial_student, 4)], submitted_at=physics_moment
+        db_session, klass, physics, [(top_student, 4), (partial_student, 2)], submitted_at=physics_moment
     )
 
     token = _login(client, "daily_combo_admin")
@@ -177,15 +187,15 @@ def test_combines_several_same_day_exams_into_one_ranked_table(client, db_sessio
     by_student_id_row = {row["student_id"]: row for row in body["students"]}
     top_row = by_student_id_row[top_student.id]
     assert top_row["full_name"] == "Combo Top"
-    assert set(top_row["scores"]) == {4.0, 2.0}
-    assert top_row["total"] == 6.0
+    assert set(top_row["scores"]) == {4.0}
+    assert top_row["percent"] == 100.0
     assert top_row["rank"] == 1
 
     partial_row = by_student_id_row[partial_student.id]
     assert partial_row["full_name"] == "Combo Partial"
     assert None in partial_row["scores"]
-    assert 4.0 in partial_row["scores"]
-    assert partial_row["total"] == 4.0
+    assert 2.0 in partial_row["scores"]
+    assert partial_row["percent"] == 50.0
     assert partial_row["rank"] == 2
 
 

@@ -430,9 +430,19 @@ export const translations: Record<string, Record<Lang, string>> = {
   "dailyResults.download": { uz: "Rasm sifatida yuklab olish", ru: "Скачать как изображение" },
   "dailyResults.exporting": { uz: "Tayyorlanmoqda...", ru: "Подготовка..." },
   "dailyResults.empty": { uz: "Bugun bu sinf uchun tugallangan imtihon yo'q", ru: "Сегодня у этого класса нет завершённых экзаменов" },
-  "dailyResults.cardSubtitle": { uz: "Bugungi imtihonlar natijalari", ru: "Результаты сегодняшних экзаменов" },
+  "dailyResults.cardTitle": { uz: "{className} SINF", ru: "{className} КЛАСС" },
+  "dailyResults.cardSubtitleWithDate": {
+    uz: "{date} kuni topshirgan imtihon natijalari",
+    ru: "Результаты экзаменов, сданных {date}",
+  },
+  "dailyResults.topResult": { uz: "Eng yuqori natija", ru: "Лучший результат" },
   "dailyResults.studentColumn": { uz: "O'quvchi", ru: "Ученик" },
-  "dailyResults.totalColumn": { uz: "Umumiy", ru: "Итого" },
+  "dailyResults.totalColumn": { uz: "Jami", ru: "Итого" },
+  "dailyResults.questionCountSuffix": { uz: "{count} ta test", ru: "{count} вопросов" },
+  "dailyResults.footerSummary": {
+    uz: "Jami o'quvchilar: {students} ta   |   Umumiy savollar soni: {questions} ta   |   Spetion imtihon platformasi",
+    ru: "Всего учеников: {students}   |   Всего вопросов: {questions}   |   Платформа экзаменов Spetion",
+  },
 
   "ranking.fallbackTitle": { uz: "Reyting", ru: "Рейтинг" },
   "ranking.loadError": { uz: "Reytingni yuklab bo'lmadi", ru: "Не удалось загрузить рейтинг" },

@@ -69,6 +69,12 @@ class DailyResultsExamOut(BaseModel):
     exam_title: str
     subject_name: str
     end_at: datetime | None = None
+    # Question count (the shareable-image template shows "20 ta test" per
+    # subject, not a point total) and the exam's max possible score (points,
+    # used to compute each student's overall %, since a raw point sum across
+    # differently-weighted exams isn't a fair combined number).
+    question_count: int
+    max_score: float
 
 
 class DailyStudentRowOut(BaseModel):
@@ -80,7 +86,12 @@ class DailyStudentRowOut(BaseModel):
     # take it / not yet graded), rendered as a dash rather than a 0 so it
     # isn't mistaken for a zero score.
     scores: list[float | None]
-    total: float
+    # Percent of points earned vs. possible, summed only over the exams this
+    # student actually took that day (not raw points — a raw sum across
+    # differently-weighted exams wouldn't be a fair combined ranking number).
+    # Ranking is by this percent, same convention as ranking_service's
+    # overall-ranking (RANK() semantics: ties share a rank).
+    percent: float
 
 
 class DailyClassResultsOut(BaseModel):

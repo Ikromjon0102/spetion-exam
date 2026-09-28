@@ -171,6 +171,8 @@ export interface DailyResultsExam {
   exam_title: string;
   subject_name: string;
   end_at: string | null;
+  question_count: number;
+  max_score: number;
 }
 
 export interface DailyStudentRow {
@@ -180,7 +182,9 @@ export interface DailyStudentRow {
   // Aligned index-for-index with DailyClassResults.exams — null means this
   // student has no score for that particular exam (didn't take it).
   scores: (number | null)[];
-  total: number;
+  // Points earned / possible, summed only over exams this student took —
+  // not a raw point sum, since exams aren't all worth the same total.
+  percent: number;
 }
 
 export interface DailyClassResults {

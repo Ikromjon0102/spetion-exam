@@ -10,7 +10,7 @@ from app.core.timeutil import local_day_bounds_utc
 from app.db.base import get_db
 from app.dependencies import require_role
 from app.models.attempt import AttemptStatus, ExamAttempt
-from app.models.exam import Exam
+from app.models.exam import Exam, Question
 from app.models.ranking import ExamRanking, StudentSubjectStats
 from app.models.user import Student, Subject, User
 from app.routers.admin_management import _ensure_class_view_access
@@ -262,9 +262,15 @@ def get_class_daily_results(
     student_names: dict[int, str] = {}
     for exam in exams:
         subject = db.get(Subject, exam.subject_id)
+        question_count = db.query(Question).filter_by(exam_id=exam.id).count()
         exam_outs.append(
             DailyResultsExamOut(
-                exam_id=exam.id, exam_title=exam.title, subject_name=subject.name if subject else "", end_at=exam.end_at
+                exam_id=exam.id,
+                exam_title=exam.title,
+                subject_name=subject.name if subject else "",
+                end_at=exam.end_at,
+                question_count=question_count,
+                max_score=float(exam.total_points or 0),
             )
         )
         rows = db.query(ExamRanking).filter_by(exam_id=exam.id).all()
@@ -277,19 +283,25 @@ def get_class_daily_results(
     unranked = []
     for student_id, full_name in student_names.items():
         scores = [scores_for_exam.get(student_id) for scores_for_exam in per_exam_scores]
-        total = sum(s for s in scores if s is not None)
-        unranked.append((student_id, full_name, scores, total))
+        # Percent over only the exams this student actually took — summing
+        # raw points across differently-weighted exams (e.g. a 20-point exam
+        # and a 40-point exam) wouldn't be a fair combined number, same
+        # reasoning as ranking_service.compute_overall_ranking.
+        earned = sum(s for s in scores if s is not None)
+        possible = sum(exam_outs[i].max_score for i, s in enumerate(scores) if s is not None)
+        percent = round(earned / possible * 100, 2) if possible > 0 else 0.0
+        unranked.append((student_id, full_name, scores, percent))
     unranked.sort(key=lambda row: row[3], reverse=True)
 
     student_outs: list[DailyStudentRowOut] = []
-    prev_total: float | None = None
+    prev_percent: float | None = None
     rank = 0
-    for i, (student_id, full_name, scores, total) in enumerate(unranked):
-        if total != prev_total:
+    for i, (student_id, full_name, scores, percent) in enumerate(unranked):
+        if percent != prev_percent:
             rank = i + 1
-        prev_total = total
+        prev_percent = percent
         student_outs.append(
-            DailyStudentRowOut(rank=rank, student_id=student_id, full_name=full_name, scores=scores, total=total)
+            DailyStudentRowOut(rank=rank, student_id=student_id, full_name=full_name, scores=scores, percent=percent)
         )
 
     return DailyClassResultsOut(

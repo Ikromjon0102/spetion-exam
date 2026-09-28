@@ -9,7 +9,7 @@ import {
   type OverallRanking,
 } from "../../api/adminApi";
 import { useAuth } from "../../auth/AuthContext";
-import { AdminLayout, Badge, Button, ListRow } from "../../components/ui";
+import { AdminLayout, Badge, Button, ListRow, RankBadge } from "../../components/ui";
 import { useLanguage } from "../../i18n/LanguageContext";
 
 type Scope = "class" | "grade" | "school";
@@ -150,7 +150,7 @@ export default function OverallRankingPage() {
             {ranking.rankings.map((r) => (
               <ListRow
                 key={r.student_id}
-                leading={<span className="data-value">#{r.rank}</span>}
+                leading={<RankBadge rank={r.rank} />}
                 title={r.full_name}
                 subtitle={scope !== "class" ? r.class_name : undefined}
                 trailing={

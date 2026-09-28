@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { getExamRanking, getResult, type ExamResult, type RankingEntry } from "../../api/studentApi";
-import { AnswerOption, AppHeader, Card, ListRow } from "../../components/ui";
+import { AnswerOption, AppHeader, Card, ListRow, RankBadge } from "../../components/ui";
 import { useLanguage } from "../../i18n/LanguageContext";
 import { formatDateTimeUz } from "../../utils/formatDate";
 
@@ -170,7 +170,7 @@ export default function ExamResultPage() {
                 <ListRow
                   key={r.student_id}
                   state={r.is_me ? "next" : "resting"}
-                  leading={<span className="data-value">#{r.rank_in_class}</span>}
+                  leading={<RankBadge rank={r.rank_in_class} />}
                   title={r.full_name}
                   trailing={
                     <span className="data-value">

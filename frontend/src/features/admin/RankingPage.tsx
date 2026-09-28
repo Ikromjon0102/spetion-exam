@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { getClassRanking, listExamAttempts, type AttemptMonitor, type ClassRanking } from "../../api/adminApi";
-import { AdminLayout, Badge, Button, ListRow, StatCard, type BadgeStatus } from "../../components/ui";
+import { AdminLayout, Badge, Button, ListRow, RankBadge, StatCard, type BadgeStatus } from "../../components/ui";
 import { formatDateTimeUz } from "../../utils/formatDate";
 import { useLanguage } from "../../i18n/LanguageContext";
 
@@ -76,7 +76,7 @@ export default function RankingPage() {
               {ranking.rankings.map((r) => (
                 <ListRow
                   key={r.student_id}
-                  leading={<span className="data-value">#{r.rank_in_class}</span>}
+                  leading={<RankBadge rank={r.rank_in_class} />}
                   title={r.full_name}
                   trailing={
                     <span className="data-value">

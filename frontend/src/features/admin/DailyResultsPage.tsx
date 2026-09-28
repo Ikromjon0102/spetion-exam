@@ -14,6 +14,9 @@ const CARD_INK = "#1a1a1a";
 const CARD_MUTED = "#6b6b6b";
 const CARD_BRAND = "#dd1808";
 const CARD_BORDER = "#ececec";
+// Same gold/silver/bronze as RankBadge — duplicated as hex rather than
+// reused, since this component's whole point is hardcoded colors (see above).
+const CARD_MEDAL: Record<number, string> = { 1: "#f0c419", 2: "#c7cbd1", 3: "#d1904a" };
 
 export default function DailyResultsPage() {
   const { classId } = useParams();
@@ -143,7 +146,24 @@ export default function DailyResultsPage() {
                   <tbody>
                     {data.students.map((row) => (
                       <tr key={row.student_id} style={{ borderBottom: `1px solid ${CARD_BORDER}` }}>
-                        <td style={{ padding: "4px 8px", width: 32, color: CARD_MUTED }}>#{row.rank}</td>
+                        <td style={{ padding: "4px 8px", width: 32 }}>
+                          <span
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              minWidth: 22,
+                              height: 22,
+                              borderRadius: 999,
+                              fontSize: 12,
+                              fontWeight: 700,
+                              background: CARD_MEDAL[row.rank] ?? "transparent",
+                              color: CARD_MEDAL[row.rank] ? "#1a1a1a" : CARD_MUTED,
+                            }}
+                          >
+                            {row.rank}
+                          </span>
+                        </td>
                         <td style={{ padding: "4px 8px", whiteSpace: "nowrap" }}>{row.full_name}</td>
                         {row.scores.map((score, i) => (
                           <td

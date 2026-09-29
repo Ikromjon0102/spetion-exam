@@ -33,6 +33,10 @@ import { useLanguage } from "../../../i18n/LanguageContext";
 import { errorDetail } from "../../../utils/errorDetail";
 import { exportA4Image } from "../../../utils/exportA4Image";
 
+// Same shared temp password bulk-import already auto-generates — see
+// StudentsPage.tsx for why the reset field starts pre-filled with it.
+const DEFAULT_TEMP_PASSWORD = "Spetion2026!";
+
 export default function ClassDetailPage() {
   const { classId } = useParams();
   const id = Number(classId);
@@ -152,7 +156,7 @@ export default function ClassDetailPage() {
     setResetError(null);
     setResetSuccess(null);
     setResetConfirming(false);
-    setResetPassword("");
+    setResetPassword(DEFAULT_TEMP_PASSWORD);
     setResetSheetRows(null);
     setOpenModal("reset");
   }
@@ -290,8 +294,17 @@ export default function ClassDetailPage() {
     }
   }
 
+  // Synchronous in-flight guards — `disabled={exporting}` only takes
+  // effect once React re-renders, which isn't necessarily before a second
+  // invocation reaches this function (rapid double-clicks, or the same
+  // click somehow reaching the handler more than once). These refs block
+  // a re-entrant call immediately, before any state/async work starts, so
+  // exactly one export ever runs per genuine trigger.
+  const bulkExportInFlightRef = useRef(false);
   async function handleBulkExport() {
+    if (bulkExportInFlightRef.current) return;
     if (!bulkSheetRef.current || !bulkResult) return;
+    bulkExportInFlightRef.current = true;
     setBulkExporting(true);
     try {
       await exportA4Image(bulkSheetRef.current, `${detail?.display_name ?? ""}-yangi-oquvchilar.png`);
@@ -299,11 +312,15 @@ export default function ClassDetailPage() {
       setBulkError(t("credentialsSheet.exportError"));
     } finally {
       setBulkExporting(false);
+      bulkExportInFlightRef.current = false;
     }
   }
 
+  const resetExportInFlightRef = useRef(false);
   async function handleResetExport() {
+    if (resetExportInFlightRef.current) return;
     if (!resetSheetRef.current || !resetSheetRows) return;
+    resetExportInFlightRef.current = true;
     setResetExporting(true);
     try {
       await exportA4Image(resetSheetRef.current, `${detail?.display_name ?? ""}-parollar.png`);
@@ -311,8 +328,22 @@ export default function ClassDetailPage() {
       setResetError(t("credentialsSheet.exportError"));
     } finally {
       setResetExporting(false);
+      resetExportInFlightRef.current = false;
     }
   }
+
+  // Auto-download the moment a reset succeeds and the sheet is ready — see
+  // StudentsPage.tsx for the same pattern and for why this is guarded by
+  // reference (StrictMode's dev-only double-invoke of effects must never
+  // trigger two downloads for one reset).
+  const autoExportedRowsRef = useRef<CredentialRow[] | null>(null);
+  useEffect(() => {
+    if (resetSheetRows && autoExportedRowsRef.current !== resetSheetRows) {
+      autoExportedRowsRef.current = resetSheetRows;
+      handleResetExport();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resetSheetRows]);
 
   if (loadError && !detail) {
     return (

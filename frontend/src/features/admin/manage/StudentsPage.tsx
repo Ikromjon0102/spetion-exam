@@ -32,6 +32,13 @@ import { exportA4Image } from "../../../utils/exportA4Image";
 
 type OpenModal = "add" | "bulk" | "reset" | null;
 
+// Same shared temp password bulk-import already auto-generates — reusing
+// it here means the reset-password field can start pre-filled (so the
+// download is ready the moment a class is picked, not only after the
+// admin also types and confirms a custom password) while still letting
+// the admin overwrite it with something else first.
+const DEFAULT_TEMP_PASSWORD = "Spetion2026!";
+
 export default function StudentsPage() {
   const navigate = useNavigate();
   const [classes, setClasses] = useState<ClassOut[]>([]);
@@ -130,7 +137,7 @@ export default function StudentsPage() {
     setResetError(null);
     setResetSuccess(null);
     setResetConfirming(false);
-    setResetPassword("");
+    setResetPassword(DEFAULT_TEMP_PASSWORD);
     setResetSheetRows(null);
     setResetClassId(filterClassId);
     setOpenModal("reset");
@@ -219,8 +226,14 @@ export default function StudentsPage() {
     }
   }
 
+  // Synchronous in-flight guards — see ClassDetailPage.tsx for why
+  // `disabled={exporting}` alone isn't a sufficient guard against a
+  // re-entrant call reaching this function before React re-renders.
+  const bulkExportInFlightRef = useRef(false);
   async function handleBulkExport() {
+    if (bulkExportInFlightRef.current) return;
     if (!bulkSheetRef.current || !bulkResult) return;
+    bulkExportInFlightRef.current = true;
     setBulkExporting(true);
     try {
       const className = classes.find((c) => c.id === bulkClassId)?.display_name ?? "";
@@ -229,11 +242,15 @@ export default function StudentsPage() {
       setBulkError(t("credentialsSheet.exportError"));
     } finally {
       setBulkExporting(false);
+      bulkExportInFlightRef.current = false;
     }
   }
 
+  const resetExportInFlightRef = useRef(false);
   async function handleResetExport() {
+    if (resetExportInFlightRef.current) return;
     if (!resetSheetRef.current || !resetSheetRows) return;
+    resetExportInFlightRef.current = true;
     setResetExporting(true);
     try {
       const className = classes.find((c) => c.id === resetClassId)?.display_name ?? "";
@@ -242,8 +259,25 @@ export default function StudentsPage() {
       setResetError(t("credentialsSheet.exportError"));
     } finally {
       setResetExporting(false);
+      resetExportInFlightRef.current = false;
     }
   }
+
+  // Auto-download the moment a reset succeeds and the sheet is ready — the
+  // user shouldn't need a second, separate click after already confirming
+  // the reset itself. The manual button below stays as a fallback (in case
+  // a popup/download blocker swallowed this automatic one). Guarded by
+  // reference so React StrictMode's dev-only double-invoke of effects (or
+  // any other reason this fires more than once for the same result) can
+  // never trigger two downloads for one reset.
+  const autoExportedRowsRef = useRef<CredentialRow[] | null>(null);
+  useEffect(() => {
+    if (resetSheetRows && autoExportedRowsRef.current !== resetSheetRows) {
+      autoExportedRowsRef.current = resetSheetRows;
+      handleResetExport();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resetSheetRows]);
 
   async function handleClassChange(student: StudentRow, classId: number) {
     try {

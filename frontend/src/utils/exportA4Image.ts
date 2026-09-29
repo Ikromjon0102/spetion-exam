@@ -26,8 +26,20 @@ export async function exportA4Image(el: HTMLElement, filename: string): Promise<
   const drawHeight = canvas.height * fitScale;
   ctx.drawImage(canvas, (A4_WIDTH_PX - drawWidth) / 2, (A4_HEIGHT_PX - drawHeight) / 2, drawWidth, drawHeight);
 
+  // toBlob + an object URL, not toDataURL — a raw base64 data: URI on the
+  // download attribute is unreliable in some browsers (notably Safari,
+  // which has historically opened it in a new tab instead of downloading)
+  // and is needlessly large in memory for an image this size. The link is
+  // briefly appended to the DOM, since some browsers only honor a
+  // synthetic click on an anchor that's actually in the document.
+  const blob = await new Promise<Blob | null>((resolve) => a4Canvas.toBlob(resolve, "image/png"));
+  if (!blob) throw new Error("canvas.toBlob returned null");
+  const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.download = filename;
-  link.href = a4Canvas.toDataURL("image/png");
+  link.href = url;
+  document.body.appendChild(link);
   link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
 }

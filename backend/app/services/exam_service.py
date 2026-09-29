@@ -19,7 +19,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.models.attempt import ExamAttempt
+from app.models.attempt import AttemptStatus, ExamAttempt
 from app.models.exam import Exam, ExamStatus, Question, QuestionType
 from app.models.user import TeacherClassSubject, User, UserRole
 
@@ -47,8 +47,25 @@ def ensure_can_manage_exam(db: Session, user: User, exam: Exam) -> None:
     ensure_can_author_exam(db, user, exam.class_id, exam.subject_id)
 
 
+_STARTED_STATUSES = (AttemptStatus.in_progress, AttemptStatus.submitted, AttemptStatus.auto_submitted)
+
+
 def has_attempts(db: Session, exam: Exam) -> bool:
-    return db.query(ExamAttempt).filter_by(exam_id=exam.id).first() is not None
+    """True only if a student actually opened the exam.
+
+    The lifecycle sweep (mark_expired_unstarted) creates an ExamAttempt row
+    for every enrolled student once exam.end_at passes, even ones who never
+    called /start — status=expired_unstarted (or a never-touched
+    not_started row). Those rows must NOT count here, or an exam nobody
+    ever took becomes permanently unelidable/unediable the moment its
+    window closes."""
+    return (
+        db.query(ExamAttempt)
+        .filter_by(exam_id=exam.id)
+        .filter(ExamAttempt.status.in_(_STARTED_STATUSES))
+        .first()
+        is not None
+    )
 
 
 def ensure_no_attempts(db: Session, exam: Exam) -> None:

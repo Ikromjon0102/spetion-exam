@@ -69,6 +69,31 @@ def test_can_edit_false_once_a_student_starts(client, db_session):
     assert resp.json()["can_edit"] is False
 
 
+def test_can_edit_true_when_only_expired_unstarted_attempts_exist(client, db_session):
+    """The mark_expired_unstarted sweep (exam_lifecycle_tasks.py) creates an
+    ExamAttempt row for every enrolled student once exam.end_at passes,
+    even ones who never opened the exam at all — status=expired_unstarted,
+    the student simply never called /start. Those rows must not lock
+    editing/deletion, or any exam whose window closes with nobody having
+    taken it becomes permanently stuck."""
+    klass = make_class(db_session)
+    subject = make_subject(db_session)
+    start, end = _window()
+    exam = make_exam(db_session, klass, subject, start_at=start, end_at=end)
+    add_mcq_question(db_session, exam, needs_review=False)
+    _publish(db_session, exam)
+    student = make_student(db_session, klass)
+    db_session.add(
+        ExamAttempt(exam_id=exam.id, student_id=student.id, status=AttemptStatus.expired_unstarted)
+    )
+    db_session.commit()
+    headers = _admin_headers(client, db_session)
+
+    resp = client.get(f"/api/v1/admin/exams/{exam.id}", headers=headers)
+    assert resp.status_code == 200
+    assert resp.json()["can_edit"] is True
+
+
 def test_editing_question_on_scheduled_exam_with_no_attempts_succeeds(client, db_session):
     klass = make_class(db_session)
     subject = make_subject(db_session)

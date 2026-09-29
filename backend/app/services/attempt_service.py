@@ -95,7 +95,14 @@ def start_attempt(db: Session, exam: Exam, student: Student) -> ExamAttempt:
         .one()
     )
 
-    if attempt.status == AttemptStatus.not_started:
+    # expired_unstarted is the lifecycle sweep's placeholder for "the
+    # window closed and this student never opened it" (started_at is
+    # always None on it, same as not_started) — not a real attempt. If a
+    # teacher edits the schedule to reopen the window (ensure_no_attempts
+    # allows this precisely because nothing was ever started), the window
+    # check above already lets the student in; this must not then turn
+    # around and block them with a stale "already finished" 409.
+    if attempt.status in (AttemptStatus.not_started, AttemptStatus.expired_unstarted):
         deadline = min(now + timedelta(minutes=exam.duration_minutes), aware(exam.end_at))
         attempt.status = AttemptStatus.in_progress
         attempt.started_at = now

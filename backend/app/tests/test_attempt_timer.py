@@ -88,6 +88,28 @@ def test_start_attempt_rejected_after_window_closes(db_session):
     assert exc.value.status_code == 400
 
 
+def test_start_attempt_succeeds_after_expired_unstarted_row_and_reschedule(db_session):
+    """The lifecycle sweep (mark_expired_unstarted) creates an
+    expired_unstarted ExamAttempt for a student who never opened the exam
+    once its window first closed. If a teacher then edits the exam to
+    reopen the window (allowed — see ensure_no_attempts, expired_unstarted
+    doesn't count as "started"), the student must actually be able to
+    start it, not get a stale 409 as if they'd already finished."""
+    exam, student = _scheduled_exam_with_student(db_session)
+    attempt = attempt_service.start_attempt(db_session, exam, student)
+    # Simulate the sweep marking it expired (window closed, never opened)
+    # instead of actually going through it — same end state either way.
+    attempt.status = AttemptStatus.expired_unstarted
+    attempt.started_at = None
+    attempt.deadline_at = None
+    db_session.commit()
+
+    resumed = attempt_service.start_attempt(db_session, exam, student)
+    assert resumed.id == attempt.id
+    assert resumed.status == AttemptStatus.in_progress
+    assert resumed.started_at is not None
+
+
 def test_record_answer_rejected_after_deadline_even_if_status_in_progress(db_session):
     """The server-side deadline check, not the client countdown, is what
     must block a late write — see docs/spec.md section 3 step 7."""

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { getClassDailyResults, type DailyClassResults, type DailyStudentRow } from "../../api/adminApi";
+import { getClassDailyResults, type DailyClassResults } from "../../api/adminApi";
 import { AdminLayout, Button, EmptyState, Logo } from "../../components/ui";
 import { useLanguage } from "../../i18n/LanguageContext";
 import { formatDateUz } from "../../utils/formatDate";
@@ -69,22 +69,6 @@ export default function DailyResultsPage() {
   // data.exams is empty and this whole card isn't rendered anyway.
   const topStudent = data && data.students.length > 0 && data.students[0].percent !== null ? data.students[0] : null;
   const totalQuestions = data ? data.exams.reduce((sum, e) => sum + e.question_count, 0) : 0;
-
-  // A long roster (the full-class list, not just today's participants) is
-  // a tall, narrow table — composited onto a fixed A4 page, that leaves a
-  // lot of dead white space on the sides. Splitting it into side-by-side
-  // columns past a threshold makes the captured content noticeably wider
-  // relative to its height, closer to A4's own proportions, so exportA4Image
-  // needs less letterboxing to fit it. Each column repeats the full header
-  // since it's a self-contained mini-table.
-  const STUDENTS_PER_COLUMN = 12;
-  const columnCount = data ? Math.max(1, Math.ceil(data.students.length / STUDENTS_PER_COLUMN)) : 1;
-  const studentColumns: DailyStudentRow[][] = data
-    ? Array.from({ length: columnCount }, (_, i) => {
-        const chunkSize = Math.ceil(data.students.length / columnCount);
-        return data.students.slice(i * chunkSize, (i + 1) * chunkSize);
-      })
-    : [];
 
   return (
     <AdminLayout>
@@ -200,106 +184,100 @@ export default function DailyResultsPage() {
                 </div>
 
                 {data.exams.length > 0 && (
-                  <div style={{ padding: "0 32px 20px", display: "flex", gap: 16 }}>
-                    {studentColumns.map((columnRows, colIndex) => (
-                      <table
-                        key={colIndex}
-                        style={{ borderCollapse: "collapse", fontSize: 13, width: "100%", background: "#ffffff" }}
-                      >
-                        <thead>
-                          <tr style={{ background: CARD_BRAND, color: "#ffffff" }}>
-                            <th rowSpan={2} style={{ padding: "8px 10px", fontSize: 12 }}>
-                              T/R
+                  <div style={{ padding: "0 32px 20px" }}>
+                    <table style={{ borderCollapse: "collapse", fontSize: 13, width: "100%", background: "#ffffff" }}>
+                      <thead>
+                        <tr style={{ background: CARD_BRAND, color: "#ffffff" }}>
+                          <th rowSpan={2} style={{ padding: "8px 10px", fontSize: 12 }}>
+                            T/R
+                          </th>
+                          <th rowSpan={2} style={{ textAlign: "left", padding: "8px 10px", fontSize: 12 }}>
+                            {t("dailyResults.studentColumn")}
+                          </th>
+                          {data.exams.map((exam) => (
+                            <th key={exam.exam_id} style={{ padding: "8px 10px", fontSize: 12, whiteSpace: "nowrap" }}>
+                              {exam.subject_name}
                             </th>
-                            <th rowSpan={2} style={{ textAlign: "left", padding: "8px 10px", fontSize: 12 }}>
-                              {t("dailyResults.studentColumn")}
+                          ))}
+                          <th style={{ padding: "8px 10px", fontSize: 12 }}>{t("dailyResults.totalColumn")}</th>
+                        </tr>
+                        <tr style={{ background: CARD_BRAND, color: "rgba(255,255,255,0.75)" }}>
+                          {data.exams.map((exam) => (
+                            <th key={exam.exam_id} style={{ padding: "0 10px 8px", fontSize: 11, fontWeight: 400 }}>
+                              {t("dailyResults.questionCountSuffix", { count: exam.question_count })}
                             </th>
-                            {data.exams.map((exam) => (
-                              <th key={exam.exam_id} style={{ padding: "8px 10px", fontSize: 12, whiteSpace: "nowrap" }}>
-                                {exam.subject_name}
-                              </th>
-                            ))}
-                            <th style={{ padding: "8px 10px", fontSize: 12 }}>{t("dailyResults.totalColumn")}</th>
-                          </tr>
-                          <tr style={{ background: CARD_BRAND, color: "rgba(255,255,255,0.75)" }}>
-                            {data.exams.map((exam) => (
-                              <th key={exam.exam_id} style={{ padding: "0 10px 8px", fontSize: 11, fontWeight: 400 }}>
-                                {t("dailyResults.questionCountSuffix", { count: exam.question_count })}
-                              </th>
-                            ))}
-                            <th style={{ padding: "0 10px 8px", fontSize: 11, fontWeight: 400 }}>%</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {columnRows.map((row, rowIndex) => {
-                            const pill = row.percent === null ? null : percentPill(row.percent);
-                            return (
-                              <tr
-                                key={row.student_id}
-                                style={{ background: rowIndex % 2 === 1 ? CARD_ZEBRA : "#ffffff" }}
-                              >
-                                <td style={{ padding: "8px 10px", textAlign: "center" }}>
+                          ))}
+                          <th style={{ padding: "0 10px 8px", fontSize: 11, fontWeight: 400 }}>%</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {data.students.map((row, rowIndex) => {
+                          const pill = row.percent === null ? null : percentPill(row.percent);
+                          return (
+                            <tr
+                              key={row.student_id}
+                              style={{ background: rowIndex % 2 === 1 ? CARD_ZEBRA : "#ffffff" }}
+                            >
+                              <td style={{ padding: "8px 10px", textAlign: "center" }}>
+                                <span
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    minWidth: 24,
+                                    height: 24,
+                                    borderRadius: 999,
+                                    fontSize: 12,
+                                    fontWeight: 700,
+                                    background: row.rank !== null ? CARD_MEDAL[row.rank] ?? "transparent" : "transparent",
+                                    color: row.rank !== null && CARD_MEDAL[row.rank] ? "#1a1a1a" : CARD_MUTED,
+                                  }}
+                                >
+                                  {row.rank ?? "—"}
+                                </span>
+                              </td>
+                              <td style={{ padding: "8px 10px", whiteSpace: "nowrap", fontWeight: 600 }}>
+                                {row.full_name}
+                              </td>
+                              {row.scores.map((score, i) => (
+                                <td
+                                  key={data.exams[i].exam_id}
+                                  style={{
+                                    padding: "8px 10px",
+                                    textAlign: "center",
+                                    fontFamily: "'Space Mono', monospace",
+                                    color: score === null ? CARD_MUTED : CARD_INK,
+                                  }}
+                                >
+                                  {score === null ? "—" : `${score}/${data.exams[i].question_count}`}
+                                </td>
+                              ))}
+                              <td style={{ padding: "8px 10px", textAlign: "center" }}>
+                                {pill ? (
                                   <span
                                     style={{
-                                      display: "inline-flex",
-                                      alignItems: "center",
-                                      justifyContent: "center",
-                                      minWidth: 24,
-                                      height: 24,
+                                      display: "inline-block",
+                                      padding: "3px 10px",
                                       borderRadius: 999,
-                                      fontSize: 12,
+                                      fontSize: 13,
                                       fontWeight: 700,
-                                      background:
-                                        row.rank !== null ? CARD_MEDAL[row.rank] ?? "transparent" : "transparent",
-                                      color: row.rank !== null && CARD_MEDAL[row.rank] ? "#1a1a1a" : CARD_MUTED,
+                                      background: pill.bg,
+                                      color: pill.fg,
                                     }}
                                   >
-                                    {row.rank ?? "—"}
+                                    {row.percent}%
                                   </span>
-                                </td>
-                                <td style={{ padding: "8px 10px", whiteSpace: "nowrap", fontWeight: 600 }}>
-                                  {row.full_name}
-                                </td>
-                                {row.scores.map((score, i) => (
-                                  <td
-                                    key={data.exams[i].exam_id}
-                                    style={{
-                                      padding: "8px 10px",
-                                      textAlign: "center",
-                                      fontFamily: "'Space Mono', monospace",
-                                      color: score === null ? CARD_MUTED : CARD_INK,
-                                    }}
-                                  >
-                                    {score === null ? "—" : `${score}/${data.exams[i].question_count}`}
-                                  </td>
-                                ))}
-                                <td style={{ padding: "8px 10px", textAlign: "center" }}>
-                                  {pill ? (
-                                    <span
-                                      style={{
-                                        display: "inline-block",
-                                        padding: "3px 10px",
-                                        borderRadius: 999,
-                                        fontSize: 13,
-                                        fontWeight: 700,
-                                        background: pill.bg,
-                                        color: pill.fg,
-                                      }}
-                                    >
-                                      {row.percent}%
-                                    </span>
-                                  ) : (
-                                    <span style={{ fontSize: 12, color: CARD_MUTED, fontStyle: "italic" }}>
-                                      {t("dailyResults.notParticipated")}
-                                    </span>
-                                  )}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    ))}
+                                ) : (
+                                  <span style={{ fontSize: 12, color: CARD_MUTED, fontStyle: "italic" }}>
+                                    {t("dailyResults.notParticipated")}
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
                 )}
 

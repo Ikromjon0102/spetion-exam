@@ -40,6 +40,10 @@ export async function exportA4Image(el: HTMLElement, filename: string): Promise<
   link.href = url;
   document.body.appendChild(link);
   link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 10000);
+  // Removing the anchor (and later revoking the URL) happens on a delay,
+  // not right after click() — some browsers process a triggered download
+  // asynchronously, and yanking the anchor out of the DOM immediately can
+  // race that and silently drop the download.
+  setTimeout(() => link.remove(), 1000);
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
 }

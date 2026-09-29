@@ -176,7 +176,9 @@ export interface DailyResultsExam {
 }
 
 export interface DailyStudentRow {
-  rank: number;
+  // null for a student who took none of today's exams — still listed (the
+  // full class roster is always shown), just with no numeric rank.
+  rank: number | null;
   student_id: number;
   full_name: string;
   // Aligned index-for-index with DailyClassResults.exams — null means this
@@ -184,7 +186,8 @@ export interface DailyStudentRow {
   scores: (number | null)[];
   // Points earned / possible, summed only over exams this student took —
   // not a raw point sum, since exams aren't all worth the same total.
-  percent: number;
+  // null (not 0) when the student took none of today's exams.
+  percent: number | null;
 }
 
 export interface DailyClassResults {

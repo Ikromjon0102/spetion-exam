@@ -199,6 +199,42 @@ def test_combines_several_same_day_exams_into_one_ranked_table(client, db_sessio
     assert partial_row["rank"] == 2
 
 
+def test_full_roster_shown_with_absentee_unranked(client, db_session):
+    """The user's explicit ask: the full class roster should always be
+    listed, not just students who happened to submit one of today's
+    exams — an absent/no-show student still gets a row (all scores None),
+    but no numeric rank/percent (0% would misrepresent "no data yet" as
+    "failed everything")."""
+    klass = make_class(db_session)
+    subject = make_subject(db_session, name="Biologiya")
+    make_admin(db_session, username="daily_roster_admin")
+    taker = make_student(db_session, klass, username="daily_roster_taker", full_name="Roster Taker")
+    absentee = make_student(db_session, klass, username="daily_roster_absent", full_name="Roster Absent")
+    db_session.commit()
+
+    _, day_start, _ = local_day_bounds_utc()
+    exam = _make_scored_exam(db_session, klass, subject, taker, submitted_at=day_start + timedelta(hours=5))
+
+    token = _login(client, "daily_roster_admin")
+    resp = client.get(f"/api/v1/admin/classes/{klass.id}/daily-results", headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body["exams"]) == 1
+    assert body["exams"][0]["exam_id"] == exam.id
+
+    by_student_id_row = {row["student_id"]: row for row in body["students"]}
+    assert set(by_student_id_row.keys()) == {taker.id, absentee.id}
+
+    taker_row = by_student_id_row[taker.id]
+    assert taker_row["rank"] == 1
+    assert taker_row["percent"] == 75.0
+
+    absentee_row = by_student_id_row[absentee.id]
+    assert absentee_row["scores"] == [None]
+    assert absentee_row["percent"] is None
+    assert absentee_row["rank"] is None
+
+
 def test_homeroom_teacher_sees_results_for_a_subject_they_dont_teach(client, db_session):
     """The scoping fix this endpoint needed: list_exams's teacher_class_subjects
     filter would hide a subject the homeroom teacher doesn't personally teach —

@@ -458,6 +458,7 @@ export const translations: Record<string, Record<Lang, string>> = {
     uz: "Jami o'quvchilar: {students} ta   |   Umumiy savollar soni: {questions} ta   |   Spetion imtihon platformasi",
     ru: "Всего учеников: {students}   |   Всего вопросов: {questions}   |   Платформа экзаменов Spetion",
   },
+  "dailyResults.notParticipated": { uz: "Topshirmagan", ru: "Не сдавал" },
 
   "ranking.fallbackTitle": { uz: "Reyting", ru: "Рейтинг" },
   "ranking.loadError": { uz: "Reytingni yuklab bo'lmadi", ru: "Не удалось загрузить рейтинг" },

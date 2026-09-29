@@ -259,7 +259,6 @@ def get_class_daily_results(
     # missing entry (didn't take that particular exam) naturally becomes
     # None rather than a misleading 0.
     per_exam_scores: list[dict[int, float]] = []
-    student_names: dict[int, str] = {}
     for exam in exams:
         subject = db.get(Subject, exam.subject_id)
         question_count = db.query(Question).filter_by(exam_id=exam.id).count()
@@ -274,13 +273,24 @@ def get_class_daily_results(
             )
         )
         rows = db.query(ExamRanking).filter_by(exam_id=exam.id).all()
-        score_map: dict[int, float] = {}
-        for r in rows:
-            score_map[r.student_id] = float(r.score)
-            student_names.setdefault(r.student_id, db.get(Student, r.student_id).user.full_name)
+        score_map: dict[int, float] = {r.student_id: float(r.score) for r in rows}
         per_exam_scores.append(score_map)
 
-    unranked = []
+    # Every student currently enrolled in the class gets a row, not just
+    # ones who happened to submit one of today's exams — the user asked
+    # for the full roster so absentees/no-shows are visibly missing (a
+    # dash per column, via per_exam_scores.get() below) rather than just
+    # silently not appearing at all.
+    student_names: dict[int, str] = {
+        s.id: s.user.full_name for s in db.query(Student).filter_by(class_id=class_id).all()
+    }
+
+    # Split into students who took at least one of today's exams (get a
+    # real percent + rank) and ones who took none (no numeric rank/percent —
+    # 0% would misrepresent "no data yet" as "failed everything", the same
+    # call already made for ranking_service.compute_overall_ranking).
+    ranked_rows = []
+    no_data_rows = []
     for student_id, full_name in student_names.items():
         scores = [scores_for_exam.get(student_id) for scores_for_exam in per_exam_scores]
         # Percent over only the exams this student actually took — summing
@@ -289,19 +299,27 @@ def get_class_daily_results(
         # reasoning as ranking_service.compute_overall_ranking.
         earned = sum(s for s in scores if s is not None)
         possible = sum(exam_outs[i].max_score for i, s in enumerate(scores) if s is not None)
-        percent = round(earned / possible * 100, 2) if possible > 0 else 0.0
-        unranked.append((student_id, full_name, scores, percent))
-    unranked.sort(key=lambda row: row[3], reverse=True)
+        if possible > 0:
+            percent = round(earned / possible * 100, 2)
+            ranked_rows.append((student_id, full_name, scores, percent))
+        else:
+            no_data_rows.append((student_id, full_name, scores))
+    ranked_rows.sort(key=lambda row: row[3], reverse=True)
+    no_data_rows.sort(key=lambda row: row[1])
 
     student_outs: list[DailyStudentRowOut] = []
     prev_percent: float | None = None
     rank = 0
-    for i, (student_id, full_name, scores, percent) in enumerate(unranked):
+    for i, (student_id, full_name, scores, percent) in enumerate(ranked_rows):
         if percent != prev_percent:
             rank = i + 1
         prev_percent = percent
         student_outs.append(
             DailyStudentRowOut(rank=rank, student_id=student_id, full_name=full_name, scores=scores, percent=percent)
+        )
+    for student_id, full_name, scores in no_data_rows:
+        student_outs.append(
+            DailyStudentRowOut(rank=None, student_id=student_id, full_name=full_name, scores=scores, percent=None)
         )
 
     return DailyClassResultsOut(

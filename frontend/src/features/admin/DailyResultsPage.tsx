@@ -63,7 +63,11 @@ export default function DailyResultsPage() {
     }
   }
 
-  const topStudent = data && data.students.length > 0 ? data.students[0] : null;
+  // students[0] is only a meaningful "top result" when it has a real
+  // percent — a no-data (didn't take today's exams) student can sort first
+  // only if literally nobody in the class took anything, in which case
+  // data.exams is empty and this whole card isn't rendered anyway.
+  const topStudent = data && data.students.length > 0 && data.students[0].percent !== null ? data.students[0] : null;
   const totalQuestions = data ? data.exams.reduce((sum, e) => sum + e.question_count, 0) : 0;
 
   return (
@@ -208,7 +212,7 @@ export default function DailyResultsPage() {
                       </thead>
                       <tbody>
                         {data.students.map((row, rowIndex) => {
-                          const pill = percentPill(row.percent);
+                          const pill = row.percent === null ? null : percentPill(row.percent);
                           return (
                             <tr
                               key={row.student_id}
@@ -225,11 +229,11 @@ export default function DailyResultsPage() {
                                     borderRadius: 999,
                                     fontSize: 12,
                                     fontWeight: 700,
-                                    background: CARD_MEDAL[row.rank] ?? "transparent",
-                                    color: CARD_MEDAL[row.rank] ? "#1a1a1a" : CARD_MUTED,
+                                    background: row.rank !== null ? CARD_MEDAL[row.rank] ?? "transparent" : "transparent",
+                                    color: row.rank !== null && CARD_MEDAL[row.rank] ? "#1a1a1a" : CARD_MUTED,
                                   }}
                                 >
-                                  {row.rank}
+                                  {row.rank ?? "—"}
                                 </span>
                               </td>
                               <td style={{ padding: "8px 10px", whiteSpace: "nowrap", fontWeight: 600 }}>
@@ -249,19 +253,25 @@ export default function DailyResultsPage() {
                                 </td>
                               ))}
                               <td style={{ padding: "8px 10px", textAlign: "center" }}>
-                                <span
-                                  style={{
-                                    display: "inline-block",
-                                    padding: "3px 10px",
-                                    borderRadius: 999,
-                                    fontSize: 13,
-                                    fontWeight: 700,
-                                    background: pill.bg,
-                                    color: pill.fg,
-                                  }}
-                                >
-                                  {row.percent}%
-                                </span>
+                                {pill ? (
+                                  <span
+                                    style={{
+                                      display: "inline-block",
+                                      padding: "3px 10px",
+                                      borderRadius: 999,
+                                      fontSize: 13,
+                                      fontWeight: 700,
+                                      background: pill.bg,
+                                      color: pill.fg,
+                                    }}
+                                  >
+                                    {row.percent}%
+                                  </span>
+                                ) : (
+                                  <span style={{ fontSize: 12, color: CARD_MUTED, fontStyle: "italic" }}>
+                                    {t("dailyResults.notParticipated")}
+                                  </span>
+                                )}
                               </td>
                             </tr>
                           );

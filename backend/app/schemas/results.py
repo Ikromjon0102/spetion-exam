@@ -78,7 +78,10 @@ class DailyResultsExamOut(BaseModel):
 
 
 class DailyStudentRowOut(BaseModel):
-    rank: int
+    # None for a student who took none of today's exams — the full class
+    # roster is always listed (not just submitters), and a student with no
+    # data isn't given a numeric rank alongside real scores.
+    rank: int | None
     student_id: int
     full_name: str
     # Aligned index-for-index with DailyClassResultsOut.exams — None means
@@ -90,8 +93,11 @@ class DailyStudentRowOut(BaseModel):
     # student actually took that day (not raw points — a raw sum across
     # differently-weighted exams wouldn't be a fair combined ranking number).
     # Ranking is by this percent, same convention as ranking_service's
-    # overall-ranking (RANK() semantics: ties share a rank).
-    percent: float
+    # overall-ranking (RANK() semantics: ties share a rank). None (not 0)
+    # when the student took none of today's exams — a 0% would misrepresent
+    # "no data yet" as "failed everything", same reasoning as
+    # ranking_service.compute_overall_ranking excluding no-data students.
+    percent: float | None
 
 
 class DailyClassResultsOut(BaseModel):

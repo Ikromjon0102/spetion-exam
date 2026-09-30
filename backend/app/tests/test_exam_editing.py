@@ -231,9 +231,19 @@ def test_delete_exam_with_no_attempts_succeeds(client, db_session):
         assert db_session.get(QuestionOption, oid) is None
 
 
-def test_delete_exam_blocked_once_a_student_starts(client, db_session):
+def test_delete_exam_blocked_for_teacher_once_a_student_starts(client, db_session):
+    """Admin gets an explicit override here (see test_attempt_delete.py's
+    test_admin_can_force_delete_exam_with_real_attempts) — a teacher does
+    not, so this now needs a teacher assigned to the class/subject rather
+    than admin to actually exercise the block."""
+    from app.tests.factories import make_teacher
+
     klass = make_class(db_session)
     subject = make_subject(db_session)
+    teacher = make_teacher(db_session, subject=subject, username="delete_block_teacher")
+    from app.models.user import TeacherClassSubject
+
+    db_session.add(TeacherClassSubject(teacher_id=teacher.id, class_id=klass.id, subject_id=subject.id))
     start, end = _window()
     exam = make_exam(db_session, klass, subject, start_at=start, end_at=end)
     add_mcq_question(db_session, exam, needs_review=False)
@@ -241,13 +251,15 @@ def test_delete_exam_blocked_once_a_student_starts(client, db_session):
     student = make_student(db_session, klass)
     db_session.add(ExamAttempt(exam_id=exam.id, student_id=student.id, status=AttemptStatus.in_progress))
     db_session.commit()
-    headers = _admin_headers(client, db_session)
+    token = _login(client, "delete_block_teacher")
+    headers = {"Authorization": f"Bearer {token}"}
 
     resp = client.delete(f"/api/v1/admin/exams/{exam.id}", headers=headers)
     assert resp.status_code == 409
 
     # untouched
-    assert client.get(f"/api/v1/admin/exams/{exam.id}", headers=headers).status_code == 200
+    admin_headers = _admin_headers(client, db_session)
+    assert client.get(f"/api/v1/admin/exams/{exam.id}", headers=admin_headers).status_code == 200
 
 
 def test_delete_exam_forbidden_for_unassigned_teacher(client, db_session):

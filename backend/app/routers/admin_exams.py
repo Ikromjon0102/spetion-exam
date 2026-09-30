@@ -327,16 +327,26 @@ def delete_exam(
     db: Session = Depends(get_db),
     user: User = Depends(require_role("teacher", "admin")),
 ):
-    """Same block/allow rule as editing: a draft, review, or already-
-    scheduled/published exam can be deleted right up until a student
-    actually starts it (ensure_no_attempts) — a started attempt's grade
-    would otherwise vanish along with the exam. Cascades to the exam's
+    """Same block/allow rule as editing for a teacher: a draft, review, or
+    already-scheduled/published exam can be deleted right up until a
+    student actually starts it (ensure_no_attempts) — a started attempt's
+    grade would otherwise vanish along with the exam. Admin gets an
+    explicit override: real attempts are unwound first (one call to
+    ranking_service.remove_attempt per student, which also fixes up
+    ExamRanking/StudentSubjectStats — see that function's docstring) so
+    admin can force-delete an exam even after students took it, e.g.
+    cleaning up a mistakenly-published test exam. Cascades to the exam's
     own Question/QuestionOption rows (Exam.questions now has
     cascade="all, delete-orphan"); ExamUpload, if any, is left as-is —
     harmless once orphaned, same as elsewhere in this router."""
     exam = _get_exam_or_404(db, exam_id)
     exam_service.ensure_can_manage_exam(db, user, exam)
-    exam_service.ensure_no_attempts(db, exam)
+    if user.role == UserRole.admin:
+        student_ids = [row[0] for row in db.query(ExamAttempt.student_id).filter_by(exam_id=exam.id).distinct()]
+        for student_id in student_ids:
+            ranking_service.remove_attempt(db, exam.id, student_id)
+    else:
+        exam_service.ensure_no_attempts(db, exam)
     db.delete(exam)
     db.commit()
 
@@ -663,6 +673,25 @@ def get_attempt_detail(
         submitted_at=attempt.submitted_at if attempt else None,
         score=float(attempt.score) if attempt and attempt.score is not None else None,
     )
+
+
+@router.delete("/{exam_id}/attempts/{student_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_attempt(
+    exam_id: int,
+    student_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role("admin")),
+):
+    """Admin-only (not teacher) — removes one student's attempt at this
+    exam (e.g. a staff member's own test run), including its answers and
+    ExamRanking row, and re-derives that student's StudentSubjectStats and
+    the rest of the class's ranks from what's left. See
+    ranking_service.remove_attempt for why this can't be a raw DB delete:
+    those derived tables don't update themselves."""
+    exam = _get_exam_or_404(db, exam_id)
+    exam_service.ensure_can_manage_exam(db, user, exam)
+    if not ranking_service.remove_attempt(db, exam_id, student_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bu o'quvchining urinishi topilmadi")
 
 
 def _get_graded_attempt_or_404(db: Session, exam_id: int, student_id: int) -> ExamAttempt:

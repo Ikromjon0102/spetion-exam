@@ -467,6 +467,11 @@ export const translations: Record<string, Record<Lang, string>> = {
   "ranking.submittedAt": { uz: "Topshirdi", ru: "Сдал" },
   "ranking.startedAt": { uz: "Boshladi", ru: "Начал" },
   "ranking.reviewAnswers": { uz: "Javoblarni ko'rish", ru: "Посмотреть ответы" },
+  "ranking.deleteAttempt": { uz: "Urinishni o'chirish", ru: "Удалить попытку" },
+  "ranking.deleteAttemptError": {
+    uz: "Urinishni o'chirib bo'lmadi",
+    ru: "Не удалось удалить попытку",
+  },
 
   "attemptReview.backToRanking": { uz: "Reytingga qaytish", ru: "Назад к рейтингу" },
   "attemptReview.title": { uz: "O'quvchi javoblari", ru: "Ответы ученика" },

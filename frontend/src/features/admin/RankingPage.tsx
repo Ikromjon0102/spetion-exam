@@ -1,9 +1,16 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getClassRanking, listExamAttempts, type AttemptMonitor, type ClassRanking } from "../../api/adminApi";
-import { AdminLayout, Badge, Button, ListRow, RankBadge, StatCard, type BadgeStatus } from "../../components/ui";
+import {
+  deleteAttempt,
+  getClassRanking,
+  listExamAttempts,
+  type AttemptMonitor,
+  type ClassRanking,
+} from "../../api/adminApi";
+import { AdminLayout, Badge, Button, ConfirmButton, ListRow, RankBadge, StatCard, type BadgeStatus } from "../../components/ui";
 import { formatDateTimeUz } from "../../utils/formatDate";
 import { useLanguage } from "../../i18n/LanguageContext";
+import { useAuth } from "../../auth/AuthContext";
 
 const STATUS_KEY: Record<string, { status: BadgeStatus; key: string }> = {
   not_started: { status: "neutral", key: "attemptStatus.not_started" },
@@ -21,16 +28,31 @@ export default function RankingPage() {
   const [error, setError] = useState<string | null>(null);
   const { t } = useLanguage();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
 
-  useEffect(() => {
+  function reload() {
     getClassRanking(id)
       .then(setRanking)
       .catch(() => setError(t("ranking.loadError")));
     listExamAttempts(id)
       .then(setAttempts)
       .catch(() => undefined);
+  }
+
+  useEffect(() => {
+    reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  async function handleDeleteAttempt(studentId: number) {
+    try {
+      await deleteAttempt(id, studentId);
+      reload();
+    } catch {
+      setError(t("ranking.deleteAttemptError"));
+    }
+  }
 
   return (
     <AdminLayout>
@@ -126,6 +148,13 @@ export default function RankingPage() {
                       >
                         {t("ranking.reviewAnswers")}
                       </Button>
+                    )}
+                    {isAdmin && a.status !== "not_started" && (
+                      <ConfirmButton
+                        label={t("ranking.deleteAttempt")}
+                        confirmLabel={t("common.confirmDelete")}
+                        onConfirm={() => handleDeleteAttempt(a.student_id)}
+                      />
                     )}
                   </>
                 }

@@ -7,11 +7,11 @@
 
 from sqlalchemy import func
 
-from app.models.attempt import AttemptStatus, ExamAttempt
+from app.models.attempt import AttemptStatus, ExamAttempt, StudentAnswer
 from app.models.exam import Exam
 from app.models.org import Class
 from app.models.ranking import ExamRanking, StudentSubjectStats, Trend
-from app.models.user import Student
+from app.models.user import Student, User
 
 
 def recompute_for_student(db, exam_id: int, student_id: int) -> None:
@@ -37,6 +37,32 @@ def recompute_for_student(db, exam_id: int, student_id: int) -> None:
     _recompute_class_ranks(db, exam_id)
     _update_subject_stats(db, student_id, exam.subject_id)
     db.commit()
+
+
+def remove_attempt(db, exam_id: int, student_id: int) -> bool:
+    """The inverse of recompute_for_student — deletes one student's
+    ExamAttempt (+ its StudentAnswer rows and ExamRanking row) for an exam,
+    then re-derives that student's StudentSubjectStats and the remaining
+    class's ranks from what's left. Used both by the single-attempt admin
+    delete and by force-deleting a whole exam that already has attempts
+    (see admin_exams.delete_exam) — a raw SQL delete of the attempt alone
+    would leave StudentSubjectStats/ExamRanking stale, since those are
+    derived data, not automatically kept in sync by a DB-level cascade.
+    Returns False if there was no such attempt to remove."""
+    exam = db.get(Exam, exam_id)
+    attempt = db.query(ExamAttempt).filter_by(exam_id=exam_id, student_id=student_id).first()
+    if attempt is None:
+        return False
+
+    db.query(StudentAnswer).filter_by(attempt_id=attempt.id).delete()
+    db.query(ExamRanking).filter_by(exam_id=exam_id, student_id=student_id).delete()
+    db.delete(attempt)
+    db.commit()
+
+    _recompute_class_ranks(db, exam_id)
+    _update_subject_stats(db, student_id, exam.subject_id)
+    db.commit()
+    return True
 
 
 def _recompute_class_ranks(db, exam_id: int) -> None:
@@ -68,10 +94,16 @@ def _update_subject_stats(db, student_id: int, subject_id: int) -> None:
         .order_by(ExamAttempt.submitted_at)
         .all()
     )
+    stats = db.query(StudentSubjectStats).filter_by(student_id=student_id, subject_id=subject_id).first()
     if not attempts:
+        # No graded attempt left for this subject (e.g. the last one was
+        # just deleted) — a stale stats row must not survive it, or the
+        # student keeps showing an old score/rank forever with nothing left
+        # to back it up.
+        if stats is not None:
+            db.delete(stats)
         return
 
-    stats = db.query(StudentSubjectStats).filter_by(student_id=student_id, subject_id=subject_id).first()
     if stats is None:
         stats = StudentSubjectStats(student_id=student_id, subject_id=subject_id)
         db.add(stats)
@@ -110,6 +142,11 @@ def compute_overall_ranking(db, class_id: int | None = None, grade_level: int | 
         )
         .join(StudentSubjectStats, StudentSubjectStats.student_id == Student.id)
         .join(Class, Class.id == Student.class_id)
+        .join(User, User.id == Student.user_id)
+        # A deactivated student (left the school, duplicate/test account,
+        # etc.) shouldn't keep showing up in a live ranking just because
+        # their old StudentSubjectStats rows are still on file.
+        .filter(User.is_active.is_(True))
         .group_by(Student.id, Class.id, Class.display_name)
     )
     if class_id is not None:

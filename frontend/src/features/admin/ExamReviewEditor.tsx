@@ -424,7 +424,7 @@ export default function ExamReviewEditor() {
             <Button variant="secondary" size="sm" onClick={openDuplicateModal}>
               {t("review.duplicate")}
             </Button>
-            {!locked && (
+            {(!locked || isAdmin) && (
               <ConfirmButton
                 label={t("common.delete")}
                 confirmLabel={t("common.confirmDelete")}

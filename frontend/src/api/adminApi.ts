@@ -432,6 +432,14 @@ export async function deleteExam(examId: number): Promise<void> {
   await apiClient.delete(`/admin/exams/${examId}`);
 }
 
+// Admin-only on the backend (require_role("admin"), not teacher) — removes
+// one student's attempt at an exam (e.g. a staff member's own test run)
+// and re-derives their StudentSubjectStats/the class's ranks from what's
+// left, rather than leaving those derived tables stale.
+export async function deleteAttempt(examId: number, studentId: number): Promise<void> {
+  await apiClient.delete(`/admin/exams/${examId}/attempts/${studentId}`);
+}
+
 export async function updateQuestion(
   examId: number,
   questionId: number,

@@ -32,6 +32,7 @@ import {
   CardHead,
   ConfirmButton,
   Modal,
+  Toast,
   type BadgeStatus,
 } from "../../components/ui";
 import { useLanguage } from "../../i18n/LanguageContext";
@@ -84,6 +85,9 @@ export default function ExamReviewEditor() {
   const [exam, setExam] = useState<ExamDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  // Bumped on every notify() so two identical "Saqlandi" toasts in a row
+  // each get a fresh auto-dismiss timer instead of sharing the first one's.
+  const [messageKey, setMessageKey] = useState(0);
   const [newQuestion, setNewQuestion] = useState({
     question_type: "mcq" as "mcq" | "short_answer",
     prompt_text: "",
@@ -145,10 +149,17 @@ export default function ExamReviewEditor() {
   const locked = !exam.can_edit;
   const canPublish = exam.status === "draft" || exam.status === "review";
 
+  function notify(text: string) {
+    setError(null);
+    setMessage(text);
+    setMessageKey((k) => k + 1);
+  }
+
   async function saveSchedule(patch: Partial<{ duration_minutes: number; start_at: string; end_at: string }>) {
     try {
       await updateExam(id, patch);
       await reload();
+      notify(t("review.saved"));
     } catch (e) {
       setError(errorDetail(e, t("review.genericError")));
     }
@@ -161,6 +172,7 @@ export default function ExamReviewEditor() {
     try {
       await updateQuestion(id, questionId, patch);
       await reload();
+      notify(t("review.saved"));
     } catch (e) {
       setError(errorDetail(e, t("review.genericError")));
     }
@@ -173,6 +185,7 @@ export default function ExamReviewEditor() {
       if (previous) await updateQuestionOption(id, questionId, previous.id, { is_correct: false });
       await updateQuestionOption(id, questionId, optionId, { is_correct: true });
       await reload();
+      notify(t("review.saved"));
     } catch (e) {
       setError(errorDetail(e, t("review.genericError")));
     }
@@ -182,6 +195,7 @@ export default function ExamReviewEditor() {
     try {
       await updateQuestionOption(id, questionId, optionId, { option_text: text });
       await reload();
+      notify(t("review.saved"));
     } catch (e) {
       setError(errorDetail(e, t("review.genericError")));
     }
@@ -194,6 +208,7 @@ export default function ExamReviewEditor() {
     try {
       await setQuestionPromptImage(id, questionId, file);
       await reload();
+      notify(t("review.saved"));
     } catch (err) {
       setError(errorDetail(err, t("review.genericError")));
     }
@@ -203,6 +218,7 @@ export default function ExamReviewEditor() {
     try {
       await clearQuestionPromptImage(id, questionId);
       await reload();
+      notify(t("review.saved"));
     } catch (err) {
       setError(errorDetail(err, t("review.genericError")));
     }
@@ -215,6 +231,7 @@ export default function ExamReviewEditor() {
     try {
       await setOptionImage(id, questionId, optionId, file);
       await reload();
+      notify(t("review.saved"));
     } catch (err) {
       setError(errorDetail(err, t("review.genericError")));
     }
@@ -224,6 +241,7 @@ export default function ExamReviewEditor() {
     try {
       await clearOptionImage(id, questionId, optionId);
       await reload();
+      notify(t("review.saved"));
     } catch (err) {
       setError(errorDetail(err, t("review.genericError")));
     }
@@ -233,6 +251,7 @@ export default function ExamReviewEditor() {
     try {
       await deleteQuestion(id, questionId);
       await reload();
+      notify(t("review.questionDeleted"));
     } catch (e) {
       setError(errorDetail(e, t("review.genericError")));
     }
@@ -252,7 +271,7 @@ export default function ExamReviewEditor() {
     } else {
       for (let i = 0; i < newQuestion.options.length; i++) {
         if (!newQuestion.options[i].trim() && !newQuestion.optionImageFiles[i]) {
-          setError(t("review.needsTextOrImage"));
+          setError(t("review.optionEmpty", { letter: String.fromCharCode(65 + i) }));
           return;
         }
       }
@@ -284,6 +303,7 @@ export default function ExamReviewEditor() {
         reference_answer: "",
       });
       await reload();
+      notify(t("review.questionAdded", { count: (exam?.questions.length ?? 0) + 1 }));
     } catch (e) {
       setError(errorDetail(e, t("review.genericError")));
     }
@@ -337,8 +357,10 @@ export default function ExamReviewEditor() {
     setError(null);
     try {
       await publishExam(id);
-      setMessage(t("review.published"));
-      await reload();
+      // Land on the exam list with a confirmation — the publish button is
+      // at the very bottom of a long page, so a message left up here was
+      // easy to miss entirely and the page looked like it had frozen.
+      navigate("/admin/exams", { state: { flash: t("review.published") } });
     } catch (e) {
       setError(errorDetail(e, t("review.genericError")));
     }
@@ -437,15 +459,15 @@ export default function ExamReviewEditor() {
           {exam.subject_name} · {exam.class_name}
         </p>
 
-        {error && (
-          <p role="alert" className="body-sm" style={{ color: "var(--danger)", marginBottom: "var(--space-4)" }}>
-            {error}
-          </p>
-        )}
+        {error && <Toast kind="error" text={error} onClose={() => setError(null)} />}
         {message && (
-          <p className="body-sm" style={{ color: "var(--success)", marginBottom: "var(--space-4)" }}>
-            {message}
-          </p>
+          <Toast
+            key={messageKey}
+            kind="success"
+            text={message}
+            autoDismissMs={3000}
+            onClose={() => setMessage(null)}
+          />
         )}
         {locked && (
           <p className="body-sm ink-muted" style={{ marginBottom: "var(--space-4)" }}>
@@ -495,6 +517,11 @@ export default function ExamReviewEditor() {
             {exam.question_count} {t("review.questionsCount")} · {exam.needs_review_count} {t("review.needsReviewCount")}
           </span>
         </div>
+        {!locked && (
+          <p className="body-sm ink-muted" style={{ marginBottom: "var(--space-4)" }}>
+            {t("review.autosaveHint")}
+          </p>
+        )}
 
         <div className="stack" style={{ marginBottom: "var(--space-6)" }}>
           {exam.questions.map((q, idx) => (

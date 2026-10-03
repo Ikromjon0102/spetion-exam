@@ -21,6 +21,7 @@ export type { DonutSegment } from "./DonutChart";
 export { default as ConfirmButton } from "./ConfirmButton";
 export { default as AuthedImage } from "./AuthedImage";
 export { default as Modal } from "./Modal";
+export { default as Toast } from "./Toast";
 export { default as PasswordInput } from "./PasswordInput";
 export { default as RankBadge } from "./RankBadge";
 export { default as EmptyState } from "./EmptyState";

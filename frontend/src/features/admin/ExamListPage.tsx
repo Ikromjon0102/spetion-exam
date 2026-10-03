@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { deleteExam, listExams, type ExamSummary } from "../../api/adminApi";
-import { AdminLayout, Badge, Button, ConfirmButton, ListRow, type BadgeStatus } from "../../components/ui";
+import { AdminLayout, Badge, Button, ConfirmButton, ListRow, Toast, type BadgeStatus } from "../../components/ui";
 import { useLanguage } from "../../i18n/LanguageContext";
 import { errorDetail } from "../../utils/errorDetail";
 
@@ -19,6 +19,14 @@ export default function AdminExamListPage() {
   const [error, setError] = useState<string | null>(null);
   const { t } = useLanguage();
   const navigate = useNavigate();
+  const location = useLocation();
+  // One-shot confirmation handed over by the page that navigated here (e.g.
+  // the editor after publishing) — read once, then cleared from history so
+  // a refresh doesn't show it again.
+  const [flash, setFlash] = useState<string | null>((location.state as { flash?: string } | null)?.flash ?? null);
+  useEffect(() => {
+    if (flash) window.history.replaceState({}, "");
+  }, [flash]);
   const [searchParams, setSearchParams] = useSearchParams();
 
   const statusFilter = searchParams.get("status");
@@ -86,11 +94,8 @@ export default function AdminExamListPage() {
           </p>
         )}
 
-        {error && (
-          <p role="alert" style={{ color: "var(--danger)" }}>
-            {error}
-          </p>
-        )}
+        {flash && <Toast kind="success" text={flash} autoDismissMs={4000} onClose={() => setFlash(null)} />}
+        {error && <Toast kind="error" text={error} onClose={() => setError(null)} />}
         {!error && exams.length === 0 && (
           <ListRow state="free" title={t("adminExamList.empty")} subtitle={t("adminExamList.emptySubtitle")} />
         )}

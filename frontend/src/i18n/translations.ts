@@ -359,6 +359,20 @@ export const translations: Record<string, Record<Lang, string>> = {
   "review.loadError": { uz: "Imtihonni yuklab bo'lmadi", ru: "Не удалось загрузить экзамен" },
   "review.genericError": { uz: "Amalni bajarib bo'lmadi", ru: "Не удалось выполнить действие" },
   "review.published": { uz: "Imtihon muvaffaqiyatli chop etildi", ru: "Экзамен успешно опубликован" },
+  "review.saved": { uz: "Saqlandi", ru: "Сохранено" },
+  "review.questionDeleted": { uz: "Savol o'chirildi", ru: "Вопрос удалён" },
+  "review.questionAdded": {
+    uz: "Savol qo'shildi — jami {count} ta",
+    ru: "Вопрос добавлен — всего {count}",
+  },
+  "review.optionEmpty": {
+    uz: "Variant {letter} bo'sh — matn kiriting yoki rasm joylashtiring (Ctrl+V)",
+    ru: "Вариант {letter} пуст — введите текст или вставьте изображение (Ctrl+V)",
+  },
+  "review.autosaveHint": {
+    uz: "O'zgarishlar maydondan chiqqaningizda (boshqa joyga bosganingizda) avtomatik saqlanadi — \"Saqlandi\" xabari chiqadi",
+    ru: "Изменения сохраняются автоматически, когда вы выходите из поля, — появится сообщение «Сохранено»",
+  },
   "review.schedule": { uz: "Jadval", ru: "Расписание" },
   "review.duration": { uz: "Davomiyligi (daqiqa)", ru: "Длительность (мин)" },
   "review.startAt": { uz: "Boshlanish", ru: "Начало" },

@@ -86,6 +86,9 @@ export default function AdminExamListPage() {
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState<ExamsSummary | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  // Checkboxes only exist while selecting: always-on checkboxes cluttered
+  // every row of a list that is mostly just read.
+  const [selectMode, setSelectMode] = useState(false);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -152,8 +155,14 @@ export default function AdminExamListPage() {
     refreshSummary();
   }
 
+  function endSelecting() {
+    setSelectMode(false);
+    setSelected(new Set());
+  }
+
   function switchTab(toArchive: boolean) {
     if (toArchive === archived) return;
+    endSelecting();
     setArchived(toArchive);
     setSubjectId(null);
     setClassId(null);
@@ -182,6 +191,7 @@ export default function AdminExamListPage() {
   async function run(action: () => Promise<ExamBulkResult>, doneKey: string) {
     try {
       report(await action(), doneKey);
+      setSelectMode(false);
       reload();
     } catch (e) {
       setError(errorDetail(e, t("examArchive.error")));
@@ -253,6 +263,13 @@ export default function AdminExamListPage() {
         >
           <h1 className="h2">{t("adminExamList.title")}</h1>
           <div style={{ display: "flex", gap: "var(--space-2)", flexWrap: "wrap" }}>
+            <Button
+              variant={selectMode ? "primary" : "secondary"}
+              size="sm"
+              onClick={() => (selectMode ? endSelecting() : setSelectMode(true))}
+            >
+              {selectMode ? t("examArchive.selectDone") : t("examArchive.selectMode")}
+            </Button>
             {!archived && (
               <Button variant="secondary" size="sm" onClick={() => setArchiveOldOpen(true)}>
                 {t("examArchive.archiveOld")}
@@ -340,7 +357,7 @@ export default function AdminExamListPage() {
           )}
         </div>
 
-        {selectedIds.length > 0 && (
+        {selectMode && (
           <div
             style={{
               display: "flex",
@@ -354,19 +371,29 @@ export default function AdminExamListPage() {
               borderRadius: "var(--radius-md)",
             }}
           >
-            <span className="body-sm">{t("examArchive.selected", { count: selectedIds.length })}</span>
+            <span className="body-sm">
+              {selectedIds.length > 0
+                ? t("examArchive.selected", { count: selectedIds.length })
+                : t("examArchive.pickHint")}
+            </span>
             {archived ? (
-              <Button size="sm" onClick={() => run(() => restoreExams(selectedIds), "examArchive.restoredToast")}>
+              <Button size="sm" disabled={selectedIds.length === 0} onClick={() => run(() => restoreExams(selectedIds), "examArchive.restoredToast")}>
                 {t("examArchive.restore")}
               </Button>
             ) : (
-              <Button size="sm" onClick={() => run(() => archiveExams(selectedIds), "examArchive.archivedToast")}>
+              <Button
+                size="sm"
+                disabled={selectedIds.length === 0}
+                onClick={() => run(() => archiveExams(selectedIds), "examArchive.archivedToast")}
+              >
                 {t("examArchive.archive")}
               </Button>
             )}
-            <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
-              {t("examArchive.clearSelection")}
-            </Button>
+            {selectedIds.length > 0 && (
+              <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
+                {t("examArchive.clearSelection")}
+              </Button>
+            )}
           </div>
         )}
 
@@ -397,7 +424,7 @@ export default function AdminExamListPage() {
                     margin: "var(--space-2) 0",
                   }}
                 >
-                  {pickable.length > 0 && (
+                  {selectMode && pickable.length > 0 && (
                     <input
                       type="checkbox"
                       checked={allPicked}
@@ -435,14 +462,16 @@ export default function AdminExamListPage() {
                       const canPick = archived || exam.can_archive;
                       return (
                         <div key={exam.id} style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
-                          <input
-                            type="checkbox"
-                            checked={selected.has(exam.id)}
-                            disabled={!canPick}
-                            onChange={() => toggle(exam.id)}
-                            aria-label={exam.title}
-                            style={{ accentColor: "var(--brand-600)", width: 18, height: 18, flexShrink: 0 }}
-                          />
+                          {selectMode && (
+                            <input
+                              type="checkbox"
+                              checked={selected.has(exam.id)}
+                              disabled={!canPick}
+                              onChange={() => toggle(exam.id)}
+                              aria-label={exam.title}
+                              style={{ accentColor: "var(--brand-600)", width: 18, height: 18, flexShrink: 0 }}
+                            />
+                          )}
                           <div style={{ flex: 1, minWidth: 0 }}>
                             {/* Row itself isn't clickable: its trailing slot holds
                                 real buttons (a clickable ListRow is a <button>, and

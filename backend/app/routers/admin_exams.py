@@ -2,9 +2,12 @@
 monitoring. See docs/spec.md sections 2-4.
 """
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from datetime import datetime, timedelta, timezone
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import Response as FastAPIResponse
 from fastapi.responses import Response
-from sqlalchemy import case, func
+from sqlalchemy import and_, case, exists, false, func, or_
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.storage import download_exam_file, upload_exam_file, upload_question_image
@@ -28,10 +31,16 @@ from app.schemas.exam import (
     AttemptAnswerOverrideIn,
     AttemptAnswerReviewOut,
     AttemptMonitorOut,
+    ArchiveOldIn,
+    ExamBulkResultOut,
+    ExamBulkSkippedOut,
     ExamCreate,
     ExamDetailOut,
     ExamDuplicateIn,
+    ExamIdsIn,
     ExamOut,
+    ExamsSummaryOut,
+    FacetOut,
     ExamUpdate,
     ExamUploadOut,
     QuestionCreate,
@@ -100,6 +109,7 @@ def _exam_outs(db: Session, exams: list[Exam]) -> list[ExamOut]:
     }
     started = exam_service.exam_ids_with_attempts(db, exam_ids)
 
+    now = datetime.now(timezone.utc)
     out = []
     for exam in exams:
         total, pending = question_counts.get(exam.id, (0, 0))
@@ -119,6 +129,9 @@ def _exam_outs(db: Session, exams: list[Exam]) -> list[ExamOut]:
                 question_count=total,
                 needs_review_count=int(pending),
                 expected_question_count=exam.expected_question_count,
+                phase=exam_service.exam_phase(exam, now),
+                archived_at=exam.archived_at,
+                can_archive=exam_service.archive_block_reason(exam, now) is None,
                 can_edit=exam.id not in started,
             )
         )
@@ -218,6 +231,46 @@ def create_exam(
     return _exam_out(db, exam)
 
 
+def visible_exams_query(db: Session, user: User):
+    """Every exam `user` may see, as a query so callers can filter, count and
+    page in SQL: all of them for an admin, only the (class, subject) pairs they
+    teach for a teacher. Shared by the exam list, its folder counts, the bulk
+    archive actions and the dashboard so they can never disagree about scope."""
+    query = db.query(Exam)
+    if user.role == UserRole.teacher:
+        pairs = (
+            [(a.class_id, a.subject_id) for a in db.query(TeacherClassSubject).filter_by(teacher_id=user.teacher.id)]
+            if user.teacher is not None
+            else []
+        )
+        if not pairs:
+            return query.filter(false())
+        query = query.filter(or_(*[and_(Exam.class_id == c, Exam.subject_id == s) for c, s in pairs]))
+    return query
+
+
+def _phase_clause(phase: str, now: datetime):
+    """SQL twin of exam_service.exam_phase — keep the two in step."""
+    live_statuses = [ExamStatus.scheduled, ExamStatus.active]
+    if phase == "draft":
+        return Exam.status.in_([ExamStatus.draft, ExamStatus.review])
+    if phase == "upcoming":
+        return and_(Exam.status.in_(live_statuses), or_(Exam.start_at.is_(None), Exam.start_at > now))
+    if phase == "live":
+        return and_(Exam.status.in_(live_statuses), Exam.start_at <= now, Exam.end_at > now)
+    if phase == "finished":
+        return or_(
+            Exam.status.in_([ExamStatus.closed, ExamStatus.archived]),
+            and_(Exam.status.in_(live_statuses), Exam.start_at.isnot(None), Exam.end_at <= now),
+        )
+    raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Noma'lum holat")
+
+
+def _newest_first():
+    # Drafts have no start yet — place them by when they were created.
+    return func.coalesce(Exam.start_at, Exam.created_at).desc()
+
+
 def visible_exams(
     db: Session,
     user: User,
@@ -225,38 +278,159 @@ def visible_exams(
     class_id: int | None = None,
     subject_id: int | None = None,
 ) -> list[Exam]:
-    """Every exam `user` may see, newest first: all of them for an admin, only
-    the (class, subject) pairs they teach for a teacher. Shared by the exam
-    list and the dashboard so the two can never disagree about scoping."""
-    query = db.query(Exam)
+    """The non-archived exams `user` may see, newest first (the dashboard's
+    view of "my exams")."""
+    query = visible_exams_query(db, user).filter(Exam.archived_at.is_(None))
     if exam_status:
         query = query.filter(Exam.status == ExamStatus(exam_status))
     if class_id:
         query = query.filter(Exam.class_id == class_id)
     if subject_id:
         query = query.filter(Exam.subject_id == subject_id)
-    exams = query.order_by(Exam.created_at.desc()).all()
-
-    if user.role == UserRole.teacher:
-        if user.teacher is None:
-            return []
-        allowed_pairs = {
-            (a.class_id, a.subject_id)
-            for a in db.query(TeacherClassSubject).filter_by(teacher_id=user.teacher.id)
-        }
-        exams = [e for e in exams if (e.class_id, e.subject_id) in allowed_pairs]
-    return exams
+    return query.order_by(_newest_first(), Exam.id.desc()).all()
 
 
 @router.get("", response_model=list[ExamOut])
 def list_exams(
+    response: FastAPIResponse,
     exam_status: str | None = None,
     class_id: int | None = None,
     subject_id: int | None = None,
+    phase: str | None = None,
+    q: str | None = None,
+    needs_review: bool = False,
+    archived: bool = False,
+    limit: int | None = Query(None, ge=1, le=200),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
     user: User = Depends(require_role("teacher", "admin")),
 ):
-    return _exam_outs(db, visible_exams(db, user, exam_status, class_id, subject_id))
+    """Filterable, pageable list. `archived=false` (the default) is the working
+    view; `archived=true` is the archive. The unpaged total is returned in the
+    X-Total-Count header so the body stays a plain list. Omitting `limit`
+    returns everything that matches (the dashboard relies on that)."""
+    query = visible_exams_query(db, user)
+    query = query.filter(Exam.archived_at.isnot(None) if archived else Exam.archived_at.is_(None))
+    if exam_status:
+        query = query.filter(Exam.status == ExamStatus(exam_status))
+    if class_id:
+        query = query.filter(Exam.class_id == class_id)
+    if subject_id:
+        query = query.filter(Exam.subject_id == subject_id)
+    if phase:
+        query = query.filter(_phase_clause(phase, datetime.now(timezone.utc)))
+    if q and q.strip():
+        query = query.filter(Exam.title.ilike(f"%{q.strip()}%"))
+    if needs_review:
+        query = query.filter(exists().where(and_(Question.exam_id == Exam.id, Question.needs_review.is_(True))))
+
+    response.headers["X-Total-Count"] = str(query.count())
+    query = query.order_by(_newest_first(), Exam.id.desc()).offset(offset)
+    if limit is not None:
+        query = query.limit(limit)
+    return _exam_outs(db, query.all())
+
+
+@router.get("/summary", response_model=ExamsSummaryOut)
+def exams_summary(
+    archived: bool = False,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role("teacher", "admin")),
+):
+    """The "folders": how many exams per subject and per class in the working
+    view (or the archive), plus the size of both tabs. Counted in SQL over the
+    exams this user may see."""
+    base = visible_exams_query(db, user)
+    current = base.filter(Exam.archived_at.is_(None)).count()
+    archived_total = base.filter(Exam.archived_at.isnot(None)).count()
+    scoped = base.filter(Exam.archived_at.isnot(None) if archived else Exam.archived_at.is_(None))
+
+    def facets(column, model, name_column) -> list[FacetOut]:
+        rows = scoped.with_entities(column, func.count(Exam.id)).group_by(column).all()
+        names = (
+            dict(db.query(model.id, name_column).filter(model.id.in_([r[0] for r in rows])).all()) if rows else {}
+        )
+        return sorted(
+            (FacetOut(id=r[0], name=names.get(r[0], ""), count=r[1]) for r in rows),
+            key=lambda f: f.name.lower(),
+        )
+
+    return ExamsSummaryOut(
+        current=current,
+        archived=archived_total,
+        subjects=facets(Exam.subject_id, Subject, Subject.name),
+        classes=facets(Exam.class_id, Class, Class.display_name),
+    )
+
+
+def _bulk_archive_change(db: Session, user: User, exam_ids: list[int], *, archive: bool) -> ExamBulkResultOut:
+    """Archive or restore several exams, each checked on its own: one that
+    can't be changed (no access, still running, wrong state) is reported back
+    as skipped instead of failing the whole batch. Only the archived_at flag
+    moves — attempts, rankings and student stats are never touched."""
+    now = datetime.now(timezone.utc)
+    found = {e.id: e for e in db.query(Exam).filter(Exam.id.in_(exam_ids)).all()}
+    changed: list[int] = []
+    skipped: list[ExamBulkSkippedOut] = []
+    for exam_id in dict.fromkeys(exam_ids):
+        exam = found.get(exam_id)
+        if exam is None:
+            skipped.append(ExamBulkSkippedOut(exam_id=exam_id, reason="not_found"))
+            continue
+        try:
+            exam_service.ensure_can_manage_exam(db, user, exam)
+        except HTTPException:
+            skipped.append(ExamBulkSkippedOut(exam_id=exam_id, reason="forbidden"))
+            continue
+        if archive:
+            reason = exam_service.archive_block_reason(exam, now)
+            if reason is not None:
+                skipped.append(ExamBulkSkippedOut(exam_id=exam_id, reason=reason))
+                continue
+            exam.archived_at = now
+        else:
+            if exam.archived_at is None:
+                skipped.append(ExamBulkSkippedOut(exam_id=exam_id, reason="not_archived"))
+                continue
+            exam.archived_at = None
+        changed.append(exam_id)
+    db.commit()
+    return ExamBulkResultOut(changed=changed, skipped=skipped)
+
+
+@router.post("/archive", response_model=ExamBulkResultOut)
+def archive_exams(
+    body: ExamIdsIn, db: Session = Depends(get_db), user: User = Depends(require_role("teacher", "admin"))
+):
+    return _bulk_archive_change(db, user, body.exam_ids, archive=True)
+
+
+@router.post("/restore", response_model=ExamBulkResultOut)
+def restore_exams(
+    body: ExamIdsIn, db: Session = Depends(get_db), user: User = Depends(require_role("teacher", "admin"))
+):
+    return _bulk_archive_change(db, user, body.exam_ids, archive=False)
+
+
+@router.post("/archive-old", response_model=ExamBulkResultOut)
+def archive_old_exams(
+    body: ArchiveOldIn, db: Session = Depends(get_db), user: User = Depends(require_role("teacher", "admin"))
+):
+    """Archives every exam the caller can see whose window ended more than
+    `days` days ago — the weekly "clear last week's out of the way" action."""
+    cutoff = datetime.now(timezone.utc) - timedelta(days=body.days)
+    ids = [
+        e.id
+        for e in visible_exams_query(db, user).filter(
+            Exam.archived_at.is_(None),
+            Exam.status.in_([ExamStatus.scheduled, ExamStatus.active, ExamStatus.closed]),
+            Exam.end_at.isnot(None),
+            Exam.end_at < cutoff,
+        )
+    ]
+    if not ids:
+        return ExamBulkResultOut(changed=[])
+    return _bulk_archive_change(db, user, ids, archive=True)
 
 
 @router.get("/{exam_id}", response_model=ExamDetailOut)

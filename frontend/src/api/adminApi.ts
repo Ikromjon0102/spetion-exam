@@ -66,6 +66,8 @@ export interface ExamUpload {
   exam_id: number | null;
 }
 
+export type ExamPhase = "draft" | "upcoming" | "live" | "finished";
+
 export interface ExamSummary {
   id: number;
   title: string;
@@ -81,6 +83,11 @@ export interface ExamSummary {
   question_count: number;
   needs_review_count: number;
   expected_question_count: number | null;
+  // Derived server-side from the time window (Exam.status alone stays
+  // "scheduled" for ever), so last week's exams don't look upcoming.
+  phase: ExamPhase;
+  archived_at: string | null;
+  can_archive: boolean;
   can_edit: boolean;
 }
 
@@ -405,6 +412,63 @@ export async function createExam(
     class_id: classId,
     expected_question_count: expectedQuestionCount ?? null,
   });
+  return data;
+}
+
+export interface ExamListParams {
+  archived?: boolean;
+  subject_id?: number;
+  class_id?: number;
+  phase?: ExamPhase;
+  q?: string;
+  needs_review?: boolean;
+  exam_status?: string;
+  limit?: number;
+  offset?: number;
+}
+
+/** One page of the exam list plus the unpaged total (X-Total-Count header). */
+export async function listExamsPage(params: ExamListParams): Promise<{ items: ExamSummary[]; total: number }> {
+  const res = await apiClient.get<ExamSummary[]>("/admin/exams", { params });
+  return { items: res.data, total: Number(res.headers["x-total-count"] ?? res.data.length) };
+}
+
+export interface ExamFacet {
+  id: number;
+  name: string;
+  count: number;
+}
+
+export interface ExamsSummary {
+  current: number;
+  archived: number;
+  subjects: ExamFacet[];
+  classes: ExamFacet[];
+}
+
+export async function getExamsSummary(archived: boolean): Promise<ExamsSummary> {
+  const { data } = await apiClient.get<ExamsSummary>("/admin/exams/summary", { params: { archived } });
+  return data;
+}
+
+export interface ExamBulkResult {
+  changed: number[];
+  skipped: { exam_id: number; reason: string }[];
+}
+
+// Archive only flips a flag; results, rankings and student portfolios are untouched.
+export async function archiveExams(examIds: number[]): Promise<ExamBulkResult> {
+  const { data } = await apiClient.post<ExamBulkResult>("/admin/exams/archive", { exam_ids: examIds });
+  return data;
+}
+
+export async function restoreExams(examIds: number[]): Promise<ExamBulkResult> {
+  const { data } = await apiClient.post<ExamBulkResult>("/admin/exams/restore", { exam_ids: examIds });
+  return data;
+}
+
+export async function archiveOldExams(days: number): Promise<ExamBulkResult> {
+  const { data } = await apiClient.post<ExamBulkResult>("/admin/exams/archive-old", { days });
   return data;
 }
 

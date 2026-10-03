@@ -2,7 +2,7 @@ import { enterFullscreen } from "../../hooks/useExamGuard";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { listMyExams, type ExamListItem } from "../../api/studentApi";
-import { AppHeader, Badge, ListRow, type BadgeStatus, type RowState } from "../../components/ui";
+import { AppHeader, Badge, Button, ListRow, type BadgeStatus, type RowState } from "../../components/ui";
 import { formatDateShortUz, formatTimeUz } from "../../utils/formatDate";
 import { useLanguage } from "../../i18n/LanguageContext";
 
@@ -33,15 +33,16 @@ function formatDate(iso: string | null): string {
 export default function ExamListPage() {
   const [exams, setExams] = useState<ExamListItem[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [includeOld, setIncludeOld] = useState(false);
   const { t } = useLanguage();
   const navigate = useNavigate();
 
   useEffect(() => {
-    listMyExams()
+    listMyExams(includeOld)
       .then(setExams)
       .catch(() => setError(t("examList.loadError")));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [includeOld]);
 
   function openExam(exam: ExamListItem) {
     if (exam.my_attempt_status === "submitted" || exam.my_attempt_status === "auto_submitted") {
@@ -95,6 +96,11 @@ export default function ExamListPage() {
               />
             );
           })}
+        </div>
+        <div style={{ marginTop: "var(--space-5)", textAlign: "center" }}>
+          <Button variant="ghost" size="sm" onClick={() => setIncludeOld((v) => !v)}>
+            {includeOld ? t("examList.hideOlder") : t("examList.showOlder")}
+          </Button>
         </div>
       </div>
     </>

@@ -1215,6 +1215,43 @@ Decisions already confirmed with the user, so don't re-litigate them:
    brand red (red reads as "wrong" mid-exam; red/green are for the graded
    result only).
 
+10. **Exam archive + a list that survives 100 exams a week.** ~5 exams per
+    class every Saturday means the flat exam list could only grow. Built:
+    - **Archive is a flag, not a status**: `Exam.archived_at` (migration
+      `a9d2c4e6b1f3`). `ExamStatus.archived` exists in the enum but is unused
+      on purpose — `status` keeps driving the sweep, grading and the student
+      list, so restoring loses nothing and re-triggers nothing. Archiving never
+      touches attempts/rankings/`StudentSubjectStats`, so archived exams'
+      results stay in the student portfolio (`/student/me/subjects/{id}/history`
+      has no archive filter; pinned by `test_exam_archive.py`).
+    - Endpoints (admin **and** teachers, each within their own
+      `ensure_can_manage_exam` scope; bulk calls report per-exam
+      `changed`/`skipped` reasons instead of failing as a whole):
+      `POST /admin/exams/archive`, `/restore`, `/archive-old {days}`. Only
+      drafts and finished exams can be archived (`exam_service.
+      archive_block_reason`); upcoming/live ones must be closed or deleted.
+    - **`Exam.status` stays "scheduled" for ever after the window closes**, so
+      list/dashboard badges lied (last week's exams looked upcoming). The API
+      now returns a derived `phase` (draft/upcoming/live/finished —
+      `exam_service.exam_phase`, with a SQL twin `_phase_clause` in
+      `admin_exams.py`; keep the two in step) and `can_archive`. The dashboard
+      donut/lists and the editor header badge use phase, not status.
+    - `GET /admin/exams` is filterable and pageable (`archived`, `subject_id`,
+      `class_id`, `phase`, `q`, `needs_review`, `exam_status`, `limit`,
+      `offset`; total in the `X-Total-Count` header so the body stays a plain
+      list; no `limit` = everything, which the dashboard relies on). Ordered by
+      `coalesce(start_at, created_at)` desc. `GET /admin/exams/summary` gives
+      the per-subject / per-class counts that act as "folders". Scoping lives
+      in one place, `visible_exams_query` (teacher pairs applied in SQL).
+    - `ExamListPage.tsx` was rewritten: Joriy/Arxiv tabs with counts, subject
+      chips with counts (the "folders" — filters, not a new entity to maintain),
+      class/phase/search filters, grouping by exam *day* ("5-oktabr · dushanba"),
+      checkboxes + bulk archive/restore, "Eskilarini arxivlash" (N days),
+      load-more paging. The student list defaults to running/upcoming/last 30
+      days (`include_old=true` for everything), live first.
+    - Deliberately not done: automatic archiving by age (a button instead — a
+      silent status change at 3am is surprising), and a physical folder entity.
+
 ## Next steps (in order)
 
 1. **Done** — the app is live on the DigitalOcean VPS's real Postgres

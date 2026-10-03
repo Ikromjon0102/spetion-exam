@@ -87,6 +87,11 @@ class Exam(Base):
     # the last add silently failed) is otherwise indistinguishable from a
     # complete exam; the review page compares this to the real count.
     expected_question_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Archiving is a flag, NOT a status: Exam.status keeps meaning what it
+    # always did (the sweep, the student list and grading all key off it), and
+    # restoring is just clearing this — nothing about the exam's state is lost
+    # or re-triggered. ExamStatus.archived exists in the enum but is unused.
+    archived_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
 
     # cascade="all, delete-orphan" — without it, deleting an Exam row tries
     # to null out Question.exam_id (a NOT NULL column) instead of deleting

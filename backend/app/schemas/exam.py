@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.core import rich_text
 
@@ -48,6 +48,40 @@ class ExamUpdate(BaseModel):
     expected_question_count: int | None = None
 
 
+class ExamIdsIn(BaseModel):
+    exam_ids: list[int] = Field(min_length=1, max_length=500)
+
+
+class ArchiveOldIn(BaseModel):
+    days: int = Field(ge=1, le=3650)
+
+
+class ExamBulkSkippedOut(BaseModel):
+    exam_id: int
+    # not_found | forbidden | already_archived | not_finished | not_archived
+    reason: str
+
+
+class ExamBulkResultOut(BaseModel):
+    changed: list[int]
+    skipped: list[ExamBulkSkippedOut] = []
+
+
+class FacetOut(BaseModel):
+    id: int
+    name: str
+    count: int
+
+
+class ExamsSummaryOut(BaseModel):
+    current: int
+    archived: int
+    # counts for the tab that was asked about, ignoring the other filters, so
+    # the "folder" numbers don't jump around as you filter
+    subjects: list[FacetOut]
+    classes: list[FacetOut]
+
+
 class QuestionOptionOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
@@ -87,6 +121,12 @@ class ExamOut(BaseModel):
     question_count: int
     needs_review_count: int
     expected_question_count: int | None = None
+    # draft | upcoming | live | finished — derived from the time window (see
+    # exam_service.exam_phase), because Exam.status alone stays "scheduled"
+    # for ever and made last week's exams look like they were still to come.
+    phase: str = "draft"
+    archived_at: datetime | None = None
+    can_archive: bool = False
     can_edit: bool
 
 

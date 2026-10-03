@@ -19,6 +19,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.core.timeutil import aware
 from app.models.attempt import AttemptStatus, ExamAttempt
 from app.models.exam import Exam, ExamStatus, Question, QuestionType
 from app.models.user import TeacherClassSubject, User, UserRole
@@ -48,6 +49,35 @@ def ensure_can_manage_exam(db: Session, user: User, exam: Exam) -> None:
 
 
 _STARTED_STATUSES = (AttemptStatus.in_progress, AttemptStatus.submitted, AttemptStatus.auto_submitted)
+
+
+def exam_phase(exam: Exam, now: datetime | None = None) -> str:
+    """Where an exam is in its life, derived from its time window — never read
+    off Exam.status alone, which stays "scheduled" long after the window has
+    closed (only a manual close ever sets "closed"). One of: draft, upcoming,
+    live, finished. The SQL twin is admin_exams._phase_clause; keep in step."""
+    now = now or datetime.now(timezone.utc)
+    if exam.status in (ExamStatus.draft, ExamStatus.review):
+        return "draft"
+    if exam.status in (ExamStatus.closed, ExamStatus.archived):
+        return "finished"
+    if exam.start_at is None or exam.end_at is None:
+        return "upcoming"
+    if now < aware(exam.start_at):
+        return "upcoming"
+    if now < aware(exam.end_at):
+        return "live"
+    return "finished"
+
+
+def archive_block_reason(exam: Exam, now: datetime | None = None) -> str | None:
+    """None if the exam may be archived. A draft or a finished exam can; one
+    that is still to come or running cannot (close or delete it instead)."""
+    if exam.archived_at is not None:
+        return "already_archived"
+    if exam_phase(exam, now) not in ("draft", "finished"):
+        return "not_finished"
+    return None
 
 
 def exam_ids_with_attempts(db: Session, exam_ids: list[int]) -> set[int]:

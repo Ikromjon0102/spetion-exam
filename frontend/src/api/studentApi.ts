@@ -107,8 +107,12 @@ export async function listSubjects(): Promise<Subject[]> {
   return data;
 }
 
-export async function listMyExams(): Promise<ExamListItem[]> {
-  const { data } = await apiClient.get<ExamListItem[]>("/student/me/exams");
+// By default the server returns what is running, upcoming or recent (last 30
+// days); includeOld asks for the whole history.
+export async function listMyExams(includeOld = false): Promise<ExamListItem[]> {
+  const { data } = await apiClient.get<ExamListItem[]>("/student/me/exams", {
+    params: includeOld ? { include_old: true } : undefined,
+  });
   return data;
 }
 

@@ -6,6 +6,7 @@ import {
   listExams,
   listMyAssignments,
   type DashboardData,
+  type ExamPhase,
   type ExamSummary,
   type TeacherAssignment,
 } from "../../api/adminApi";
@@ -23,13 +24,11 @@ import {
 import { useLanguage } from "../../i18n/LanguageContext";
 import { formatDateTimeUz } from "../../utils/formatDate";
 
-const STATUS_KEY: Record<string, { status: BadgeStatus; key: string }> = {
-  draft: { status: "neutral", key: "status.draft" },
-  review: { status: "warning", key: "status.review" },
-  scheduled: { status: "info", key: "status.scheduled" },
-  active: { status: "warning", key: "status.active" },
-  closed: { status: "success", key: "status.closed" },
-  archived: { status: "neutral", key: "status.archived" },
+const PHASE_KEY: Record<ExamPhase, { status: BadgeStatus; key: string }> = {
+  draft: { status: "neutral", key: "phase.draft" },
+  upcoming: { status: "info", key: "phase.upcoming" },
+  live: { status: "warning", key: "phase.live" },
+  finished: { status: "success", key: "phase.finished" },
 };
 
 export default function DashboardPage() {
@@ -69,21 +68,23 @@ export default function DashboardPage() {
     loadAll();
   }
 
-  const statusCounts: Record<string, number> = {};
-  for (const e of exams) statusCounts[e.status] = (statusCounts[e.status] ?? 0) + 1;
+  // By phase (derived from each exam's time window), not Exam.status: status
+  // stays "scheduled" for ever, so last week's finished exams were being
+  // counted — and listed below — as still upcoming.
+  const phaseCounts: Record<string, number> = {};
+  for (const e of exams) phaseCounts[e.phase] = (phaseCounts[e.phase] ?? 0) + 1;
 
   const needsAttention = exams.filter((e) => e.needs_review_count > 0).slice(0, 6);
   const upcomingOrActive = exams
-    .filter((e) => e.status === "active" || e.status === "scheduled")
+    .filter((e) => e.phase === "live" || e.phase === "upcoming")
     .sort((a, b) => (a.start_at ?? "").localeCompare(b.start_at ?? ""))
     .slice(0, 6);
 
   const statusSegments = [
-    { label: t("status.draft"), value: statusCounts.draft ?? 0, color: "var(--ink-faint)" },
-    { label: t("status.review"), value: statusCounts.review ?? 0, color: "var(--warning)" },
-    { label: t("status.scheduled"), value: statusCounts.scheduled ?? 0, color: "var(--info)" },
-    { label: t("status.active"), value: statusCounts.active ?? 0, color: "var(--brand-600)" },
-    { label: t("status.closed"), value: statusCounts.closed ?? 0, color: "var(--success)" },
+    { label: t("phase.draft"), value: phaseCounts.draft ?? 0, color: "var(--ink-faint)" },
+    { label: t("phase.upcoming"), value: phaseCounts.upcoming ?? 0, color: "var(--info)" },
+    { label: t("phase.live"), value: phaseCounts.live ?? 0, color: "var(--brand-600)" },
+    { label: t("phase.finished"), value: phaseCounts.finished ?? 0, color: "var(--success)" },
   ].filter((s) => s.value > 0);
 
   const studentsPerClass = (summary?.students_per_class ?? [])
@@ -264,7 +265,7 @@ export default function DashboardPage() {
             </h2>
             <div className="row-stack" style={{ marginBottom: "var(--space-8)" }}>
               {upcomingOrActive.map((exam) => {
-                const badge = STATUS_KEY[exam.status] ?? { status: "neutral" as BadgeStatus, key: null };
+                const badge = PHASE_KEY[exam.phase];
                 return (
                   <ListRow
                     key={exam.id}
@@ -276,7 +277,7 @@ export default function DashboardPage() {
                         ? `${exam.subject_name} · ${exam.class_name} · ${formatDateTimeUz(exam.start_at)}`
                         : `${exam.subject_name} · ${exam.class_name}`
                     }
-                    trailing={<Badge status={badge.status}>{badge.key ? t(badge.key) : exam.status}</Badge>}
+                    trailing={<Badge status={badge.status}>{t(badge.key)}</Badge>}
                   />
                 );
               })}

@@ -42,13 +42,13 @@ import { errorDetail } from "../../utils/errorDetail";
 import RichText from "../../components/ui/RichText";
 import RichTextEditor from "../../components/ui/RichTextEditor";
 
-const STATUS_KEY: Record<string, { status: BadgeStatus; key: string }> = {
-  draft: { status: "neutral", key: "status.draft" },
-  review: { status: "warning", key: "status.review" },
-  scheduled: { status: "info", key: "status.scheduled" },
-  active: { status: "warning", key: "status.active" },
-  closed: { status: "success", key: "status.closed" },
-  archived: { status: "neutral", key: "status.archived" },
+// The header badge shows the exam's phase (from its time window), not
+// Exam.status — which stays "scheduled" long after the exam is over.
+const PHASE_KEY: Record<string, { status: BadgeStatus; key: string }> = {
+  draft: { status: "neutral", key: "phase.draft" },
+  upcoming: { status: "info", key: "phase.upcoming" },
+  live: { status: "warning", key: "phase.live" },
+  finished: { status: "success", key: "phase.finished" },
 };
 
 /** Local preview of a not-yet-uploaded pasted image (the "Yangi savol
@@ -456,7 +456,7 @@ export default function ExamReviewEditor() {
     }
   }
 
-  const statusBadge = STATUS_KEY[exam.status];
+  const statusBadge = PHASE_KEY[exam.phase];
 
   return (
     <AdminLayout>
@@ -473,6 +473,7 @@ export default function ExamReviewEditor() {
           <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
             <h1 className="h2">{exam.title}</h1>
             <Badge status={statusBadge?.status ?? "neutral"}>{statusBadge ? t(statusBadge.key) : exam.status}</Badge>
+            {exam.archived_at && <Badge status="neutral">{t("examArchive.tabArchive")}</Badge>}
           </div>
           <div style={{ display: "flex", gap: "var(--space-2)" }}>
             <Button variant="secondary" size="sm" onClick={openDuplicateModal}>

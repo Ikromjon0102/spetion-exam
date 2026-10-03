@@ -3,9 +3,10 @@ subject history. See docs/spec.md section 2 ("Student") and section 3
 (lifecycle steps 6-9).
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.core.timeutil import aware
@@ -83,16 +84,36 @@ def _get_exam_for_student(db: Session, exam_id: int, student: Student) -> Exam:
     return exam
 
 
+# A class sitting several exams every week would otherwise show a student a
+# list that only ever grows. By default the list is what is happening or
+# recent; the full history is one tap away (include_old) and always on the
+# profile/portfolio, which is built from graded attempts and does not depend on
+# this list (or on whether staff have archived the exam).
+RECENT_EXAM_DAYS = 30
+
+
 @router.get("/me/exams", response_model=list[ExamListItemOut])
-def list_my_exams(db: Session = Depends(get_db), student: Student = Depends(get_current_student)):
-    exams = (
-        db.query(Exam)
-        .filter(
-            Exam.class_id == student.class_id,
-            Exam.status.in_([ExamStatus.scheduled, ExamStatus.active, ExamStatus.closed]),
+def list_my_exams(
+    include_old: bool = False,
+    db: Session = Depends(get_db),
+    student: Student = Depends(get_current_student),
+):
+    query = db.query(Exam).filter(
+        Exam.class_id == student.class_id,
+        Exam.status.in_([ExamStatus.scheduled, ExamStatus.active, ExamStatus.closed]),
+    )
+    if not include_old:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=RECENT_EXAM_DAYS)
+        query = query.filter(or_(Exam.end_at.is_(None), Exam.end_at >= cutoff))
+    exams = query.all()
+    # What needs the student now comes first: running, then upcoming (soonest
+    # first), then finished (most recent first).
+    order = {"active": 0, "upcoming": 1, "closed": 2}
+    exams.sort(
+        key=lambda e: (
+            order.get(_window_state(e), 3),
+            (aware(e.start_at).timestamp() if e.start_at else 0) * (1 if _window_state(e) != "closed" else -1),
         )
-        .order_by(Exam.start_at)
-        .all()
     )
     attempts = {
         a.exam_id: a

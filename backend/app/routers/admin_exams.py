@@ -87,6 +87,7 @@ def _exam_out(db: Session, exam: Exam) -> ExamOut:
         total_points=float(exam.total_points) if exam.total_points is not None else None,
         question_count=len(exam.questions),
         needs_review_count=sum(1 for q in exam.questions if q.needs_review),
+        expected_question_count=exam.expected_question_count,
         can_edit=not exam_service.has_attempts(db, exam),
     )
 
@@ -117,6 +118,7 @@ async def create_upload(
     subject_id: int = Form(...),
     class_id: int = Form(...),
     title: str | None = Form(None),
+    expected_question_count: int | None = Form(None),
     db: Session = Depends(get_db),
     user: User = Depends(require_role("teacher", "admin")),
 ):
@@ -144,7 +146,7 @@ async def create_upload(
     # always opens a broker connection even under task_always_eager (a
     # Celery quirk), while calling the task object's own apply_async/delay
     # correctly short-circuits to an in-process call in eager dev mode.
-    parse_exam_upload.delay(upload.id, subject_id, class_id, title)
+    parse_exam_upload.delay(upload.id, subject_id, class_id, title, expected_question_count)
 
     return _upload_out(db, upload)
 
@@ -170,6 +172,7 @@ def create_exam(
         class_id=body.class_id,
         created_by_id=user.id,
         exam_upload_id=body.exam_upload_id,
+        expected_question_count=body.expected_question_count,
         status=ExamStatus.draft,
     )
     db.add(exam)
@@ -257,6 +260,7 @@ def duplicate_exam(
             class_id=class_id,
             created_by_id=user.id,
             exam_upload_id=None,
+            expected_question_count=source.expected_question_count,
             status=ExamStatus.draft,
             start_at=source.start_at,
             end_at=source.end_at,

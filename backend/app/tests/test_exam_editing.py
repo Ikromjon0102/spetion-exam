@@ -277,3 +277,26 @@ def test_delete_exam_forbidden_for_unassigned_teacher(client, db_session):
 
     resp = client.delete(f"/api/v1/admin/exams/{exam.id}", headers={"Authorization": f"Bearer {token}"})
     assert resp.status_code == 403
+
+
+def test_expected_question_count_round_trips_and_is_editable(client, db_session):
+    """Optional "how many questions should this have" — lets the review page
+    flag an exam that parsed/was typed to 19 of an intended 20."""
+    klass = make_class(db_session)
+    subject = make_subject(db_session)
+    db_session.commit()
+    headers = _admin_headers(client, db_session)
+
+    created = client.post(
+        "/api/v1/admin/exams",
+        json={"title": "Kutilgan", "subject_id": subject.id, "class_id": klass.id, "expected_question_count": 20},
+        headers=headers,
+    )
+    assert created.status_code == 201
+    assert created.json()["expected_question_count"] == 20
+    exam_id = created.json()["id"]
+
+    updated = client.put(f"/api/v1/admin/exams/{exam_id}", json={"expected_question_count": 15}, headers=headers)
+    assert updated.status_code == 200
+    assert updated.json()["expected_question_count"] == 15
+    assert client.get(f"/api/v1/admin/exams/{exam_id}", headers=headers).json()["expected_question_count"] == 15

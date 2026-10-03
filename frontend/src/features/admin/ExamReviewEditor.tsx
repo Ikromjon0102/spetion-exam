@@ -155,7 +155,9 @@ export default function ExamReviewEditor() {
     setMessageKey((k) => k + 1);
   }
 
-  async function saveSchedule(patch: Partial<{ duration_minutes: number; start_at: string; end_at: string }>) {
+  async function saveSchedule(
+    patch: Partial<{ duration_minutes: number; start_at: string; end_at: string; expected_question_count: number | null }>
+  ) {
     try {
       await updateExam(id, patch);
       await reload();
@@ -520,6 +522,36 @@ export default function ExamReviewEditor() {
         {!locked && (
           <p className="body-sm ink-muted" style={{ marginBottom: "var(--space-4)" }}>
             {t("review.autosaveHint")}
+          </p>
+        )}
+        <div className="sp-field" style={{ maxWidth: 280, marginBottom: "var(--space-4)" }}>
+          <label className="sp-field__label">{t("review.expectedCountLabel")}</label>
+          <input
+            className="sp-input"
+            type="number"
+            min={1}
+            defaultValue={exam.expected_question_count ?? ""}
+            disabled={locked}
+            placeholder={t("review.expectedCountPlaceholder")}
+            onBlur={(e) => {
+              const next = Number(e.target.value) > 0 ? Number(e.target.value) : null;
+              if (next !== exam.expected_question_count) saveSchedule({ expected_question_count: next });
+            }}
+          />
+        </div>
+        {exam.expected_question_count !== null && exam.question_count !== exam.expected_question_count && (
+          <p
+            role="status"
+            className="body-sm"
+            style={{
+              marginBottom: "var(--space-4)",
+              padding: "var(--space-3) var(--space-4)",
+              border: "1.5px solid var(--warning)",
+              borderRadius: "var(--radius-md)",
+              color: "var(--warning)",
+            }}
+          >
+            {t("review.countMismatch", { expected: exam.expected_question_count, actual: exam.question_count })}
           </p>
         )}
 

@@ -80,6 +80,7 @@ export interface ExamSummary {
   total_points: number | null;
   question_count: number;
   needs_review_count: number;
+  expected_question_count: number | null;
   can_edit: boolean;
 }
 
@@ -372,13 +373,15 @@ export async function uploadExamFile(
   file: File,
   subjectId: number,
   classId: number,
-  title?: string
+  title?: string,
+  expectedQuestionCount?: number
 ): Promise<ExamUpload> {
   const form = new FormData();
   form.append("file", file);
   form.append("subject_id", String(subjectId));
   form.append("class_id", String(classId));
   if (title) form.append("title", title);
+  if (expectedQuestionCount) form.append("expected_question_count", String(expectedQuestionCount));
   const { data } = await apiClient.post<ExamUpload>("/admin/exams/uploads", form, {
     headers: { "Content-Type": "multipart/form-data" },
   });
@@ -390,11 +393,17 @@ export async function getUploadStatus(uploadId: number): Promise<ExamUpload> {
   return data;
 }
 
-export async function createExam(title: string, subjectId: number, classId: number): Promise<ExamSummary> {
+export async function createExam(
+  title: string,
+  subjectId: number,
+  classId: number,
+  expectedQuestionCount?: number
+): Promise<ExamSummary> {
   const { data } = await apiClient.post<ExamSummary>("/admin/exams", {
     title,
     subject_id: subjectId,
     class_id: classId,
+    expected_question_count: expectedQuestionCount ?? null,
   });
   return data;
 }
@@ -422,6 +431,7 @@ export async function updateExam(
     end_at: string;
     shuffle_questions: boolean;
     shuffle_options: boolean;
+    expected_question_count: number | null;
   }>
 ): Promise<ExamSummary> {
   const { data } = await apiClient.put<ExamSummary>(`/admin/exams/${examId}`, body);

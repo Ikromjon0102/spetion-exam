@@ -82,6 +82,11 @@ class Exam(Base):
     shuffle_options: Mapped[bool] = mapped_column(Boolean, default=True)
     published_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, server_default=func.now())
+    # How many questions the author *intends* the exam to have — optional.
+    # A file that parses to 19 of an intended 20 (or a manual session where
+    # the last add silently failed) is otherwise indistinguishable from a
+    # complete exam; the review page compares this to the real count.
+    expected_question_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # cascade="all, delete-orphan" — without it, deleting an Exam row tries
     # to null out Question.exam_id (a NOT NULL column) instead of deleting

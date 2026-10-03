@@ -38,6 +38,7 @@ def process_upload(
     subject_id: int,
     class_id: int,
     title: str | None = None,
+    expected_question_count: int | None = None,
 ) -> Exam:
     upload.status = UploadStatus.parsing
     db.commit()
@@ -70,6 +71,7 @@ def process_upload(
         class_id=class_id,
         created_by_id=upload.uploaded_by_id,
         exam_upload_id=upload.id,
+        expected_question_count=expected_question_count,
         status=ExamStatus.draft,
     )
     db.add(exam)

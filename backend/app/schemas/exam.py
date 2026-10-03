@@ -19,6 +19,7 @@ class ExamCreate(BaseModel):
     subject_id: int
     class_id: int
     exam_upload_id: int | None = None
+    expected_question_count: int | None = None
 
 
 class ExamDuplicateIn(BaseModel):
@@ -36,6 +37,7 @@ class ExamUpdate(BaseModel):
     end_at: datetime | None = None
     shuffle_questions: bool | None = None
     shuffle_options: bool | None = None
+    expected_question_count: int | None = None
 
 
 class QuestionOptionOut(BaseModel):
@@ -76,6 +78,7 @@ class ExamOut(BaseModel):
     total_points: float | None = None
     question_count: int
     needs_review_count: int
+    expected_question_count: int | None = None
     can_edit: bool
 
 

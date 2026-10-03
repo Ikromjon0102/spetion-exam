@@ -240,3 +240,62 @@ def test_bullet_marker_option_pattern_and_space_separated_answer_table():
     ]
     key = extract_answer_key(key_lines)
     assert key == {1: "B", 6: "B", 11: "A", 16: "B", 2: "A", 7: "A", 12: "A", 17: "B"}
+
+
+def _docx_bytes(doc: Document) -> bytes:
+    buf = io.BytesIO()
+    doc.save(buf)
+    return buf.getvalue()
+
+
+def test_docx_parser_accepts_markers_without_a_space_after_them():
+    """A real report: a 20-question file parsed as 19 because one question
+    was typed "20.Savol" with no space — the marker went unrecognised and the
+    question merged into the previous one."""
+    doc = Document()
+    doc.add_paragraph("19. Birinchi savol?")
+    doc.add_paragraph("A.Bir")
+    doc.add_paragraph("B) Ikki")
+    doc.add_paragraph("20.Ikkinchi savol?")
+    doc.add_paragraph("A.Uch")
+    doc.add_paragraph("B.To'rt")
+    doc.add_paragraph("Javoblar: 19-A, 20-B")
+
+    questions = DocxParser().parse(_docx_bytes(doc))
+
+    assert len(questions) == 2
+    assert questions[1].prompt == "Ikkinchi savol?"
+    assert [o.text for o in questions[1].options] == ["Uch", "To'rt"]
+    assert [o.is_correct for o in questions[1].options] == [False, True]
+
+
+def test_decimal_numbers_at_line_start_are_not_question_markers():
+    doc = Document()
+    doc.add_paragraph("1. Pi taxminan nechaga teng?")
+    doc.add_paragraph("3.14 ga yaqin son qaysi?")
+    doc.add_paragraph("A) 3")
+    doc.add_paragraph("B) 4")
+    doc.add_paragraph("Javoblar: 1-A")
+
+    questions = DocxParser().parse(_docx_bytes(doc))
+
+    assert len(questions) == 1
+    assert "3.14 ga yaqin" in questions[0].prompt
+
+
+def test_docx_parser_reconstructs_wordss_automatic_list_numbers():
+    """Questions typed through Word's numbered-list button have no "1." in
+    paragraph.text at all — python-docx only sees the bare question text, so
+    every one used to merge into its predecessor."""
+    doc = Document()
+    for i in range(1, 4):
+        doc.add_paragraph(f"Savol matni {i}?", style="List Number")
+        doc.add_paragraph("A) Bir")
+        doc.add_paragraph("B) Ikki")
+    doc.add_paragraph("Javoblar: 1-A, 2-B, 3-A")
+
+    questions = DocxParser().parse(_docx_bytes(doc))
+
+    assert len(questions) == 3
+    assert [q.prompt for q in questions] == ["Savol matni 1?", "Savol matni 2?", "Savol matni 3?"]
+    assert [[o.is_correct for o in q.options] for q in questions] == [[True, False], [False, True], [True, False]]

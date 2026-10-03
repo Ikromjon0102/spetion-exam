@@ -336,6 +336,17 @@ export const translations: Record<string, Record<Lang, string>> = {
   },
   "upload.titleLabel": { uz: "Sarlavha (ixtiyoriy)", ru: "Заголовок (необязательно)" },
   "upload.titleLabelRequired": { uz: "Sarlavha", ru: "Заголовок" },
+  "upload.expectedCountLabel": { uz: "Savollar soni (ixtiyoriy)", ru: "Количество вопросов (необязательно)" },
+  "upload.expectedCountPlaceholder": {
+    uz: "Masalan: 20 — kam chiqsa ogohlantiramiz",
+    ru: "Например: 20 — предупредим, если вопросов меньше",
+  },
+  "review.expectedCountLabel": { uz: "Kutilgan savollar soni", ru: "Ожидаемое количество вопросов" },
+  "review.expectedCountPlaceholder": { uz: "Ixtiyoriy", ru: "Необязательно" },
+  "review.countMismatch": {
+    uz: "Diqqat: {expected} ta savol kutilgan edi, hozir {actual} ta bor. Nashr qilishdan oldin tekshiring",
+    ru: "Внимание: ожидалось вопросов — {expected}, сейчас — {actual}. Проверьте перед публикацией",
+  },
   "upload.titlePlaceholder": { uz: "Masalan: Shanba imtihoni", ru: "Например: Субботний экзамен" },
   "upload.fileLabel": { uz: "Fayl (PDF yoki DOCX)", ru: "Файл (PDF или DOCX)" },
   "upload.failed": { uz: "Yuklab bo'lmadi", ru: "Не удалось загрузить" },

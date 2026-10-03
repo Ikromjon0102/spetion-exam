@@ -1,11 +1,20 @@
 # Tunable without touching parsing logic elsewhere. Tried in order.
+#
+# The space after "1." / "A." is optional on purpose: teachers routinely type
+# "20.Quyidagini hisoblang" or "A.Insert" with no space, and a marker the
+# parser misses silently merges that question into the previous one (a
+# 20-question file parsing as 19). The (?!\d) guard keeps decimals like
+# "3.14" or "1.5 m" from being read as question 3 / question 1.
 PARSER_QUESTION_PATTERNS = [
-    r"^\s*\d+[\.\)]\s+",       # "1. " or "1) "
-    r"^\s*\d+-savol[:.]?\s*",  # "1-savol:"
+    r"^\s*\d+[\.\)](?!\d)\s*",  # "1. ", "1) ", "20.Savol"
+    r"^\s*\d+-savol[:.]?\s*",   # "1-savol:"
 ]
 
 PARSER_OPTION_PATTERNS = [
-    r"^\s*[A-D][\.\)]\s+",
+    r"^\s*[A-D][\.\)](?!\d)\s*",
+    # Lowercase stays strict (space required): "d.h." / "a.k.a" style
+    # abbreviations at a line start are far more common than a lowercase
+    # option marker written without a space.
     r"^\s*[a-d][\.\)]\s+",
     # A bullet-marker option, e.g. "● A 198" — no punctuation after the
     # letter at all, a real format a teacher's PDF used (options are just

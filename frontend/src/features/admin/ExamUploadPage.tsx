@@ -41,6 +41,7 @@ export default function ExamUploadPage() {
   const [classId, setClassId] = useState<number | "">("");
   const [subjectId, setSubjectId] = useState<number | "">("");
   const [title, setTitle] = useState("");
+  const [expectedCount, setExpectedCount] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -77,13 +78,14 @@ export default function ExamUploadPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    const expectedCountValue = Number(expectedCount) > 0 ? Number(expectedCount) : undefined;
     if (classId === "" || subjectId === "") return;
 
     if (mode === "manual") {
       if (!title.trim()) return;
       setSubmitting(true);
       try {
-        const exam = await createExam(title.trim(), Number(subjectId), Number(classId));
+        const exam = await createExam(title.trim(), Number(subjectId), Number(classId), expectedCountValue);
         navigate(`/admin/exams/${exam.id}/review`);
       } catch {
         setError(t("upload.failed"));
@@ -95,7 +97,13 @@ export default function ExamUploadPage() {
     if (!file) return;
     setSubmitting(true);
     try {
-      const upload = await uploadExamFile(file, Number(subjectId), Number(classId), title || undefined);
+      const upload = await uploadExamFile(
+        file,
+        Number(subjectId),
+        Number(classId),
+        title || undefined,
+        expectedCountValue
+      );
       setStatus(t("upload.parsing"));
       pollUntilParsed(upload.id);
     } catch {
@@ -250,6 +258,17 @@ export default function ExamUploadPage() {
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 required={mode === "manual"}
+              />
+            </div>
+            <div className="sp-field">
+              <label className="sp-field__label">{t("upload.expectedCountLabel")}</label>
+              <input
+                className="sp-input"
+                type="number"
+                min={1}
+                placeholder={t("upload.expectedCountPlaceholder")}
+                value={expectedCount}
+                onChange={(e) => setExpectedCount(e.target.value)}
               />
             </div>
             {mode === "upload" && (

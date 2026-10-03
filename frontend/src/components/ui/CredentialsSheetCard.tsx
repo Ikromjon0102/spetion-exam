@@ -1,4 +1,6 @@
-import { forwardRef } from "react";
+import { forwardRef, useMemo } from "react";
+import { useLanguage } from "../../i18n/LanguageContext";
+import { qrDataUrl } from "../../utils/qrDataUrl";
 import Logo from "./Logo";
 import sparkMarkRed from "../../assets/logos/spetion-mark-red.png";
 
@@ -39,6 +41,12 @@ const CredentialsSheetCard = forwardRef<HTMLDivElement, Props>(function Credenti
   { classTitle, subtitle, rows, studentColumnLabel, usernameColumnLabel, passwordColumnLabel, footerLabel },
   ref
 ) {
+  const { t } = useLanguage();
+  // Students keep losing the address (typing "exam.spetion.uz" into a search
+  // box instead of the address bar finds nothing), so every printed sheet
+  // carries a scannable link to the site itself.
+  const siteUrl = window.location.origin;
+  const qr = useMemo(() => qrDataUrl(siteUrl), [siteUrl]);
   return (
     <div
       ref={ref}
@@ -104,7 +112,26 @@ const CredentialsSheetCard = forwardRef<HTMLDivElement, Props>(function Credenti
 
         <div
           style={{
-            padding: "12px 32px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 16,
+            padding: "14px 32px",
+            borderTop: `1px solid ${CARD_BORDER}`,
+            textAlign: "left",
+          }}
+        >
+          <img src={qr} alt="" width={84} height={84} style={{ display: "block" }} />
+          <div>
+            <div style={{ fontSize: 12, color: CARD_MUTED }}>{t("credentialsSheet.scanToOpen")}</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: CARD_BRAND, fontFamily: "'Space Mono', monospace" }}>
+              {siteUrl.replace(/^https?:\/\//, "")}
+            </div>
+          </div>
+        </div>
+        <div
+          style={{
+            padding: "10px 32px",
             borderTop: `1px solid ${CARD_BORDER}`,
             textAlign: "center",
             fontSize: 12,

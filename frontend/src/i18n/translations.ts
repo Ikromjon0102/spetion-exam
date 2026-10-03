@@ -113,6 +113,10 @@ export const translations: Record<string, Record<Lang, string>> = {
   "credentialsSheet.title": { uz: "{className} — kirish ma'lumotlari", ru: "{className} — данные для входа" },
   "credentialsSheet.bulkSubtitle": { uz: "Yangi qo'shilgan o'quvchilar", ru: "Новые ученики" },
   "credentialsSheet.resetSubtitle": { uz: "Yangilangan parollar", ru: "Обновлённые пароли" },
+  "credentialsSheet.scanToOpen": {
+    uz: "Saytga kirish uchun kamera bilan skanerlang yoki brauzer manzil satriga yozing:",
+    ru: "Наведите камеру, чтобы открыть сайт, или введите адрес в адресной строке браузера:",
+  },
   "credentialsSheet.footer": {
     uz: "Jami o'quvchilar: {count} ta   |   Spetion imtihon platformasi",
     ru: "Всего учеников: {count}   |   Платформа экзаменов Spetion",

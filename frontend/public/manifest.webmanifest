@@ -1,0 +1,14 @@
+{
+  "name": "Spetion — Imtihon Platformasi",
+  "short_name": "Spetion Imtihon",
+  "description": "Spetion School o'quvchilari uchun onlayn imtihon platformasi",
+  "lang": "uz",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#121211",
+  "theme_color": "#dd1808",
+  "icons": [
+    { "src": "/favicon.png", "sizes": "394x394", "type": "image/png", "purpose": "any" }
+  ]
+}

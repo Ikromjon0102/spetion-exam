@@ -1,0 +1,13 @@
+User-agent: *
+Allow: /
+# Sign-in-only areas: nothing here is useful in search results.
+Disallow: /staff-login
+Disallow: /admin/
+Disallow: /student/
+Disallow: /classes
+Disallow: /ranking
+Disallow: /students/
+Disallow: /change-password
+Disallow: /api/
+
+Sitemap: https://exam.spetion.uz/sitemap.xml

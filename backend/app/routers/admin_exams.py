@@ -4,7 +4,8 @@ monitoring. See docs/spec.md sections 2-4.
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import Response
-from sqlalchemy.orm import Session
+from sqlalchemy import case, func
+from sqlalchemy.orm import Session, joinedload
 
 from app.core.storage import download_exam_file, upload_exam_file, upload_question_image
 from app.db.base import get_db
@@ -70,26 +71,62 @@ def _question_out(question: Question) -> QuestionOut:
     )
 
 
+def _exam_outs(db: Session, exams: list[Exam]) -> list[ExamOut]:
+    """Builds the ExamOut rows for a whole list with a fixed number of
+    queries. This used to be one function per exam that issued a query each
+    for the subject, the class, the full question collection (just to count
+    it) and the attempt check — ~5 round trips per row, which is what made
+    the exam list crawl once the school had dozens of exams."""
+    if not exams:
+        return []
+    exam_ids = [e.id for e in exams]
+    subject_names = {
+        row.id: row.name
+        for row in db.query(Subject.id, Subject.name).filter(Subject.id.in_({e.subject_id for e in exams}))
+    }
+    class_names = {
+        row.id: row.display_name
+        for row in db.query(Class.id, Class.display_name).filter(Class.id.in_({e.class_id for e in exams}))
+    }
+    question_counts = {
+        row.exam_id: (row.total, row.pending)
+        for row in db.query(
+            Question.exam_id,
+            func.count(Question.id).label("total"),
+            func.coalesce(func.sum(case((Question.needs_review.is_(True), 1), else_=0)), 0).label("pending"),
+        )
+        .filter(Question.exam_id.in_(exam_ids))
+        .group_by(Question.exam_id)
+    }
+    started = exam_service.exam_ids_with_attempts(db, exam_ids)
+
+    out = []
+    for exam in exams:
+        total, pending = question_counts.get(exam.id, (0, 0))
+        out.append(
+            ExamOut(
+                id=exam.id,
+                title=exam.title,
+                subject_id=exam.subject_id,
+                subject_name=subject_names.get(exam.subject_id, ""),
+                class_id=exam.class_id,
+                class_name=class_names.get(exam.class_id, ""),
+                status=exam.status.value,
+                start_at=exam.start_at,
+                end_at=exam.end_at,
+                duration_minutes=exam.duration_minutes,
+                total_points=float(exam.total_points) if exam.total_points is not None else None,
+                question_count=total,
+                needs_review_count=int(pending),
+                expected_question_count=exam.expected_question_count,
+                can_edit=exam.id not in started,
+            )
+        )
+    return out
+
+
 def _exam_out(db: Session, exam: Exam) -> ExamOut:
-    subject = db.get(Subject, exam.subject_id)
-    klass = db.get(Class, exam.class_id)
-    return ExamOut(
-        id=exam.id,
-        title=exam.title,
-        subject_id=exam.subject_id,
-        subject_name=subject.name if subject else "",
-        class_id=exam.class_id,
-        class_name=klass.display_name if klass else "",
-        status=exam.status.value,
-        start_at=exam.start_at,
-        end_at=exam.end_at,
-        duration_minutes=exam.duration_minutes,
-        total_points=float(exam.total_points) if exam.total_points is not None else None,
-        question_count=len(exam.questions),
-        needs_review_count=sum(1 for q in exam.questions if q.needs_review),
-        expected_question_count=exam.expected_question_count,
-        can_edit=not exam_service.has_attempts(db, exam),
-    )
+    return _exam_outs(db, [exam])[0]
 
 
 def _get_exam_or_404(db: Session, exam_id: int) -> Exam:
@@ -181,14 +218,16 @@ def create_exam(
     return _exam_out(db, exam)
 
 
-@router.get("", response_model=list[ExamOut])
-def list_exams(
+def visible_exams(
+    db: Session,
+    user: User,
     exam_status: str | None = None,
     class_id: int | None = None,
     subject_id: int | None = None,
-    db: Session = Depends(get_db),
-    user: User = Depends(require_role("teacher", "admin")),
-):
+) -> list[Exam]:
+    """Every exam `user` may see, newest first: all of them for an admin, only
+    the (class, subject) pairs they teach for a teacher. Shared by the exam
+    list and the dashboard so the two can never disagree about scoping."""
     query = db.query(Exam)
     if exam_status:
         query = query.filter(Exam.status == ExamStatus(exam_status))
@@ -206,8 +245,18 @@ def list_exams(
             for a in db.query(TeacherClassSubject).filter_by(teacher_id=user.teacher.id)
         }
         exams = [e for e in exams if (e.class_id, e.subject_id) in allowed_pairs]
+    return exams
 
-    return [_exam_out(db, e) for e in exams]
+
+@router.get("", response_model=list[ExamOut])
+def list_exams(
+    exam_status: str | None = None,
+    class_id: int | None = None,
+    subject_id: int | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role("teacher", "admin")),
+):
+    return _exam_outs(db, visible_exams(db, user, exam_status, class_id, subject_id))
 
 
 @router.get("/{exam_id}", response_model=ExamDetailOut)
@@ -304,7 +353,7 @@ def duplicate_exam(
     db.commit()
     for exam in created:
         db.refresh(exam)
-    return [_exam_out(db, exam) for exam in created]
+    return _exam_outs(db, created)
 
 
 @router.put("/{exam_id}", response_model=ExamOut)
@@ -633,7 +682,7 @@ def list_attempts(
     exam = _get_exam_or_404(db, exam_id)
     exam_service.ensure_can_manage_exam(db, user, exam)
 
-    students = db.query(Student).filter_by(class_id=exam.class_id).all()
+    students = db.query(Student).options(joinedload(Student.user)).filter_by(class_id=exam.class_id).all()
     attempts_by_student = {a.student_id: a for a in db.query(ExamAttempt).filter_by(exam_id=exam_id)}
 
     return [

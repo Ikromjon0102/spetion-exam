@@ -1,5 +1,3 @@
-import html2canvas from "html2canvas";
-
 // A4 at 96dpi (CSS px) x2, matching the html2canvas scale below — every
 // exported image (daily results, class credential sheets) is always
 // exactly this size regardless of how much content it holds: a short
@@ -12,6 +10,9 @@ export const A4_HEIGHT_PX = 2245;
  * canvas — scaled to fit and centered, never cropped — then triggers a
  * PNG download as `filename`. */
 export async function exportA4Image(el: HTMLElement, filename: string): Promise<void> {
+  // Imported on demand: html2canvas is ~200 kB and only needed at the moment
+  // someone presses a download button.
+  const { default: html2canvas } = await import("html2canvas");
   const canvas = await html2canvas(el, { backgroundColor: "#ffffff", scale: 2, useCORS: true });
 
   const a4Canvas = document.createElement("canvas");

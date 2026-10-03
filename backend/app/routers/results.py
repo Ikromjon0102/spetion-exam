@@ -4,7 +4,7 @@ sections 1.4 and 2.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.core.timeutil import local_day_bounds_utc
 from app.db.base import get_db
@@ -41,6 +41,12 @@ def get_exam_ranking(
     if exam is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Imtihon topilmadi")
     rows = db.query(ExamRanking).filter_by(exam_id=exam_id).order_by(ExamRanking.rank_in_class).all()
+    names = {
+        s.id: s.user.full_name
+        for s in db.query(Student)
+        .options(joinedload(Student.user))
+        .filter(Student.id.in_([r.student_id for r in rows]))
+    }
     return ClassRankingOut(
         exam_id=exam.id,
         exam_title=exam.title,
@@ -48,7 +54,7 @@ def get_exam_ranking(
             ClassRankingRowOut(
                 rank_in_class=r.rank_in_class,
                 student_id=r.student_id,
-                full_name=db.get(Student, r.student_id).user.full_name,
+                full_name=names.get(r.student_id, ""),
                 score=float(r.score),
                 percentile=float(r.percentile) if r.percentile is not None else None,
             )
@@ -282,7 +288,8 @@ def get_class_daily_results(
     # dash per column, via per_exam_scores.get() below) rather than just
     # silently not appearing at all.
     student_names: dict[int, str] = {
-        s.id: s.user.full_name for s in db.query(Student).filter_by(class_id=class_id).all()
+        s.id: s.user.full_name
+        for s in db.query(Student).options(joinedload(Student.user)).filter_by(class_id=class_id).all()
     }
 
     # Split into students who took at least one of today's exams (get a

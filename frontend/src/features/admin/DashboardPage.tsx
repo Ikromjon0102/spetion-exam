@@ -2,19 +2,12 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
 import {
-  listAdminClasses,
-  listAdminStudents,
-  listAdminSubjects,
-  listAdminTeachers,
-  listExamAttempts,
+  getDashboard,
   listExams,
   listMyAssignments,
-  type ClassOut,
+  type DashboardData,
   type ExamSummary,
-  type StudentRow,
-  type SubjectOut,
   type TeacherAssignment,
-  type TeacherRow,
 } from "../../api/adminApi";
 import {
   AdminLayout,
@@ -39,26 +32,6 @@ const STATUS_KEY: Record<string, { status: BadgeStatus; key: string }> = {
   archived: { status: "neutral", key: "status.archived" },
 };
 
-// Exam.status never actually transitions to "active" anywhere in the
-// backend (publish_exam sets "scheduled" and it stays there for the
-// exam's whole life, time window included) — so "is this exam happening
-// right now" has to be computed from start_at/end_at, the same way
-// routers/student.py's _window_state does, not read off the stored status.
-function isLiveNow(exam: ExamSummary): boolean {
-  if (exam.status !== "scheduled" && exam.status !== "active") return false;
-  if (!exam.start_at || !exam.end_at) return false;
-  const now = Date.now();
-  return now >= new Date(exam.start_at).getTime() && now < new Date(exam.end_at).getTime();
-}
-
-interface LiveProgress {
-  exam: ExamSummary;
-  total: number;
-  submitted: number;
-  inProgress: number;
-  notStarted: number;
-}
-
 export default function DashboardPage() {
   const { user } = useAuth();
   const { t } = useLanguage();
@@ -66,26 +39,22 @@ export default function DashboardPage() {
   const isAdmin = user?.role === "admin";
 
   const [exams, setExams] = useState<ExamSummary[]>([]);
-  const [classes, setClasses] = useState<ClassOut[]>([]);
-  const [subjects, setSubjects] = useState<SubjectOut[]>([]);
-  const [students, setStudents] = useState<StudentRow[]>([]);
-  const [teachers, setTeachers] = useState<TeacherRow[]>([]);
+  // Everything else on this page — the school-wide counts, the per-class
+  // bar chart and the live-exam progress (which "live" exams are open right
+  // now is decided server-side from their time windows; see
+  // routers/dashboard.py) — comes from ONE aggregate call, fetched in
+  // parallel with the exam list. It used to download every class, subject,
+  // student and teacher, then fetch each live exam's roster in a second wave.
+  const [summary, setSummary] = useState<DashboardData | null>(null);
   const [assignments, setAssignments] = useState<TeacherAssignment[]>([]);
   const [loaded, setLoaded] = useState(false);
 
-  const [liveProgress, setLiveProgress] = useState<LiveProgress[]>([]);
-  const [liveLoaded, setLiveLoaded] = useState(false);
-
   const loadAll = useCallback(() => {
-    const tasks: Promise<unknown>[] = [listExams().then(setExams).catch(() => undefined)];
-    if (isAdmin) {
-      tasks.push(listAdminClasses().then(setClasses).catch(() => undefined));
-      tasks.push(listAdminSubjects().then(setSubjects).catch(() => undefined));
-      tasks.push(listAdminStudents().then(setStudents).catch(() => undefined));
-      tasks.push(listAdminTeachers().then(setTeachers).catch(() => undefined));
-    } else {
-      tasks.push(listMyAssignments().then(setAssignments).catch(() => undefined));
-    }
+    const tasks: Promise<unknown>[] = [
+      listExams().then(setExams).catch(() => undefined),
+      getDashboard().then(setSummary).catch(() => undefined),
+    ];
+    if (!isAdmin) tasks.push(listMyAssignments().then(setAssignments).catch(() => undefined));
     Promise.allSettled(tasks).then(() => setLoaded(true));
   }, [isAdmin]);
 
@@ -93,42 +62,11 @@ export default function DashboardPage() {
     loadAll();
   }, [loadAll]);
 
-  const loadLive = useCallback((examList: ExamSummary[]) => {
-    const live = examList.filter(isLiveNow);
-    if (live.length === 0) {
-      setLiveProgress([]);
-      setLiveLoaded(true);
-      return;
-    }
-    setLiveLoaded(false);
-    Promise.all(
-      live.map((exam) =>
-        listExamAttempts(exam.id)
-          .then(
-            (attempts): LiveProgress => ({
-              exam,
-              total: attempts.length,
-              submitted: attempts.filter((a) => a.status === "submitted" || a.status === "auto_submitted").length,
-              inProgress: attempts.filter((a) => a.status === "in_progress").length,
-              notStarted: attempts.filter((a) => a.status === "not_started").length,
-            })
-          )
-          .catch(() => null)
-      )
-    ).then((results) => {
-      setLiveProgress(results.filter((r): r is LiveProgress => r !== null));
-      setLiveLoaded(true);
-    });
-  }, []);
-
-  useEffect(() => {
-    if (loaded) loadLive(exams);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded]);
+  const liveProgress = summary?.live ?? [];
+  const liveLoaded = loaded;
 
   function handleRefresh() {
     loadAll();
-    loadLive(exams);
   }
 
   const statusCounts: Record<string, number> = {};
@@ -148,23 +86,16 @@ export default function DashboardPage() {
     { label: t("status.closed"), value: statusCounts.closed ?? 0, color: "var(--success)" },
   ].filter((s) => s.value > 0);
 
-  const studentsPerClass = isAdmin
-    ? classes
-        .map((c) => ({
-          label: c.display_name,
-          value: students.filter((s) => s.class_id === c.id).length,
-        }))
-        .filter((c) => c.value > 0)
-        .sort((a, b) => b.value - a.value)
-        .slice(0, 10)
-    : [];
+  const studentsPerClass = (summary?.students_per_class ?? [])
+    .slice(0, 10)
+    .map((c) => ({ label: c.class_name, value: c.count }));
 
   const liveTotals = liveProgress.reduce(
     (acc, p) => ({
       total: acc.total + p.total,
       submitted: acc.submitted + p.submitted,
-      inProgress: acc.inProgress + p.inProgress,
-      notStarted: acc.notStarted + p.notStarted,
+      inProgress: acc.inProgress + p.in_progress,
+      notStarted: acc.notStarted + p.not_started,
     }),
     { total: 0, submitted: 0, inProgress: 0, notStarted: 0 }
   );
@@ -219,13 +150,13 @@ export default function DashboardPage() {
                 <StatCard label={t("dashboard.liveNotStarted")} value={liveTotals.notStarted} />
               </div>
               <div className="row-stack">
-                {liveProgress.map(({ exam, total, submitted, inProgress }) => (
+                {liveProgress.map(({ exam_id, title, subject_name, class_name, total, submitted, in_progress: inProgress }) => (
                   <ListRow
-                    key={exam.id}
+                    key={exam_id}
                     chevron
-                    onClick={() => navigate(`/admin/exams/${exam.id}/ranking`)}
-                    title={exam.title}
-                    subtitle={`${exam.subject_name} · ${exam.class_name}`}
+                    onClick={() => navigate(`/admin/exams/${exam_id}/ranking`)}
+                    title={title}
+                    subtitle={`${subject_name} · ${class_name}`}
                     trailing={
                       <>
                         {inProgress > 0 && (
@@ -248,20 +179,20 @@ export default function DashboardPage() {
         <div className="sp-statcard-grid" style={{ marginBottom: "var(--space-8)" }}>
           {isAdmin ? (
             <>
-              <StatCard label={t("dashboard.classes")} value={classes.length} onClick={() => navigate("/classes")} />
+              <StatCard label={t("dashboard.classes")} value={summary?.counts?.classes ?? 0} onClick={() => navigate("/classes")} />
               <StatCard
                 label={t("dashboard.subjects")}
-                value={subjects.length}
+                value={summary?.counts?.subjects ?? 0}
                 onClick={() => navigate("/admin/manage/subjects")}
               />
               <StatCard
                 label={t("dashboard.students")}
-                value={students.length}
+                value={summary?.counts?.students ?? 0}
                 onClick={() => navigate("/admin/manage/students")}
               />
               <StatCard
                 label={t("dashboard.teachers")}
-                value={teachers.length}
+                value={summary?.counts?.teachers ?? 0}
                 onClick={() => navigate("/admin/manage/teachers")}
               />
             </>

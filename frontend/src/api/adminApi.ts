@@ -408,6 +408,29 @@ export async function createExam(
   return data;
 }
 
+export interface LiveExam {
+  exam_id: number;
+  title: string;
+  subject_name: string;
+  class_name: string;
+  total: number;
+  submitted: number;
+  in_progress: number;
+  not_started: number;
+}
+
+export interface DashboardData {
+  live: LiveExam[];
+  // Admin-only; null for a teacher.
+  counts: { classes: number; subjects: number; students: number; teachers: number } | null;
+  students_per_class: { class_id: number; class_name: string; count: number }[] | null;
+}
+
+export async function getDashboard(): Promise<DashboardData> {
+  const { data } = await apiClient.get<DashboardData>("/admin/dashboard");
+  return data;
+}
+
 export async function listExams(filters?: {
   exam_status?: string;
   class_id?: number;

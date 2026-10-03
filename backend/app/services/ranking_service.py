@@ -6,6 +6,7 @@
 """
 
 from sqlalchemy import func
+from sqlalchemy.orm import joinedload
 
 from app.models.attempt import AttemptStatus, ExamAttempt, StudentAnswer
 from app.models.exam import Exam
@@ -157,7 +158,8 @@ def compute_overall_ranking(db, class_id: int | None = None, grade_level: int | 
     rows = [r for r in query.all() if r.possible]
     student_ids = [r.student_id for r in rows]
     names = {
-        s.id: s.user.full_name for s in db.query(Student).filter(Student.id.in_(student_ids)).all()
+        s.id: s.user.full_name
+        for s in db.query(Student).options(joinedload(Student.user)).filter(Student.id.in_(student_ids)).all()
     }
 
     scored = sorted(

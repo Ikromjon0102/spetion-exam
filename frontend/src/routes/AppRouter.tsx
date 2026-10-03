@@ -1,30 +1,46 @@
+import { Suspense, lazy } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { useLanguage } from "../i18n/LanguageContext";
 import ClassLoginPage from "../features/student/ClassLoginPage";
-import ExamListPage from "../features/student/ExamListPage";
-import ExamTakingPage from "../features/student/ExamTakingPage";
-import ExamResultPage from "../features/student/ExamResultPage";
-import ProfilePage from "../features/student/ProfilePage";
-import StaffLoginPage from "../features/admin/StaffLoginPage";
-import DashboardPage from "../features/admin/DashboardPage";
-import AdminExamListPage from "../features/admin/ExamListPage";
-import ExamUploadPage from "../features/admin/ExamUploadPage";
-import ExamReviewEditor from "../features/admin/ExamReviewEditor";
-import RankingPage from "../features/admin/RankingPage";
-import AttemptAnswerReviewPage from "../features/admin/AttemptAnswerReviewPage";
-import OverallRankingPage from "../features/admin/OverallRankingPage";
-import StudentPerformancePage from "../features/admin/StudentPerformancePage";
-import DailyResultsPage from "../features/admin/DailyResultsPage";
-import ChangePasswordPage from "../features/shared/ChangePasswordPage";
-import ClassesPage from "../features/admin/manage/ClassesPage";
-import ClassDetailPage from "../features/admin/manage/ClassDetailPage";
-import SubjectsPage from "../features/admin/manage/SubjectsPage";
-import StudentsPage from "../features/admin/manage/StudentsPage";
-import TeachersPage from "../features/admin/manage/TeachersPage";
+const ExamListPage = lazy(() => import("../features/student/ExamListPage"));
+const ExamTakingPage = lazy(() => import("../features/student/ExamTakingPage"));
+const ExamResultPage = lazy(() => import("../features/student/ExamResultPage"));
+const ProfilePage = lazy(() => import("../features/student/ProfilePage"));
+const StaffLoginPage = lazy(() => import("../features/admin/StaffLoginPage"));
+const DashboardPage = lazy(() => import("../features/admin/DashboardPage"));
+const AdminExamListPage = lazy(() => import("../features/admin/ExamListPage"));
+const ExamUploadPage = lazy(() => import("../features/admin/ExamUploadPage"));
+const ExamReviewEditor = lazy(() => import("../features/admin/ExamReviewEditor"));
+const RankingPage = lazy(() => import("../features/admin/RankingPage"));
+const AttemptAnswerReviewPage = lazy(() => import("../features/admin/AttemptAnswerReviewPage"));
+const OverallRankingPage = lazy(() => import("../features/admin/OverallRankingPage"));
+const StudentPerformancePage = lazy(() => import("../features/admin/StudentPerformancePage"));
+const DailyResultsPage = lazy(() => import("../features/admin/DailyResultsPage"));
+const ChangePasswordPage = lazy(() => import("../features/shared/ChangePasswordPage"));
+const ClassesPage = lazy(() => import("../features/admin/manage/ClassesPage"));
+const ClassDetailPage = lazy(() => import("../features/admin/manage/ClassDetailPage"));
+const SubjectsPage = lazy(() => import("../features/admin/manage/SubjectsPage"));
+const StudentsPage = lazy(() => import("../features/admin/manage/StudentsPage"));
+const TeachersPage = lazy(() => import("../features/admin/manage/TeachersPage"));
 import RequireRole from "../auth/RequireRole";
 
+function RouteFallback() {
+  const { t } = useLanguage();
+  return (
+    <div className="page">
+      <p className="ink-muted">{t("taking.loading")}</p>
+    </div>
+  );
+}
+
+// Every page except the student login is loaded on demand. The whole app used
+// to ship as one ~580 kB script, so a student opening the login page also
+// downloaded the admin panel, the chart code and the image exporter — on a
+// phone connection that is seconds of "Yuklanmoqda..." before anything shows.
 export default function AppRouter() {
   return (
     <BrowserRouter>
+      <Suspense fallback={<RouteFallback />}>
       <Routes>
         <Route path="/" element={<ClassLoginPage />} />
         <Route path="/staff-login" element={<StaffLoginPage />} />
@@ -185,6 +201,7 @@ export default function AppRouter() {
           }
         />
       </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }

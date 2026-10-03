@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.storage import ensure_bucket
-from app.routers import admin_exams, admin_management, auth, results, student
+from app.routers import admin_exams, admin_management, auth, dashboard, results, student
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +31,7 @@ app.include_router(student.router)
 app.include_router(admin_exams.router)
 app.include_router(admin_management.router)
 app.include_router(results.router)
+app.include_router(dashboard.router)
 
 
 @app.get("/api/v1/health")

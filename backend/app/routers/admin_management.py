@@ -6,7 +6,7 @@ import re
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.core.security import hash_password
 from app.db.base import get_db
@@ -54,8 +54,15 @@ def _slugify_username(full_name: str) -> str:
     return s or "student"
 
 
-def _class_out(db: Session, klass: Class) -> ClassOut:
-    homeroom = db.get(Teacher, klass.homeroom_teacher_id) if klass.homeroom_teacher_id else None
+def _class_out(db: Session, klass: Class, homerooms: dict[int, Teacher] | None = None) -> ClassOut:
+    # `homerooms` lets a list endpoint resolve every class's homeroom teacher
+    # in one query instead of two per class (teacher row + its user row).
+    if klass.homeroom_teacher_id is None:
+        homeroom = None
+    elif homerooms is not None:
+        homeroom = homerooms.get(klass.homeroom_teacher_id)
+    else:
+        homeroom = db.get(Teacher, klass.homeroom_teacher_id)
     return ClassOut(
         id=klass.id,
         grade_level=klass.grade_level,
@@ -103,15 +110,19 @@ def _ensure_class_homeroom(db: Session, user: User, class_id: int) -> Class:
     )
 
 
-def _student_out(db: Session, student: Student) -> StudentOut:
-    klass = db.get(Class, student.class_id)
+def _student_out(db: Session, student: Student, class_names: dict[int, str] | None = None) -> StudentOut:
+    if class_names is not None:
+        class_name = class_names.get(student.class_id, "")
+    else:
+        klass = db.get(Class, student.class_id)
+        class_name = klass.display_name if klass else ""
     return StudentOut(
         id=student.id,
         user_id=student.user_id,
         username=student.user.username,
         full_name=student.user.full_name,
         class_id=student.class_id,
-        class_name=klass.display_name if klass else "",
+        class_name=class_name,
         student_code=student.student_code,
         is_active=student.user.is_active,
     )
@@ -169,7 +180,16 @@ def _get_or_create_default_context(db: Session) -> tuple[School, AcademicYear]:
 @router.get("/classes", response_model=list[ClassOut])
 def list_classes(db: Session = Depends(get_db), _user: User = Depends(require_role("admin", "teacher"))):
     classes = db.query(Class).order_by(Class.grade_level, Class.label).all()
-    return [_class_out(db, c) for c in classes]
+    homeroom_ids = {c.homeroom_teacher_id for c in classes if c.homeroom_teacher_id}
+    homerooms = (
+        {
+            t.id: t
+            for t in db.query(Teacher).options(joinedload(Teacher.user)).filter(Teacher.id.in_(homeroom_ids))
+        }
+        if homeroom_ids
+        else {}
+    )
+    return [_class_out(db, c, homerooms) for c in classes]
 
 
 @router.post("/classes", response_model=ClassOut, status_code=status.HTTP_201_CREATED)
@@ -369,7 +389,11 @@ def list_students(
         query = db.query(Student)
         if class_id is not None:
             query = query.filter_by(class_id=class_id)
-    return [_student_out(db, s) for s in query.all()]
+    # One query for the students (with their user rows joined in) plus one
+    # for class names — not two extra queries per student.
+    class_names = {c.id: c.display_name for c in db.query(Class.id, Class.display_name)}
+    students = query.options(joinedload(Student.user)).all()
+    return [_student_out(db, s, class_names) for s in students]
 
 
 @router.post("/students", response_model=StudentOut, status_code=status.HTTP_201_CREATED)
@@ -529,7 +553,7 @@ def reset_class_passwords(
 
 @router.get("/teachers", response_model=list[TeacherOut])
 def list_teachers(db: Session = Depends(get_db), _user: User = Depends(require_role("admin"))):
-    return [_teacher_out(t) for t in db.query(Teacher).all()]
+    return [_teacher_out(t) for t in db.query(Teacher).options(joinedload(Teacher.user)).all()]
 
 
 @router.post("/teachers", response_model=TeacherOut, status_code=status.HTTP_201_CREATED)

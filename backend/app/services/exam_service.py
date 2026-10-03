@@ -50,6 +50,19 @@ def ensure_can_manage_exam(db: Session, user: User, exam: Exam) -> None:
 _STARTED_STATUSES = (AttemptStatus.in_progress, AttemptStatus.submitted, AttemptStatus.auto_submitted)
 
 
+def exam_ids_with_attempts(db: Session, exam_ids: list[int]) -> set[int]:
+    """Batched form of has_attempts — which of these exams have a started
+    attempt — so a list endpoint needs one query, not one per exam."""
+    if not exam_ids:
+        return set()
+    rows = (
+        db.query(ExamAttempt.exam_id)
+        .filter(ExamAttempt.exam_id.in_(exam_ids), ExamAttempt.status.in_(_STARTED_STATUSES))
+        .distinct()
+    )
+    return {row[0] for row in rows}
+
+
 def has_attempts(db: Session, exam: Exam) -> bool:
     """True only if a student actually opened the exam.
 
@@ -59,13 +72,7 @@ def has_attempts(db: Session, exam: Exam) -> bool:
     not_started row). Those rows must NOT count here, or an exam nobody
     ever took becomes permanently unelidable/unediable the moment its
     window closes."""
-    return (
-        db.query(ExamAttempt)
-        .filter_by(exam_id=exam.id)
-        .filter(ExamAttempt.status.in_(_STARTED_STATUSES))
-        .first()
-        is not None
-    )
+    return exam.id in exam_ids_with_attempts(db, [exam.id])
 
 
 def ensure_no_attempts(db: Session, exam: Exam) -> None:

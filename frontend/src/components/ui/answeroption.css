@@ -32,26 +32,18 @@
   font-weight: 700;
   color: var(--ink-muted);
 }
+/* A picked answer during the exam uses the neutral "info" blue, NOT the brand
+   red: red reads as "wrong" to a student mid-exam, and green/red are reserved
+   for the graded result (--correct / --incorrect below). color-mix keeps one
+   rule correct in both themes, so no per-theme background override is needed. */
 .sp-option--selected {
-  border-color: var(--brand-600);
-  background: var(--brand-050);
+  border-color: var(--info);
+  background: color-mix(in srgb, var(--info) 10%, var(--surface-raised));
 }
 .sp-option--selected .sp-option__letter {
-  border-color: var(--brand-600);
-  background: var(--brand-600);
-  color: var(--on-brand);
-}
-/* --brand-050 is a pale, light-only pink (see tokens.css) — fine against
-   --ink in light mode, but --ink turns near-white in dark mode, making the
-   option text unreadable on it. Swap to a neutral dark surface instead,
-   same fix already applied to .sp-sidebar__link--active in adminlayout.css. */
-:root[data-theme="dark"] .sp-option--selected {
-  background: var(--surface-sunken);
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .sp-option--selected {
-    background: var(--surface-sunken);
-  }
+  border-color: var(--info);
+  background: var(--info);
+  color: var(--on-info);
 }
 .sp-option--correct {
   border-color: var(--success);

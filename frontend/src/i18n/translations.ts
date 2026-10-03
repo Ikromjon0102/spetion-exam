@@ -392,6 +392,18 @@ export const translations: Record<string, Record<Lang, string>> = {
   },
   "review.saveChanges": { uz: "Saqlash", ru: "Сохранить" },
   "review.editQuestion": { uz: "Tahrirlash", ru: "Редактировать" },
+  "guard.enterTitle": { uz: "Imtihon to'liq ekranda o'tkaziladi", ru: "Экзамен проходит в полноэкранном режиме" },
+  "guard.enterText": {
+    uz: "Imtihon davomida boshqa oyna, ilova yoki saytlarga o'tish mumkin emas. Davom etish uchun tugmani bosing. Vaqt ketmoqda.",
+    ru: "Во время экзамена нельзя переключаться на другие окна, приложения и сайты. Нажмите кнопку, чтобы продолжить. Время идёт.",
+  },
+  "guard.enterButton": { uz: "To'liq ekranda davom etish", ru: "Продолжить в полноэкранном режиме" },
+  "guard.leftTitle": { uz: "Diqqat! Siz imtihon oynasidan chiqdingiz", ru: "Внимание! Вы покинули окно экзамена" },
+  "guard.leftText": {
+    uz: "Imtihon paytida boshqa oyna, ilova yoki saytlarga o'tish mumkin emas. Bu {count}-ogohlantirish. Vaqt ketmoqda — imtihonga qayting.",
+    ru: "Во время экзамена нельзя переключаться на другие окна, приложения и сайты. Это предупреждение №{count}. Время идёт — вернитесь к экзамену.",
+  },
+  "guard.leftButton": { uz: "Imtihonga qaytish", ru: "Вернуться к экзамену" },
   "review.saved": { uz: "Saqlandi", ru: "Сохранено" },
   "review.questionDeleted": { uz: "Savol o'chirildi", ru: "Вопрос удалён" },
   "review.questionAdded": {

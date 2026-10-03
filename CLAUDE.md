@@ -1197,6 +1197,24 @@ Decisions already confirmed with the user, so don't re-litigate them:
      blur. The AI grader receives `rich_text.to_plain_text(prompt)`, never
      HTML. The parser still produces plain text.
 
+9. **Exam-taking guard (school computers only — user's choice).** A web page
+   cannot sit above other windows or block Alt-Tab, so this is a deterrent, not
+   a lockdown: `hooks/useExamGuard.ts` runs the exam full-screen (requested in
+   the exam *list* click, because browsers only allow it inside a user gesture;
+   it survives the SPA navigation), and when the student leaves — full-screen
+   exited, tab hidden, window blurred — an opaque `ExamGuardOverlay` covers the
+   questions with a counted warning until they press "Imtihonga qaytish". A
+   reload drops full-screen, so the page shows an uncounted "enter" overlay
+   first. copy / cut / contextmenu are `preventDefault`ed and question text is
+   `user-select: none` (answer fields exempt). **The overlay is dismissed
+   without awaiting `requestFullscreen()`** — the promise can reject or never
+   settle in some browsers, and a student must never be stuck behind an overlay
+   while the server-side deadline runs. Warnings are client-side only (not
+   stored); persisting them for the teacher to see, or auto-submitting after N,
+   was offered and not chosen. A picked answer is neutral info-blue, never
+   brand red (red reads as "wrong" mid-exam; red/green are for the graded
+   result only).
+
 ## Next steps (in order)
 
 1. **Done** — the app is live on the DigitalOcean VPS's real Postgres

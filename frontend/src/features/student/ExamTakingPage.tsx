@@ -8,7 +8,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { getMyAttempt, startExam, submitAnswer, submitExam, type AttemptState } from "../../api/studentApi";
+import { exitFullscreen, useExamGuard } from "../../hooks/useExamGuard";
 import { useExamTimer } from "../../hooks/useExamTimer";
+import ExamGuardOverlay from "./ExamGuardOverlay";
 import { AnswerOption, AppHeader, AuthedImage, Button, Card } from "../../components/ui";
 import RichText from "../../components/ui/RichText";
 import { useLanguage } from "../../i18n/LanguageContext";
@@ -85,11 +87,16 @@ export default function ExamTakingPage() {
     try {
       await submitExam(id);
     } finally {
+      exitFullscreen();
       navigate(`/student/exams/${id}/result`);
     }
   }, [id, navigate, attempt]);
 
   const remainingMs = useExamTimer(attempt?.deadline_at ?? FAR_FUTURE, handleSubmit);
+
+  // Full-screen + leave-warning + copy/right-click block, only while there is
+  // a live attempt on screen (not while loading, and not once submitting).
+  const guard = useExamGuard(attempt !== null && !submitting);
 
   async function selectOption(questionId: number, optionId: number) {
     setAnswers((prev) => ({ ...prev, [questionId]: optionId }));
@@ -142,6 +149,7 @@ export default function ExamTakingPage() {
   return (
     <>
       <AppHeader />
+      <ExamGuardOverlay kind={guard.overlay} warnings={guard.warnings} onResume={guard.resume} />
       <div className="page">
         <h1 className="h3" style={{ marginBottom: "var(--space-4)" }}>
           {attempt.exam_title}
@@ -165,7 +173,7 @@ export default function ExamTakingPage() {
           </p>
         )}
 
-        <div className="stack">
+        <div className="stack sp-exam-guarded">
           {attempt.questions.map((q, idx) => (
             <Card key={q.id}>
               <div className="data-eyebrow" style={{ marginBottom: "var(--space-2)" }}>

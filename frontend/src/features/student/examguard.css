@@ -1,0 +1,32 @@
+.sp-guard {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6);
+  background: var(--surface);
+}
+
+.sp-guard__card {
+  max-width: 480px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  text-align: center;
+}
+
+/* Question text can't be selected (so it can't be dragged out and copied),
+   but typing and selecting inside the student's own answer field still work. */
+.sp-exam-guarded {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.sp-exam-guarded textarea,
+.sp-exam-guarded input {
+  -webkit-user-select: text;
+  user-select: text;
+}

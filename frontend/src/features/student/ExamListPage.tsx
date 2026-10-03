@@ -1,3 +1,4 @@
+import { enterFullscreen } from "../../hooks/useExamGuard";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { listMyExams, type ExamListItem } from "../../api/studentApi";
@@ -46,6 +47,10 @@ export default function ExamListPage() {
     if (exam.my_attempt_status === "submitted" || exam.my_attempt_status === "auto_submitted") {
       navigate(`/student/exams/${exam.id}/result`);
     } else if (exam.window_state === "active") {
+      // Full-screen must be requested inside this click (a browser rule); it
+      // survives the in-app navigation below. Not awaited: never delay opening
+      // the exam.
+      void enterFullscreen();
       navigate(`/student/exams/${exam.id}`);
     }
   }

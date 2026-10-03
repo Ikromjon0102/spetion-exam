@@ -1135,6 +1135,68 @@ Decisions already confirmed with the user, so don't re-litigate them:
      unauthorized-class 403, admin unrestricted) — the source exam itself
      is asserted untouched by the operation.
 
+8. **Authoring-flow fixes, speed, findability and rich text (Oct 2026) —
+   built locally, deploy only when the user says so.**
+   - **Silent failures were a feedback problem, not a data problem.** A
+     validation error in the editor ("Variant D bo'sh") was rendered in a
+     banner at the very top of a page thousands of pixels tall, so a failed
+     "Savolni qo'shish" looked like it had worked and the 20th question
+     "vanished". The backend and student screen were verified to store/serve
+     all 20. Fix: a fixed-position `Toast` (`components/ui/Toast.tsx`) for
+     every editor error/confirmation, named empty-variant errors, "Saqlandi"
+     after saves, and publish redirects to `/admin/exams` with a flash
+     (`navigate(..., { state: { flash } })`, read once in `ExamListPage`).
+     Any new long-page form should report errors next to the user, not at the
+     top.
+   - **Parser:** markers no longer need a space after them (`20.Savol`,
+     `A.Insert`; `(?!\d)` keeps `3.14` from being a marker); DOCX Word
+     auto-numbering is reconstructed (`_AutoNumbering` in `docx_parser.py` —
+     `paragraph.text` never contains list numbers). `Exam.expected_question_count`
+     (migration `f2a6d8b3c1e9`) is an optional "how many should there be",
+     set at upload/manual create or on the review page, which warns on
+     mismatch.
+   - **Speed:** admin lists were N+1 (e.g. 23 students = 48 queries, 17 exams
+     = 70). Batched/eager-loaded, and pinned by `tests/test_query_counts.py`
+     (expunges the session identity map first — the shared test session would
+     otherwise hide lazy loads; keep that when adding more). `GET
+     /admin/dashboard` (`routers/dashboard.py`) replaces the dashboard's
+     four whole-school list downloads + per-live-exam roster wave. Frontend:
+     route-level `React.lazy`, `html2canvas` imported on demand, fonts
+     self-hosted via `@fontsource/*` (no Google Fonts request), and
+     `api/client.ts` refreshes an already-expired access token *before* the
+     request instead of after a wasted 401. **Do not re-export heavy
+     components from `components/ui/index.ts`** — a barrel import pulls the
+     module (and its dependencies) into the entry bundle that every page,
+     including the student login, downloads; it ballooned 265 -> 513 kB once
+     already (TipTap), then +23 kB (qrcode). `RichText`, `RichTextEditor` and
+     `CredentialsSheetCard` are imported by path for that reason.
+   - **Findability:** `index.html` meta/OG/JSON-LD/canonical, `public/robots.txt`
+     (sign-in-only areas disallowed), `sitemap.xml`, `manifest.webmanifest`,
+     noscript text. Printed credential sheets carry a QR + the site address
+     (`utils/qrDataUrl.ts`, synchronous on purpose — the sheet is captured the
+     instant it mounts). Real indexing still needs Google Search Console
+     verification + a backlink from the main spetion.uz site; that is the
+     user's to do (needs their DNS/Google account).
+   - **Rich text for questions/options.** Stored in the *existing* `prompt_text`
+     / `option_text` columns as sanitized HTML behind the marker
+     `<!--sp-rich-->` (`app/core/rich_text.py`, mirrored in
+     `frontend/src/utils/richText.ts`). **Anything without the marker is plain
+     text and must never be treated as HTML** — a plain question literally
+     containing `<b>` has to keep showing `<b>`. This is why there is no flag
+     column/migration and why the result/review/student pages work unchanged
+     (they just hand the string to `<RichText>`). Sanitization is by allow-list
+     (`nh3`, new in `requirements.txt` — **needs `pip install -r
+     requirements.txt` on the VPS**) in the schema validators on
+     create/update, and again with DOMPurify before rendering. Formulas are
+     stored as LaTeX only (`<span data-type="inline-math" data-latex="...">`)
+     and drawn by KaTeX, lazy-loaded (`loadKatex`) only when a formula is on
+     screen. Editor = TipTap (`RichTextEditor.tsx`, custom `InlineMath` node).
+     Existing questions are edited via a per-card "Tahrirlash" -> "Saqlash"
+     mode (only one card editable at a time, so unsaved drafts can't be
+     silently discarded); the rest of the editor's fields still autosave on
+     blur. The AI grader receives `rich_text.to_plain_text(prompt)`, never
+     HTML. The parser still produces plain text.
+
 ## Next steps (in order)
 
 1. **Done** — the app is live on the DigitalOcean VPS's real Postgres

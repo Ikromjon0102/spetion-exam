@@ -10,6 +10,7 @@ rather than as a separate async step (see ai_grading_service's docstring).
 
 from sqlalchemy.orm import Session
 
+from app.core import rich_text
 from app.models.attempt import ExamAttempt
 from app.models.exam import Exam, Question, QuestionOption, QuestionType
 from app.services import ai_grading_service
@@ -29,7 +30,8 @@ def grade_attempt(db: Session, attempt: ExamAttempt) -> ExamAttempt:
             continue
         if question.question_type == QuestionType.short_answer:
             points, feedback = ai_grading_service.grade_short_answer(
-                prompt_text=question.prompt_text,
+                # the model should read the question, not its HTML markup
+                prompt_text=rich_text.to_plain_text(question.prompt_text),
                 reference_answer=question.reference_answer or "",
                 student_answer=answer.answer_text,
                 max_points=float(question.points),

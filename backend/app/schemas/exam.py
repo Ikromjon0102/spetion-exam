@@ -1,6 +1,14 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
+
+from app.core import rich_text
+
+
+def _clean_rich(value: str | None) -> str | None:
+    """Question/option text may be rich HTML (see app.core.rich_text) — reduce
+    it to the allow-list at the API boundary, whatever the client sent."""
+    return rich_text.sanitize(value) if value is not None else None
 
 
 class ExamUploadOut(BaseModel):
@@ -90,6 +98,8 @@ class QuestionOptionUpdate(BaseModel):
     option_text: str | None = None
     is_correct: bool | None = None
 
+    _sanitize_option = field_validator("option_text")(_clean_rich)
+
 
 class QuestionUpdate(BaseModel):
     prompt_text: str | None = None
@@ -98,10 +108,14 @@ class QuestionUpdate(BaseModel):
     order_index: int | None = None
     reference_answer: str | None = None
 
+    _sanitize_prompt = field_validator("prompt_text")(_clean_rich)
+
 
 class QuestionOptionCreate(BaseModel):
     option_text: str
     is_correct: bool = False
+
+    _sanitize_option = field_validator("option_text")(_clean_rich)
 
 
 class QuestionCreate(BaseModel):
@@ -110,6 +124,8 @@ class QuestionCreate(BaseModel):
     points: float = 1
     reference_answer: str | None = None
     options: list[QuestionOptionCreate] = []
+
+    _sanitize_prompt = field_validator("prompt_text")(_clean_rich)
 
 
 class AttemptMonitorOut(BaseModel):

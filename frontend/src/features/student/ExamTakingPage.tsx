@@ -10,6 +10,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { getMyAttempt, startExam, submitAnswer, submitExam, type AttemptState } from "../../api/studentApi";
 import { useExamTimer } from "../../hooks/useExamTimer";
 import { AnswerOption, AppHeader, AuthedImage, Button, Card } from "../../components/ui";
+import RichText from "../../components/ui/RichText";
 import { useLanguage } from "../../i18n/LanguageContext";
 import { questionImageUrl } from "../../utils/questionImage";
 import "../../components/ui/examtimer.css";
@@ -175,9 +176,9 @@ export default function ExamTakingPage() {
                   <AuthedImage src={questionImageUrl(q.prompt_image_key)} maxHeight={320} />
                 </div>
               ) : (
-                <p className="body-lg" style={{ marginBottom: "var(--space-4)" }}>
-                  {q.prompt_text}
-                </p>
+                <div className="body-lg" style={{ marginBottom: "var(--space-4)" }}>
+                  <RichText block text={q.prompt_text} />
+                </div>
               )}
               {q.question_type === "short_answer" ? (
                 <textarea
@@ -203,7 +204,7 @@ export default function ExamTakingPage() {
                       {opt.option_image_key ? (
                         <AuthedImage src={questionImageUrl(opt.option_image_key)} maxHeight={80} />
                       ) : (
-                        opt.option_text
+                        <RichText text={opt.option_text} />
                       )}
                     </AnswerOption>
                   ))}

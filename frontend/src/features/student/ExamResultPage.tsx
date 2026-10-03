@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { getExamRanking, getResult, type ExamResult, type RankingEntry } from "../../api/studentApi";
 import { AnswerOption, AppHeader, Card, ListRow, RankBadge } from "../../components/ui";
+import RichText from "../../components/ui/RichText";
 import { useLanguage } from "../../i18n/LanguageContext";
 import { formatDateTimeUz } from "../../utils/formatDate";
 
@@ -97,9 +98,9 @@ export default function ExamResultPage() {
               <div className="data-eyebrow" style={{ marginBottom: "var(--space-2)" }}>
                 {t("result.question")} {idx + 1}
               </div>
-              <p className="body" style={{ marginBottom: "var(--space-4)", fontWeight: 600 }}>
-                {q.prompt_text}
-              </p>
+              <div className="body" style={{ marginBottom: "var(--space-4)", fontWeight: 600 }}>
+                <RichText block text={q.prompt_text} />
+              </div>
               {q.question_type === "short_answer" ? (
                 <div className="stack" style={{ gap: "var(--space-2)" }}>
                   <AnswerOption
@@ -130,7 +131,7 @@ export default function ExamResultPage() {
                       pick would otherwise reveal the answer just as directly). */}
                   {result.answers_revealed && q.correct_option_id !== null && q.correct_option_id !== q.selected_option_id && (
                     <AnswerOption letter="✓" correct disabled>
-                      <strong>{t("result.correctAnswer")}:</strong> {q.correct_option_text}
+                      <strong>{t("result.correctAnswer")}:</strong> <RichText text={q.correct_option_text ?? ""} />
                     </AnswerOption>
                   )}
                   {q.selected_option_id !== null ? (
@@ -138,7 +139,7 @@ export default function ExamResultPage() {
                       {result.answers_revealed ? (
                         <>
                           <strong>{q.is_correct ? t("result.yourAnswerCorrect") : t("result.yourAnswer")}:</strong>{" "}
-                          {q.selected_option_text}
+                          <RichText text={q.selected_option_text ?? ""} />
                         </>
                       ) : q.is_correct ? (
                         t("result.answeredCorrectHidden")

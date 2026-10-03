@@ -23,12 +23,11 @@ import {
   Button,
   Card,
   ConfirmButton,
-  CredentialsSheetCard,
   ListRow,
   Modal,
   PasswordInput,
-  type CredentialRow,
 } from "../../../components/ui";
+import CredentialsSheetCard, { type CredentialRow } from "../../../components/ui/CredentialsSheetCard";
 import { useLanguage } from "../../../i18n/LanguageContext";
 import { errorDetail } from "../../../utils/errorDetail";
 import { exportA4Image } from "../../../utils/exportA4Image";

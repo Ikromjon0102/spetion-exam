@@ -22,9 +22,11 @@ export { default as ConfirmButton } from "./ConfirmButton";
 export { default as AuthedImage } from "./AuthedImage";
 export { default as Modal } from "./Modal";
 export { default as Toast } from "./Toast";
+// RichText / RichTextEditor are deliberately NOT re-exported here: importing
+// them through this barrel drags TipTap and DOMPurify into the entry script
+// that every page (including the student login) downloads. Import them by
+// path from the lazy pages that need them.
 export { default as PasswordInput } from "./PasswordInput";
 export { default as RankBadge } from "./RankBadge";
 export { default as EmptyState } from "./EmptyState";
-export { default as CredentialsSheetCard } from "./CredentialsSheetCard";
-export type { CredentialRow } from "./CredentialsSheetCard";
 import "./field.css";

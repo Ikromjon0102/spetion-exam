@@ -37,7 +37,10 @@ import {
 } from "../../components/ui";
 import { useLanguage } from "../../i18n/LanguageContext";
 import { errorDetail } from "../../utils/errorDetail";
-import { extractPastedImage } from "../../utils/pasteImage";
+// RichText / RichTextEditor are imported by path, not through the ui barrel (see
+// components/ui/index.ts) so TipTap stays in this lazy page's chunk.
+import RichText from "../../components/ui/RichText";
+import RichTextEditor from "../../components/ui/RichTextEditor";
 
 const STATUS_KEY: Record<string, { status: BadgeStatus; key: string }> = {
   draft: { status: "neutral", key: "status.draft" },
@@ -88,6 +91,16 @@ export default function ExamReviewEditor() {
   // Bumped on every notify() so two identical "Saqlandi" toasts in a row
   // each get a fresh auto-dismiss timer instead of sharing the first one's.
   const [messageKey, setMessageKey] = useState(0);
+  // The one existing question currently open in the rich editor, with its
+  // unsaved draft. Saved explicitly (Saqlash) — a rich editor can't sensibly
+  // autosave on blur the way a plain field does.
+  const [editing, setEditing] = useState<{
+    questionId: number;
+    prompt: string;
+    options: Record<number, string>;
+  } | null>(null);
+  // Bumped after a question is added so the new-question editors remount empty.
+  const [formKey, setFormKey] = useState(0);
   const [newQuestion, setNewQuestion] = useState({
     question_type: "mcq" as "mcq" | "short_answer",
     prompt_text: "",
@@ -193,20 +206,7 @@ export default function ExamReviewEditor() {
     }
   }
 
-  async function saveOptionText(questionId: number, optionId: number, text: string) {
-    try {
-      await updateQuestionOption(id, questionId, optionId, { option_text: text });
-      await reload();
-      notify(t("review.saved"));
-    } catch (e) {
-      setError(errorDetail(e, t("review.genericError")));
-    }
-  }
-
-  async function handlePromptPaste(questionId: number, e: React.ClipboardEvent<HTMLTextAreaElement>) {
-    const file = extractPastedImage(e);
-    if (!file) return;
-    e.preventDefault();
+  async function uploadPromptImage(questionId: number, file: File) {
     try {
       await setQuestionPromptImage(id, questionId, file);
       await reload();
@@ -226,10 +226,7 @@ export default function ExamReviewEditor() {
     }
   }
 
-  async function handleOptionPaste(questionId: number, optionId: number, e: React.ClipboardEvent<HTMLInputElement>) {
-    const file = extractPastedImage(e);
-    if (!file) return;
-    e.preventDefault();
+  async function uploadOptionImage(questionId: number, optionId: number, file: File) {
     try {
       await setOptionImage(id, questionId, optionId, file);
       await reload();
@@ -246,6 +243,44 @@ export default function ExamReviewEditor() {
       notify(t("review.saved"));
     } catch (err) {
       setError(errorDetail(err, t("review.genericError")));
+    }
+  }
+
+  function startEdit(q: ExamDetail["questions"][number]) {
+    setEditing({
+      questionId: q.id,
+      prompt: q.prompt_text,
+      options: Object.fromEntries(q.options.map((o) => [o.id, o.option_text])),
+    });
+  }
+
+  async function saveEdit() {
+    if (!editing || !exam) return;
+    const q = exam.questions.find((item) => item.id === editing.questionId);
+    if (!q) return;
+    if (!editing.prompt.trim() && !q.prompt_image_key) {
+      setError(t("review.needsTextOrImage"));
+      return;
+    }
+    for (let i = 0; i < q.options.length; i++) {
+      const opt = q.options[i];
+      const text = editing.options[opt.id] ?? opt.option_text;
+      if (!text.trim() && !opt.option_image_key) {
+        setError(t("review.optionEmpty", { letter: String.fromCharCode(65 + i) }));
+        return;
+      }
+    }
+    try {
+      if (editing.prompt !== q.prompt_text) await updateQuestion(id, q.id, { prompt_text: editing.prompt });
+      for (const opt of q.options) {
+        const next = editing.options[opt.id];
+        if (next !== undefined && next !== opt.option_text) await updateQuestionOption(id, q.id, opt.id, { option_text: next });
+      }
+      setEditing(null);
+      await reload();
+      notify(t("review.saved"));
+    } catch (e) {
+      setError(errorDetail(e, t("review.genericError")));
     }
   }
 
@@ -304,6 +339,7 @@ export default function ExamReviewEditor() {
         optionImageFiles: [null, null, null, null],
         reference_answer: "",
       });
+      setFormKey((k) => k + 1);
       await reload();
       notify(t("review.questionAdded", { count: (exam?.questions.length ?? 0) + 1 }));
     } catch (e) {
@@ -311,17 +347,11 @@ export default function ExamReviewEditor() {
     }
   }
 
-  function handleNewPromptPaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
-    const file = extractPastedImage(e);
-    if (!file) return;
-    e.preventDefault();
+  function setNewPromptImage(file: File) {
     setNewQuestion((prev) => ({ ...prev, promptImageFile: file }));
   }
 
-  function handleNewOptionPaste(index: number, e: React.ClipboardEvent<HTMLInputElement>) {
-    const file = extractPastedImage(e);
-    if (!file) return;
-    e.preventDefault();
+  function setNewOptionImage(index: number, file: File) {
     setNewQuestion((prev) => {
       const optionImageFiles = [...prev.optionImageFiles];
       optionImageFiles[index] = file;
@@ -581,17 +611,20 @@ export default function ExamReviewEditor() {
                     </Button>
                   )}
                 </div>
+              ) : editing?.questionId === q.id ? (
+                <div style={{ marginBottom: "var(--space-4)" }}>
+                  <RichTextEditor
+                    value={editing.prompt}
+                    placeholder={t("review.pasteHint")}
+                    onChange={(v) => setEditing((prev) => (prev ? { ...prev, prompt: v } : prev))}
+                    onPasteImage={(file) => uploadPromptImage(q.id, file)}
+                    autoFocus
+                  />
+                </div>
               ) : (
-                <textarea
-                  className="sp-input"
-                  defaultValue={q.prompt_text}
-                  disabled={locked}
-                  rows={2}
-                  placeholder={t("review.pasteHint")}
-                  style={{ marginBottom: "var(--space-4)", resize: "vertical" }}
-                  onBlur={(e) => saveQuestion(q.id, { prompt_text: e.target.value })}
-                  onPaste={(e) => handlePromptPaste(q.id, e)}
-                />
+                <div className="body" style={{ marginBottom: "var(--space-4)" }}>
+                  <RichText block text={q.prompt_text} />
+                </div>
               )}
               {q.question_type === "short_answer" ? (
                 <div className="sp-field">
@@ -627,15 +660,22 @@ export default function ExamReviewEditor() {
                             </Button>
                           )}
                         </div>
+                      ) : editing?.questionId === q.id ? (
+                        <div style={{ flex: 1 }}>
+                          <RichTextEditor
+                            compact
+                            value={editing.options[opt.id] ?? opt.option_text}
+                            placeholder={t("review.pasteHint")}
+                            onChange={(v) =>
+                              setEditing((prev) => (prev ? { ...prev, options: { ...prev.options, [opt.id]: v } } : prev))
+                            }
+                            onPasteImage={(file) => uploadOptionImage(q.id, opt.id, file)}
+                          />
+                        </div>
                       ) : (
-                        <input
-                          className="sp-input"
-                          defaultValue={opt.option_text}
-                          disabled={locked}
-                          placeholder={t("review.pasteHint")}
-                          onBlur={(e) => saveOptionText(q.id, opt.id, e.target.value)}
-                          onPaste={(e) => handleOptionPaste(q.id, opt.id, e)}
-                        />
+                        <div className="body" style={{ flex: 1 }}>
+                          <RichText text={opt.option_text} />
+                        </div>
                       )}
                     </div>
                   ))}
@@ -652,9 +692,32 @@ export default function ExamReviewEditor() {
                   />
                   {t("review.needsReviewCheckbox")}
                 </label>
-                <Button variant="ghost" size="sm" disabled={locked} onClick={() => removeQuestion(q.id)}>
-                  {t("review.delete")}
-                </Button>
+                <div style={{ display: "flex", gap: "var(--space-2)" }}>
+                  {editing?.questionId === q.id ? (
+                    <>
+                      <Button size="sm" onClick={saveEdit}>
+                        {t("review.saveChanges")}
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => setEditing(null)}>
+                        {t("richEditor.cancel")}
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        disabled={locked || editing !== null}
+                        onClick={() => startEdit(q)}
+                      >
+                        {t("review.editQuestion")}
+                      </Button>
+                      <Button variant="ghost" size="sm" disabled={locked} onClick={() => removeQuestion(q.id)}>
+                        {t("review.delete")}
+                      </Button>
+                    </>
+                  )}
+                </div>
               </CardFoot>
             </Card>
           ))}
@@ -697,13 +760,12 @@ export default function ExamReviewEditor() {
                   </Button>
                 </div>
               ) : (
-                <textarea
-                  className="sp-input"
+                <RichTextEditor
+                  key={`new-prompt-${formKey}`}
+                  value=""
                   placeholder={`${t("review.promptPlaceholder")} — ${t("review.pasteHint")}`}
-                  value={newQuestion.prompt_text}
-                  onChange={(e) => setNewQuestion({ ...newQuestion, prompt_text: e.target.value })}
-                  onPaste={handleNewPromptPaste}
-                  rows={2}
+                  onChange={(v) => setNewQuestion((prev) => ({ ...prev, prompt_text: v }))}
+                  onPasteImage={setNewPromptImage}
                 />
               )}
               {newQuestion.question_type === "short_answer" ? (
@@ -747,17 +809,24 @@ export default function ExamReviewEditor() {
                           </Button>
                         </div>
                       ) : (
-                        <input
-                          className="sp-input"
-                          placeholder={`${t("review.optionPlaceholder")} ${String.fromCharCode(65 + i)}`}
-                          value={text}
-                          onChange={(e) => {
-                            const options = [...newQuestion.options];
-                            options[i] = e.target.value;
-                            setNewQuestion({ ...newQuestion, options });
-                          }}
-                          onPaste={(e) => handleNewOptionPaste(i, e)}
-                        />
+                        <div style={{ flex: 1 }}>
+                          <RichTextEditor
+                            compact
+                            // remounts when a slot is added/removed so each editor
+                            // re-reads its own (shifted) text from state
+                            key={`new-option-${formKey}-${newQuestion.options.length}-${i}`}
+                            value={text}
+                            placeholder={`${t("review.optionPlaceholder")} ${String.fromCharCode(65 + i)}`}
+                            onChange={(v) =>
+                              setNewQuestion((prev) => {
+                                const options = [...prev.options];
+                                options[i] = v;
+                                return { ...prev, options };
+                              })
+                            }
+                            onPasteImage={(file) => setNewOptionImage(i, file)}
+                          />
+                        </div>
                       )}
                       {newQuestion.options.length > 2 && (
                         <Button variant="ghost" size="sm" onClick={() => removeOptionSlot(i)}>

@@ -1,0 +1,122 @@
+.sp-editor {
+  background: var(--surface-sunken);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-md);
+  transition: border-color 120ms ease;
+}
+
+.sp-editor:hover {
+  border-color: var(--border-strong);
+}
+
+.sp-editor:focus-within {
+  border-color: var(--brand-600);
+}
+
+.sp-editor__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.sp-editor__tool {
+  min-width: 30px;
+  height: 28px;
+  padding: 0 var(--space-2);
+  background: none;
+  border: none;
+  border-radius: var(--radius-xs);
+  color: var(--ink-muted);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.sp-editor__tool:hover {
+  background: var(--surface-raised);
+  color: var(--ink);
+}
+
+.sp-editor__tool--active {
+  background: var(--surface-raised);
+  color: var(--brand-600);
+}
+
+.sp-editor__prose {
+  min-height: 64px;
+  padding: var(--space-3) var(--space-4);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--ink);
+  outline: none;
+}
+
+.sp-editor--compact .sp-editor__prose {
+  min-height: 0;
+  padding: var(--space-2) var(--space-3);
+}
+
+.sp-editor__prose p {
+  margin: 0 0 var(--space-2);
+}
+
+.sp-editor__prose p:last-child {
+  margin-bottom: 0;
+}
+
+.sp-editor__prose ul,
+.sp-editor__prose ol {
+  margin: 0 0 var(--space-2);
+  padding-left: var(--space-6);
+}
+
+.sp-editor__prose p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--ink-faint);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.sp-math-node {
+  display: inline-block;
+  padding: 0 2px;
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+}
+
+.sp-editor__prose .ProseMirror-selectednode.sp-math-node,
+.sp-math-node:hover {
+  background: var(--surface-raised);
+  outline: 1.5px solid var(--brand-600);
+}
+
+.sp-editor__formula {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.sp-editor__formula .sp-input {
+  flex: 1 1 200px;
+  width: auto;
+  font-family: var(--font-mono);
+  padding: var(--space-2) var(--space-3);
+}
+
+.sp-editor__formula-preview {
+  min-width: 60px;
+  padding: 0 var(--space-2);
+}
+
+.sp-editor__formula-hint {
+  flex-basis: 100%;
+  margin: 0;
+}

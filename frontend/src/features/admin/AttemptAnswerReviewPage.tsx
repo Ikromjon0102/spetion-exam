@@ -8,6 +8,7 @@ import {
   type AttemptAnswerReview,
 } from "../../api/adminApi";
 import { AdminLayout, Badge, Button, Card, type BadgeStatus } from "../../components/ui";
+import RichText from "../../components/ui/RichText";
 import { useLanguage } from "../../i18n/LanguageContext";
 import { errorDetail } from "../../utils/errorDetail";
 
@@ -114,9 +115,9 @@ export default function AttemptAnswerReviewPage() {
                   </span>
                   {badge && <Badge status={badge.status}>{t(badge.key)}</Badge>}
                 </div>
-                <p className="body" style={{ fontWeight: 600, marginBottom: "var(--space-3)" }}>
-                  {a.prompt_text}
-                </p>
+                <div className="body" style={{ fontWeight: 600, marginBottom: "var(--space-3)" }}>
+                  <RichText block text={a.prompt_text} />
+                </div>
 
                 {a.question_type === "short_answer" ? (
                   <div className="stack" style={{ gap: "var(--space-2)", marginBottom: "var(--space-3)" }}>
@@ -138,7 +139,7 @@ export default function AttemptAnswerReviewPage() {
                 ) : (
                   <p className="body-sm" style={{ marginBottom: "var(--space-3)" }}>
                     <strong>{t("attemptReview.studentAnswer")}:</strong>{" "}
-                    {a.selected_option_text || t("attemptReview.noAnswer")}
+                    {a.selected_option_text ? <RichText text={a.selected_option_text} /> : t("attemptReview.noAnswer")}
                   </p>
                 )}
 

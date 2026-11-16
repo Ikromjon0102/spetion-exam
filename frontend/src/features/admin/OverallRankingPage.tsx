@@ -7,6 +7,7 @@ import {
   listMyAssignments,
   type ClassOut,
   type OverallRanking,
+  type RankingExamType,
 } from "../../api/adminApi";
 import { useAuth } from "../../auth/AuthContext";
 import { AdminLayout, Badge, Button, ListRow, RankBadge } from "../../components/ui";
@@ -24,6 +25,9 @@ export default function OverallRankingPage() {
   const [selectedClassId, setSelectedClassId] = useState<number | null>(null);
   const [selectedGrade, setSelectedGrade] = useState<number | null>(null);
   const [scope, setScope] = useState<Scope>("class");
+  // Hammasi / faqat nazorat / faqat choraklik — a 93-point Kimyo block would
+  // otherwise drown the fortnightly tests when both are summed together.
+  const [examType, setExamType] = useState<RankingExamType>("all");
   const [ranking, setRanking] = useState<OverallRanking | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -60,24 +64,24 @@ export default function OverallRankingPage() {
   useEffect(() => {
     setError(null);
     if (scope === "school") {
-      getSchoolOverallRanking()
+      getSchoolOverallRanking(examType)
         .then(setRanking)
         .catch(() => setError(t("overallRanking.loadError")));
       return;
     }
     if (scope === "grade") {
       if (selectedGrade === null) return;
-      getGradeOverallRanking(selectedGrade)
+      getGradeOverallRanking(selectedGrade, examType)
         .then(setRanking)
         .catch(() => setError(t("overallRanking.loadError")));
       return;
     }
     if (selectedClassId === null) return;
-    getClassOverallRanking(selectedClassId)
+    getClassOverallRanking(selectedClassId, examType)
       .then(setRanking)
       .catch(() => setError(t("overallRanking.loadError")));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scope, selectedClassId, selectedGrade]);
+  }, [scope, selectedClassId, selectedGrade, examType]);
 
   return (
     <AdminLayout>
@@ -88,6 +92,19 @@ export default function OverallRankingPage() {
         <p className="body-sm ink-muted" style={{ marginBottom: "var(--space-6)" }}>
           {t("overallRanking.subtitle")}
         </p>
+
+        <div style={{ display: "flex", gap: "var(--space-2)", flexWrap: "wrap", marginBottom: "var(--space-3)" }}>
+          {(["all", "nazorat", "chorak"] as const).map((type) => (
+            <Button
+              key={type}
+              size="sm"
+              variant={examType === type ? "secondary" : "ghost"}
+              onClick={() => setExamType(type)}
+            >
+              {t(`overallRanking.type.${type}`)}
+            </Button>
+          ))}
+        </div>
 
         <div style={{ display: "flex", gap: "var(--space-3)", flexWrap: "wrap", marginBottom: "var(--space-6)" }}>
           {isAdmin && (

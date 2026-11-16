@@ -27,8 +27,26 @@
 .sp-header__link:hover {
   color: var(--brand-600);
 }
-@media (max-width: 520px) {
+.sp-header__user {
+  min-width: 0;
+}
+@media (max-width: 560px) {
   .sp-header__name {
     display: none;
+  }
+  /* Logo + switches + three links did not fit a 390px phone: the page
+     scrolled sideways and "Chiqish" was cut off. */
+  .sp-header__inner {
+    padding: var(--space-3);
+    gap: var(--space-2);
+  }
+  .sp-header__user {
+    gap: var(--space-2);
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  .sp-header__user .sp-btn {
+    padding-left: var(--space-2);
+    padding-right: var(--space-2);
   }
 }

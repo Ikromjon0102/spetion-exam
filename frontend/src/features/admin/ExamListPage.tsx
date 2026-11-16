@@ -10,9 +10,11 @@ import {
   type ExamBulkResult,
   type ExamPhase,
   type ExamSummary,
+  type ExamType,
   type ExamsSummary,
 } from "../../api/adminApi";
 import { AdminLayout, Badge, Button, ConfirmButton, ListRow, Modal, Toast, type BadgeStatus } from "../../components/ui";
+import { useAuth } from "../../auth/AuthContext";
 import { useLanguage } from "../../i18n/LanguageContext";
 import { errorDetail } from "../../utils/errorDetail";
 import { formatDateUz, formatTimeUz } from "../../utils/formatDate";
@@ -57,8 +59,26 @@ function groupByDay(exams: ExamSummary[], t: (key: string, params?: Record<strin
   return Array.from(groups.values());
 }
 
+/** A chorak exam's one-line summary: for a block's teacher, where their own
+ * block stands; for the admin, how many blocks are ready. */
+function blockProgress(exam: ExamSummary, t: (key: string, params?: Record<string, string | number>) => string): string {
+  if (!exam.can_administer) {
+    return exam.sections
+      .filter((s) => s.can_edit)
+      .map((s) => `${s.subject_name} ${s.actual_count}/${s.question_count}${s.is_ready ? " ✓" : ""}`)
+      .join(", ");
+  }
+  if (exam.phase !== "draft") return t("blocks.count", { count: exam.sections.length });
+  return t("blocks.readyOf", {
+    ready: exam.sections.filter((s) => s.is_ready).length,
+    total: exam.sections.length,
+  });
+}
+
 export default function AdminExamListPage() {
   const { t } = useLanguage();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -80,6 +100,9 @@ export default function AdminExamListPage() {
   // Links from the dashboard: ?needsReview=1 and ?status=...
   const [needsReview, setNeedsReview] = useState(searchParams.get("needsReview") === "1");
   const [examStatus, setExamStatus] = useState<string | null>(searchParams.get("status"));
+  const [examType, setExamType] = useState<ExamType | "">(
+    searchParams.get("exam_type") === "chorak" ? "chorak" : searchParams.get("exam_type") === "nazorat" ? "nazorat" : ""
+  );
 
   const [items, setItems] = useState<ExamSummary[]>([]);
   const [total, setTotal] = useState(0);
@@ -101,7 +124,7 @@ export default function AdminExamListPage() {
     return () => clearTimeout(timer);
   }, [search]);
 
-  const filtersKey = JSON.stringify([archived, subjectId, classId, phase, debouncedSearch, needsReview, examStatus]);
+  const filtersKey = JSON.stringify([archived, subjectId, classId, phase, debouncedSearch, needsReview, examStatus, examType]);
   // Guards against a slow earlier response overwriting a newer one.
   const requestId = useRef(0);
 
@@ -118,6 +141,7 @@ export default function AdminExamListPage() {
           q: debouncedSearch || undefined,
           needs_review: needsReview || undefined,
           exam_status: examStatus ?? undefined,
+          exam_type: examType || undefined,
           limit: PAGE_SIZE,
           offset,
         });
@@ -176,6 +200,7 @@ export default function AdminExamListPage() {
     setSearch("");
     setNeedsReview(false);
     setExamStatus(null);
+    setExamType("");
     setSearchParams({});
   }
 
@@ -245,7 +270,8 @@ export default function AdminExamListPage() {
   }
 
   const groups = useMemo(() => groupByDay(items, t), [items, t]);
-  const hasFilter = subjectId !== null || classId !== null || phase !== "" || search !== "" || needsReview || examStatus !== null;
+  const hasFilter =
+    subjectId !== null || classId !== null || phase !== "" || search !== "" || needsReview || examStatus !== null || examType !== "";
   const selectedIds = Array.from(selected);
 
   return (
@@ -273,6 +299,11 @@ export default function AdminExamListPage() {
             {!archived && (
               <Button variant="secondary" size="sm" onClick={() => setArchiveOldOpen(true)}>
                 {t("examArchive.archiveOld")}
+              </Button>
+            )}
+            {isAdmin && (
+              <Button variant="secondary" size="sm" onClick={() => navigate("/admin/exams/chorak/new")}>
+                + {t("chorak.new")}
               </Button>
             )}
             <Button size="sm" onClick={() => navigate("/admin/exams/upload")}>
@@ -343,6 +374,17 @@ export default function AdminExamListPage() {
                 {t(PHASE_BADGE[p].key)}
               </option>
             ))}
+          </select>
+          <select
+            className="sp-input"
+            style={{ maxWidth: 200 }}
+            value={examType}
+            aria-label={t("examArchive.allTypes")}
+            onChange={(e) => setExamType(e.target.value as ExamType | "")}
+          >
+            <option value="">{t("examArchive.allTypes")}</option>
+            <option value="nazorat">{t("examType.nazoratShort")}</option>
+            <option value="chorak">{t("examType.chorakShort")}</option>
           </select>
           {needsReview && <Badge status="danger">{t("adminExamList.filteredNeedsReview")}</Badge>}
           {hasFilter && (
@@ -480,12 +522,15 @@ export default function AdminExamListPage() {
                               leading={
                                 <>
                                   <span className="data-eyebrow">{exam.class_name}</span>
-                                  <span className="data-value">{exam.question_count}</span>
+                                  <span className="data-value" title={t("adminExamList.questionCountTitle")}>
+                                    {exam.question_count}
+                                  </span>
+                                  <span className="data-sub">{t("adminExamList.questionsUnit")}</span>
                                 </>
                               }
                               title={exam.title}
                               subtitle={[
-                                exam.subject_name,
+                                exam.exam_type === "chorak" ? blockProgress(exam, t) : exam.subject_name,
                                 exam.start_at && exam.phase !== "draft" ? formatTimeUz(exam.start_at) : null,
                                 `${exam.duration_minutes} ${t("examList.minutes")}`,
                               ]
@@ -498,13 +543,26 @@ export default function AdminExamListPage() {
                                       {exam.needs_review_count} {t("adminExamList.needsReview")}
                                     </Badge>
                                   )}
+                                  {exam.exam_type === "chorak" && <Badge status="info">{t("examType.chorakShort")}</Badge>}
                                   <Badge status={badge.status}>{t(badge.key)}</Badge>
+                                  {/* Once students can sit it, the results are what a
+                                      teacher comes back for — there used to be no way to
+                                      reach them from this list at all. */}
+                                  {exam.phase !== "draft" && (
+                                    <Button
+                                      variant={exam.phase === "upcoming" ? "ghost" : "secondary"}
+                                      size="sm"
+                                      onClick={() => navigate(`/admin/exams/${exam.id}/ranking`)}
+                                    >
+                                      {t("adminExamList.results")}
+                                    </Button>
+                                  )}
                                   <Button
-                                    variant="ghost"
+                                    variant={exam.phase === "draft" ? "secondary" : "ghost"}
                                     size="sm"
                                     onClick={() => navigate(`/admin/exams/${exam.id}/review`)}
                                   >
-                                    {t("adminExamList.view")}
+                                    {exam.phase === "draft" ? t("adminExamList.edit") : t("adminExamList.view")}
                                   </Button>
                                   {archived ? (
                                     <Button
@@ -515,6 +573,7 @@ export default function AdminExamListPage() {
                                       {t("examArchive.restore")}
                                     </Button>
                                   ) : (
+                                    exam.can_administer &&
                                     exam.can_archive && (
                                       <Button
                                         variant="ghost"
@@ -525,11 +584,13 @@ export default function AdminExamListPage() {
                                       </Button>
                                     )
                                   )}
-                                  <ConfirmButton
-                                    label={t("common.delete")}
-                                    confirmLabel={t("common.confirmDelete")}
-                                    onConfirm={() => handleDelete(exam.id)}
-                                  />
+                                  {exam.can_administer && (
+                                    <ConfirmButton
+                                      label={t("common.delete")}
+                                      confirmLabel={t("common.confirmDelete")}
+                                      onConfirm={() => handleDelete(exam.id)}
+                                    />
+                                  )}
                                 </>
                               }
                             />

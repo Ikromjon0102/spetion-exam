@@ -5,13 +5,15 @@ export function Card({
   children,
   className,
   style,
+  id,
 }: {
   children: ReactNode;
   className?: string;
   style?: CSSProperties;
+  id?: string;
 }) {
   return (
-    <div className={`sp-card ${className ?? ""}`} style={style}>
+    <div id={id} className={`sp-card ${className ?? ""}`} style={style}>
       {children}
     </div>
   );

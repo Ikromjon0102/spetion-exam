@@ -11,6 +11,7 @@ import { AdminLayout, Badge, Button, Card, type BadgeStatus } from "../../compon
 import RichText from "../../components/ui/RichText";
 import { useLanguage } from "../../i18n/LanguageContext";
 import { errorDetail } from "../../utils/errorDetail";
+import { formatPoints } from "../../utils/formatPoints";
 
 export default function AttemptAnswerReviewPage() {
   const { examId, studentId } = useParams();
@@ -137,10 +138,18 @@ export default function AttemptAnswerReviewPage() {
                     )}
                   </div>
                 ) : (
-                  <p className="body-sm" style={{ marginBottom: "var(--space-3)" }}>
-                    <strong>{t("attemptReview.studentAnswer")}:</strong>{" "}
-                    {a.selected_option_text ? <RichText text={a.selected_option_text} /> : t("attemptReview.noAnswer")}
-                  </p>
+                  <div className="stack" style={{ gap: "var(--space-1)", marginBottom: "var(--space-3)" }}>
+                    <p className="body-sm">
+                      <strong>{t("attemptReview.studentAnswer")}:</strong>{" "}
+                      {a.selected_option_text ? <RichText text={a.selected_option_text} /> : t("attemptReview.noAnswer")}
+                    </p>
+                    {/* the key, so a wrong answer can be judged without opening the exam */}
+                    {!a.is_correct && a.correct_option_text && (
+                      <p className="body-sm ink-muted">
+                        <strong>{t("result.correctAnswer")}:</strong> <RichText text={a.correct_option_text} />
+                      </p>
+                    )}
+                  </div>
                 )}
 
                 <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
@@ -172,7 +181,7 @@ export default function AttemptAnswerReviewPage() {
                     </>
                   ) : (
                     <span className="data-value">
-                      {a.points_awarded ?? 0} / {a.points}
+                      {formatPoints(a.points_awarded ?? 0)} / {formatPoints(a.points)}
                     </span>
                   )}
                 </div>

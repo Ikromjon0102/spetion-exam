@@ -4,19 +4,23 @@ import {
   addQuestion,
   clearOptionImage,
   clearQuestionPromptImage,
+  closeExam,
   deleteExam,
   deleteQuestion,
   duplicateExam,
   getExamDetail,
+  getUploadStatus,
   listAdminClasses,
   listMyAssignments,
   publishExam,
   questionImageUrl,
   setOptionImage,
   setQuestionPromptImage,
+  setSectionReady,
   updateExam,
   updateQuestion,
   updateQuestionOption,
+  uploadSectionFile,
   type ClassOut,
   type ExamDetail,
   type ExamSummary,
@@ -37,6 +41,8 @@ import {
 } from "../../components/ui";
 import { useLanguage } from "../../i18n/LanguageContext";
 import { errorDetail } from "../../utils/errorDetail";
+import { formatPoints } from "../../utils/formatPoints";
+import "../student/examtaking.css";
 // RichText / RichTextEditor are imported by path, not through the ui barrel (see
 // components/ui/index.ts) so TipTap stays in this lazy page's chunk.
 import RichText from "../../components/ui/RichText";
@@ -122,6 +128,12 @@ export default function ExamReviewEditor() {
   const [duplicateError, setDuplicateError] = useState<string | null>(null);
   const [duplicateResult, setDuplicateResult] = useState<ExamSummary[] | null>(null);
 
+  // Chorak exam: which block is open. A block's teacher lands on their own.
+  const [activeSectionId, setActiveSectionId] = useState<number | null>(null);
+  const [importingSectionId, setImportingSectionId] = useState<number | null>(null);
+  const [titleDraft, setTitleDraft] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
   async function reload() {
     try {
       setExam(await getExamDetail(id));
@@ -161,6 +173,43 @@ export default function ExamReviewEditor() {
   // exam.can_edit says nobody's begun it yet (see exam_service.ensure_no_attempts).
   const locked = !exam.can_edit;
   const canPublish = exam.status === "draft" || exam.status === "review";
+  const isChorak = exam.exam_type === "chorak";
+  // Exam-wide actions (schedule, publish, delete, copy): on a chorak exam the
+  // admin's alone; a block's teacher only writes their own block.
+  const canAdminister = exam.can_administer;
+  const activeSection = isChorak
+    ? exam.sections.find((s) => s.id === activeSectionId) ?? exam.sections.find((s) => s.can_edit) ?? exam.sections[0] ?? null
+    : null;
+  const visibleQuestions = isChorak ? exam.questions.filter((q) => q.section_id === activeSection?.id) : exam.questions;
+  const pendingQuestions = visibleQuestions.filter((q) => q.needs_review);
+  // May the questions on screen be changed: nobody has started, and (chorak)
+  // the open block is one of the user's own.
+  const questionsLocked = locked || (isChorak && !activeSection?.can_edit);
+  const scheduleLocked = locked || !canAdminister;
+
+  // Why "Nashr qilish" can't be pressed yet — said out loud next to the
+  // button instead of leaving a greyed-out button to be guessed at.
+  const publishBlockers: string[] = [];
+  if (canPublish) {
+    if (exam.question_count === 0) publishBlockers.push(t("review.blockerNoQuestions"));
+    if (exam.needs_review_count > 0) {
+      publishBlockers.push(t("review.blockerNeedsReview", { count: exam.needs_review_count }));
+    }
+    if (isChorak) {
+      exam.sections
+        .filter((s) => !s.is_ready)
+        .forEach((s) =>
+          publishBlockers.push(
+            t("review.blockerBlockNotReady", { name: s.subject_name, actual: s.actual_count, expected: s.question_count })
+          )
+        );
+    }
+    if (!exam.start_at || !exam.end_at) publishBlockers.push(t("review.blockerNoSchedule"));
+    else if (new Date(exam.end_at) <= new Date(exam.start_at)) publishBlockers.push(t("schedule.endBeforeStart"));
+    else if ((new Date(exam.end_at).getTime() - new Date(exam.start_at).getTime()) / 60000 < exam.duration_minutes) {
+      publishBlockers.push(t("schedule.windowTooShort", { minutes: exam.duration_minutes }));
+    }
+  }
 
   function notify(text: string) {
     setError(null);
@@ -318,6 +367,7 @@ export default function ExamReviewEditor() {
         question_type: newQuestion.question_type,
         prompt_text: newQuestion.prompt_text,
         reference_answer: newQuestion.question_type === "short_answer" ? newQuestion.reference_answer : undefined,
+        section_id: exam?.exam_type === "chorak" ? currentSectionId() : undefined,
         options:
           newQuestion.question_type === "short_answer"
             ? []
@@ -341,10 +391,19 @@ export default function ExamReviewEditor() {
       });
       setFormKey((k) => k + 1);
       await reload();
-      notify(t("review.questionAdded", { count: (exam?.questions.length ?? 0) + 1 }));
+      notify(t("review.questionAdded", { count: visibleQuestions.length + 1 }));
     } catch (e) {
       setError(errorDetail(e, t("review.genericError")));
     }
+  }
+
+  function currentSectionId(): number | null {
+    if (!exam) return null;
+    return (
+      exam.sections.find((s) => s.id === activeSectionId) ??
+      exam.sections.find((s) => s.can_edit) ??
+      exam.sections[0]
+    )?.id ?? null;
   }
 
   function setNewPromptImage(file: File) {
@@ -382,6 +441,86 @@ export default function ExamReviewEditor() {
       else if (correctIndex > index) correctIndex -= 1;
       return { ...prev, options, optionImageFiles, correctIndex };
     });
+  }
+
+  async function approveAll() {
+    if (pendingQuestions.length === 0) return;
+    setBusy(true);
+    try {
+      for (const q of pendingQuestions) await updateQuestion(id, q.id, { needs_review: false });
+      await reload();
+      notify(t("review.approvedAll", { count: pendingQuestions.length }));
+    } catch (e) {
+      await reload();
+      setError(errorDetail(e, t("review.genericError")));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function jumpToNextPending() {
+    const next = pendingQuestions[0];
+    if (next) document.getElementById(`question-${next.id}`)?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }
+
+  async function toggleSectionReady(sectionId: number, ready: boolean) {
+    try {
+      await setSectionReady(id, sectionId, ready);
+      await reload();
+      notify(ready ? t("blocks.markedReady") : t("blocks.markedNotReady"));
+    } catch (e) {
+      setError(errorDetail(e, t("review.genericError")));
+    }
+  }
+
+  /** A block's questions from a PDF/DOCX: upload, wait for the parser, reload. */
+  async function importSectionFile(sectionId: number, file: File) {
+    setImportingSectionId(sectionId);
+    try {
+      const upload = await uploadSectionFile(id, sectionId, file);
+      for (let attemptNo = 0; attemptNo < 90; attemptNo++) {
+        const status = await getUploadStatus(upload.id);
+        if (status.status === "parsed") {
+          await reload();
+          setActiveSectionId(sectionId);
+          notify(t("blocks.imported"));
+          return;
+        }
+        if (status.status === "parse_failed") {
+          setError(status.parse_error ?? t("upload.parseFailed"));
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+      }
+      setError(t("upload.statusCheckFailed"));
+    } catch (e) {
+      setError(errorDetail(e, t("upload.failed")));
+    } finally {
+      setImportingSectionId(null);
+    }
+  }
+
+  async function saveTitle() {
+    const next = (titleDraft ?? "").trim();
+    setTitleDraft(null);
+    if (!next || !exam || next === exam.title) return;
+    try {
+      await updateExam(id, { title: next });
+      await reload();
+      notify(t("review.saved"));
+    } catch (e) {
+      setError(errorDetail(e, t("review.genericError")));
+    }
+  }
+
+  async function handleClose() {
+    try {
+      await closeExam(id);
+      await reload();
+      notify(t("review.closed"));
+    } catch (e) {
+      setError(errorDetail(e, t("review.genericError")));
+    }
   }
 
   async function handlePublish() {
@@ -466,20 +605,53 @@ export default function ExamReviewEditor() {
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
+            flexWrap: "wrap",
             gap: "var(--space-3)",
             marginBottom: "var(--space-1)",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)" }}>
-            <h1 className="h2">{exam.title}</h1>
+          <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", flexWrap: "wrap", minWidth: 0 }}>
+            {titleDraft !== null ? (
+              <input
+                className="sp-input"
+                style={{ minWidth: 260, fontWeight: 700 }}
+                value={titleDraft}
+                autoFocus
+                aria-label={t("upload.titleLabelRequired")}
+                onChange={(e) => setTitleDraft(e.target.value)}
+                onBlur={saveTitle}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") saveTitle();
+                  if (e.key === "Escape") setTitleDraft(null);
+                }}
+              />
+            ) : (
+              <h1 className="h2">{exam.title}</h1>
+            )}
+            {canAdminister && !locked && titleDraft === null && (
+              <Button variant="ghost" size="sm" onClick={() => setTitleDraft(exam.title)}>
+                {t("review.rename")}
+              </Button>
+            )}
             <Badge status={statusBadge?.status ?? "neutral"}>{statusBadge ? t(statusBadge.key) : exam.status}</Badge>
+            {isChorak && <Badge status="info">{t("examType.chorakShort")}</Badge>}
             {exam.archived_at && <Badge status="neutral">{t("examArchive.tabArchive")}</Badge>}
           </div>
-          <div style={{ display: "flex", gap: "var(--space-2)" }}>
-            <Button variant="secondary" size="sm" onClick={openDuplicateModal}>
-              {t("review.duplicate")}
-            </Button>
-            {(!locked || isAdmin) && (
+          <div style={{ display: "flex", gap: "var(--space-2)", flexWrap: "wrap" }}>
+            {exam.phase !== "draft" && (
+              <Button size="sm" onClick={() => navigate(`/admin/exams/${id}/ranking`)}>
+                {t("adminExamList.results")}
+              </Button>
+            )}
+            {canAdminister && (
+              <Button variant="secondary" size="sm" onClick={openDuplicateModal}>
+                {t("review.duplicate")}
+              </Button>
+            )}
+            {canAdminister && (exam.phase === "upcoming" || exam.phase === "live") && (
+              <ConfirmButton label={t("review.close")} confirmLabel={t("review.closeConfirm")} onConfirm={handleClose} />
+            )}
+            {canAdminister && (!locked || isAdmin) && (
               <ConfirmButton
                 label={t("common.delete")}
                 confirmLabel={t("common.confirmDelete")}
@@ -489,7 +661,9 @@ export default function ExamReviewEditor() {
           </div>
         </div>
         <p className="body-sm ink-muted" style={{ marginBottom: "var(--space-6)" }}>
-          {exam.subject_name} · {exam.class_name}
+          {isChorak ? exam.class_name : `${exam.subject_name} · ${exam.class_name}`}
+          {exam.quarter ? ` · ${t("chorak.quarterN", { n: exam.quarter })}` : ""}
+          {exam.total_points ? ` · ${formatPoints(exam.total_points)} ${t("result.points")}` : ""}
         </p>
 
         {error && <Toast kind="error" text={error} onClose={() => setError(null)} />}
@@ -510,52 +684,204 @@ export default function ExamReviewEditor() {
 
         <Card className="stack" style={{ marginBottom: "var(--space-8)" }}>
           <h2 className="h4">{t("review.schedule")}</h2>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "var(--space-4)" }}>
-            <div className="sp-field">
-              <label className="sp-field__label">{t("review.duration")}</label>
-              <input
-                className="sp-input"
-                type="number"
-                defaultValue={exam.duration_minutes}
-                disabled={locked}
-                onBlur={(e) => saveSchedule({ duration_minutes: Number(e.target.value) })}
-              />
-            </div>
-            <div className="sp-field">
+          <div className="sp-form-row">
+            <div className="sp-field" style={{ flex: 1 }}>
               <label className="sp-field__label">{t("review.startAt")}</label>
               <input
                 className="sp-input"
                 type="datetime-local"
                 defaultValue={toLocalInputValue(exam.start_at)}
-                disabled={locked}
-                onBlur={(e) => e.target.value && saveSchedule({ start_at: new Date(e.target.value).toISOString() })}
+                disabled={scheduleLocked}
+                onBlur={(e) => {
+                  // only a real change is saved — tabbing through a field
+                  // used to fire a save (and a "Saqlandi") every time
+                  if (e.target.value && e.target.value !== toLocalInputValue(exam.start_at)) {
+                    saveSchedule({ start_at: new Date(e.target.value).toISOString() });
+                  }
+                }}
               />
             </div>
-            <div className="sp-field">
+            <div className="sp-field" style={{ flex: 1 }}>
               <label className="sp-field__label">{t("review.endAt")}</label>
               <input
                 className="sp-input"
                 type="datetime-local"
                 defaultValue={toLocalInputValue(exam.end_at)}
-                disabled={locked}
-                onBlur={(e) => e.target.value && saveSchedule({ end_at: new Date(e.target.value).toISOString() })}
+                disabled={scheduleLocked}
+                onBlur={(e) => {
+                  if (e.target.value && e.target.value !== toLocalInputValue(exam.end_at)) {
+                    saveSchedule({ end_at: new Date(e.target.value).toISOString() });
+                  }
+                }}
+              />
+            </div>
+            <div className="sp-field" style={{ flex: 1 }}>
+              <label className="sp-field__label">{t("review.duration")}</label>
+              <input
+                className="sp-input"
+                type="number"
+                min={1}
+                defaultValue={exam.duration_minutes}
+                disabled={scheduleLocked}
+                onBlur={(e) => {
+                  const next = Number(e.target.value);
+                  if (next > 0 && next !== exam.duration_minutes) saveSchedule({ duration_minutes: next });
+                }}
               />
             </div>
           </div>
+          <p className="caption">{t("schedule.hint")}</p>
+          {isChorak && !canAdminister && <p className="caption">{t("blocks.scheduleByAdmin")}</p>}
         </Card>
 
+        {isChorak && (
+          <Card className="stack" style={{ marginBottom: "var(--space-8)" }}>
+            <div>
+              <h2 className="h4">{t("blocks.title")}</h2>
+              <p className="body-sm ink-muted">
+                {canAdminister ? t("blocks.hintAdmin") : t("blocks.hintTeacher")}
+              </p>
+            </div>
+            <div className="sp-table-scroll">
+              <table className="sp-data-table">
+                <thead>
+                  <tr>
+                    <th className="sp-data-table__text">{t("blocks.subject")}</th>
+                    <th className="sp-data-table__text">{t("blocks.teacher")}</th>
+                    <th>{t("blocks.questions")}</th>
+                    <th>{t("blocks.pointsEach")}</th>
+                    <th className="sp-data-table__text">{t("blocks.state")}</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {exam.sections.map((section) => {
+                    const full = section.actual_count === section.question_count;
+                    return (
+                      <tr key={section.id}>
+                        <td className="sp-data-table__text">
+                          {section.subject_name}
+                          <span className="sp-block-table__kind">{t(`blocks.kind.${section.kind}`)}</span>
+                        </td>
+                        <td className="sp-data-table__text" style={{ fontWeight: 400 }}>
+                          {section.teacher_names.length > 0 ? (
+                            section.teacher_names.join(", ")
+                          ) : (
+                            <span style={{ color: "var(--warning)" }}>{t("blocks.noTeacher")}</span>
+                          )}
+                        </td>
+                        <td style={{ color: full ? undefined : "var(--warning)" }}>
+                          {section.actual_count}/{section.question_count}
+                        </td>
+                        <td>{formatPoints(section.points_per_question)}</td>
+                        <td className="sp-data-table__text">
+                          {section.is_ready ? (
+                            <Badge status="success">{t("blocks.ready")}</Badge>
+                          ) : section.needs_review_count > 0 ? (
+                            <Badge status="warning">
+                              {t("blocks.pendingReview", { count: section.needs_review_count })}
+                            </Badge>
+                          ) : (
+                            <Badge status="neutral">{t("blocks.inProgress")}</Badge>
+                          )}
+                        </td>
+                        <td>
+                          {section.can_edit && (
+                            <Button
+                              size="sm"
+                              variant={section.id === activeSection?.id ? "secondary" : "ghost"}
+                              onClick={() => setActiveSectionId(section.id)}
+                            >
+                              {section.id === activeSection?.id ? t("blocks.opened") : t("blocks.open")}
+                            </Button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        )}
+
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "var(--space-4)" }}>
-          <h2 className="h3">{t("review.questions")}</h2>
+          <h2 className="h3">
+            {activeSection ? `${activeSection.subject_name} — ${t("review.questions").toLowerCase()}` : t("review.questions")}
+          </h2>
           <span className="body-sm ink-muted">
-            {exam.question_count} {t("review.questionsCount")} · {exam.needs_review_count} {t("review.needsReviewCount")}
+            {visibleQuestions.length}
+            {activeSection ? `/${activeSection.question_count}` : ""} {t("review.questionsCount")} ·{" "}
+            {pendingQuestions.length} {t("review.needsReviewCount")}
           </span>
         </div>
-        {!locked && (
+        {activeSection?.can_edit && !locked && canPublish && (
+          <div className="sp-block-actions">
+            <label className={`sp-btn sp-btn--secondary sp-btn--sm${importingSectionId !== null ? " sp-btn--disabled" : ""}`}>
+              {importingSectionId === activeSection.id ? t("upload.parsing") : t("blocks.importFile")}
+              <input
+                type="file"
+                accept=".pdf,.docx"
+                hidden
+                disabled={importingSectionId !== null}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = "";
+                  if (file) void importSectionFile(activeSection.id, file);
+                }}
+              />
+            </label>
+            {activeSection.is_ready ? (
+              <Button variant="ghost" size="sm" onClick={() => toggleSectionReady(activeSection.id, false)}>
+                {t("blocks.unmarkReady")}
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                disabled={
+                  activeSection.actual_count !== activeSection.question_count || activeSection.needs_review_count > 0
+                }
+                onClick={() => toggleSectionReady(activeSection.id, true)}
+              >
+                {t("blocks.markReady")}
+              </Button>
+            )}
+            {!activeSection.is_ready && (
+              <span className="caption">
+                {activeSection.actual_count !== activeSection.question_count
+                  ? t("blocks.needCount", { expected: activeSection.question_count, actual: activeSection.actual_count })
+                  : activeSection.needs_review_count > 0
+                  ? t("review.blockerNeedsReview", { count: activeSection.needs_review_count })
+                  : t("blocks.canMarkReady")}
+              </span>
+            )}
+          </div>
+        )}
+        {!questionsLocked && pendingQuestions.length > 0 && (
+          <div className="sp-review-bar">
+            <span className="body-sm">
+              <strong>{t("review.blockerNeedsReview", { count: pendingQuestions.length })}</strong> —{" "}
+              {t("review.reviewHint")}
+            </span>
+            <div style={{ display: "flex", gap: "var(--space-2)", flexWrap: "wrap" }}>
+              <Button variant="secondary" size="sm" onClick={jumpToNextPending}>
+                {t("review.nextPending")}
+              </Button>
+              <ConfirmButton
+                label={t("review.approveAll", { count: pendingQuestions.length })}
+                confirmLabel={t("review.approveAllConfirm")}
+                onConfirm={approveAll}
+                disabled={busy}
+              />
+            </div>
+          </div>
+        )}
+        {!questionsLocked && (
           <p className="body-sm ink-muted" style={{ marginBottom: "var(--space-4)" }}>
             {t("review.autosaveHint")}
           </p>
         )}
-        <div className="sp-field" style={{ maxWidth: 280, marginBottom: "var(--space-4)" }}>
+        <div className="sp-field" style={{ maxWidth: 280, marginBottom: "var(--space-4)", display: isChorak ? "none" : undefined }}>
           <label className="sp-field__label">{t("review.expectedCountLabel")}</label>
           <input
             className="sp-input"
@@ -570,7 +896,7 @@ export default function ExamReviewEditor() {
             }}
           />
         </div>
-        {exam.expected_question_count !== null && exam.question_count !== exam.expected_question_count && (
+        {!isChorak && exam.expected_question_count !== null && exam.question_count !== exam.expected_question_count && (
           <p
             role="status"
             className="body-sm"
@@ -587,8 +913,11 @@ export default function ExamReviewEditor() {
         )}
 
         <div className="stack" style={{ marginBottom: "var(--space-6)" }}>
-          {exam.questions.map((q, idx) => (
-            <Card key={q.id}>
+          {visibleQuestions.length === 0 && (
+            <p className="body-sm ink-muted">{questionsLocked ? t("blocks.emptyLocked") : t("blocks.emptyEditable")}</p>
+          )}
+          {visibleQuestions.map((q, idx) => (
+            <Card key={q.id} id={`question-${q.id}`} className={q.needs_review ? "sp-question--pending" : undefined}>
               <CardHead>
                 <span className="data-eyebrow">
                   {t("review.question")} {idx + 1}
@@ -601,7 +930,7 @@ export default function ExamReviewEditor() {
               {q.prompt_image_key ? (
                 <div style={{ marginBottom: "var(--space-4)" }}>
                   <AuthedImage src={questionImageUrl(q.prompt_image_key)} alt={t("review.question")} maxHeight={280} />
-                  {!locked && (
+                  {!questionsLocked && (
                     <Button
                       variant="ghost"
                       size="sm"
@@ -633,7 +962,7 @@ export default function ExamReviewEditor() {
                   <textarea
                     className="sp-input"
                     defaultValue={q.reference_answer ?? ""}
-                    disabled={locked}
+                    disabled={questionsLocked}
                     rows={2}
                     placeholder={t("review.referenceAnswerPlaceholder")}
                     style={{ resize: "vertical" }}
@@ -648,14 +977,14 @@ export default function ExamReviewEditor() {
                         type="radio"
                         name={`correct-${q.id}`}
                         checked={opt.is_correct}
-                        disabled={locked}
+                        disabled={questionsLocked}
                         onChange={() => setCorrectOption(q.id, opt.id)}
                         style={{ accentColor: "var(--brand-600)", width: 18, height: 18, flexShrink: 0 }}
                       />
                       {opt.option_image_key ? (
                         <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", flex: 1 }}>
                           <AuthedImage src={questionImageUrl(opt.option_image_key)} maxHeight={60} />
-                          {!locked && (
+                          {!questionsLocked && (
                             <Button variant="ghost" size="sm" onClick={() => handleClearOptionImage(q.id, opt.id)}>
                               {t("review.revertToText")}
                             </Button>
@@ -683,16 +1012,51 @@ export default function ExamReviewEditor() {
                 </div>
               )}
               <CardFoot>
-                <label className="body-sm" style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
-                  <input
-                    type="checkbox"
-                    checked={q.needs_review}
-                    disabled={locked}
-                    onChange={(e) => saveQuestion(q.id, { needs_review: e.target.checked })}
-                    style={{ accentColor: "var(--brand-600)" }}
-                  />
-                  {t("review.needsReviewCheckbox")}
-                </label>
+                <div style={{ display: "flex", alignItems: "center", gap: "var(--space-3)", flexWrap: "wrap" }}>
+                  {/* "Tasdiqlash" replaces the old "Tekshirish kerak" checkbox the
+                      teacher had to un-tick on every question: approving is the
+                      action, so it is the button. */}
+                  {q.needs_review ? (
+                    <Button size="sm" disabled={questionsLocked} onClick={() => saveQuestion(q.id, { needs_review: false })}>
+                      ✓ {t("review.approve")}
+                    </Button>
+                  ) : (
+                    <span className="body-sm" style={{ color: "var(--success)", fontWeight: 600 }}>
+                      ✓ {t("review.approved")}
+                      {!questionsLocked && (
+                        <button
+                          type="button"
+                          className="sp-link-button"
+                          onClick={() => saveQuestion(q.id, { needs_review: true })}
+                        >
+                          {t("review.unapprove")}
+                        </button>
+                      )}
+                    </span>
+                  )}
+                  {isChorak ? (
+                    <span className="caption">
+                      {formatPoints(q.points)} {t("result.points")}
+                    </span>
+                  ) : (
+                    <label className="caption" style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+                      {t("review.pointsLabel")}
+                      <input
+                        className="sp-input"
+                        type="number"
+                        min={0.5}
+                        step={0.5}
+                        style={{ width: 76, padding: "4px 8px" }}
+                        defaultValue={q.points}
+                        disabled={questionsLocked}
+                        onBlur={(e) => {
+                          const next = Number(e.target.value);
+                          if (next > 0 && next !== q.points) saveQuestion(q.id, { points: next });
+                        }}
+                      />
+                    </label>
+                  )}
+                </div>
                 <div style={{ display: "flex", gap: "var(--space-2)" }}>
                   {editing?.questionId === q.id ? (
                     <>
@@ -708,14 +1072,17 @@ export default function ExamReviewEditor() {
                       <Button
                         variant="secondary"
                         size="sm"
-                        disabled={locked || editing !== null}
+                        disabled={questionsLocked || editing !== null}
                         onClick={() => startEdit(q)}
                       >
                         {t("review.editQuestion")}
                       </Button>
-                      <Button variant="ghost" size="sm" disabled={locked} onClick={() => removeQuestion(q.id)}>
-                        {t("review.delete")}
-                      </Button>
+                      <ConfirmButton
+                        label={t("review.delete")}
+                        confirmLabel={t("common.confirmDelete")}
+                        disabled={questionsLocked}
+                        onConfirm={() => removeQuestion(q.id)}
+                      />
                     </>
                   )}
                 </div>
@@ -724,10 +1091,11 @@ export default function ExamReviewEditor() {
           ))}
         </div>
 
-        {!locked && (
+        {!questionsLocked && (
           <Card style={{ marginBottom: "var(--space-8)" }}>
             <h3 className="h4" style={{ marginBottom: "var(--space-4)" }}>
               {t("review.addQuestion")}
+              {activeSection ? ` — ${activeSection.subject_name} (${activeSection.actual_count}/${activeSection.question_count})` : ""}
             </h3>
             <form onSubmit={handleAddQuestion} className="stack">
               <div style={{ display: "flex", gap: "var(--space-2)" }}>
@@ -850,12 +1218,26 @@ export default function ExamReviewEditor() {
           </Card>
         )}
 
-        {canPublish ? (
-          <Button size="lg" block onClick={handlePublish} disabled={locked || exam.needs_review_count > 0}>
-            {t("review.publish")}
-          </Button>
-        ) : (
+        {!canPublish ? (
           <p className="body-sm ink-muted">{t("review.alreadyPublished")}</p>
+        ) : canAdminister ? (
+          <>
+            {publishBlockers.length > 0 && (
+              <div className="sp-review-bar sp-review-bar--stack" role="status">
+                <strong className="body-sm">{t("review.publishBlockedTitle")}</strong>
+                <ul className="sp-intro-rules body-sm">
+                  {publishBlockers.map((reason) => (
+                    <li key={reason}>{reason}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <Button size="lg" block onClick={handlePublish} disabled={locked || publishBlockers.length > 0}>
+              {t("review.publish")}
+            </Button>
+          </>
+        ) : (
+          <p className="body-sm ink-muted">{t("blocks.publishByAdmin")}</p>
         )}
       </div>
 

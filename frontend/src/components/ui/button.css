@@ -63,3 +63,12 @@
 .sp-btn--block {
   width: 100%;
 }
+
+/* a <label> styled as a button (wrapping a hidden file input) */
+label.sp-btn {
+  cursor: pointer;
+}
+.sp-btn--disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}

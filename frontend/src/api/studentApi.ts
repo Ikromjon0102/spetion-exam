@@ -1,5 +1,13 @@
 import { apiClient } from "./client";
 
+export interface ExamSectionInfo {
+  id: number;
+  subject_name: string;
+  kind: "asosiy" | "majburiy";
+  question_count: number;
+  points_per_question: number;
+}
+
 export interface ExamListItem {
   id: number;
   title: string;
@@ -9,6 +17,11 @@ export interface ExamListItem {
   duration_minutes: number;
   window_state: "upcoming" | "active" | "closed";
   my_attempt_status: string | null;
+  exam_type: "nazorat" | "chorak";
+  question_count: number;
+  total_points: number | null;
+  my_deadline_at: string | null;
+  sections: ExamSectionInfo[];
 }
 
 export interface AttemptOption {
@@ -20,6 +33,7 @@ export interface AttemptOption {
 
 export interface AttemptQuestion {
   id: number;
+  section_id: number | null;
   order_index: number;
   question_type: string;
   prompt_text: string;
@@ -36,6 +50,8 @@ export interface AttemptState {
   exam_title: string;
   deadline_at: string;
   duration_minutes: number;
+  exam_type: "nazorat" | "chorak";
+  sections: ExamSectionInfo[];
   questions: AttemptQuestion[];
 }
 
@@ -45,8 +61,19 @@ export interface SubmitResult {
   submitted_at: string;
 }
 
+export interface ResultSection {
+  section_id: number;
+  subject_name: string;
+  kind: "asosiy" | "majburiy";
+  score: number;
+  max_score: number;
+  correct_count: number;
+  question_count: number;
+}
+
 export interface ResultQuestion {
   question_id: number;
+  section_id: number | null;
   question_type: string;
   prompt_text: string;
   points: number;
@@ -68,6 +95,8 @@ export interface ExamResult {
   percent: number;
   answers_revealed: boolean;
   reveal_at: string | null;
+  exam_type: "nazorat" | "chorak";
+  sections: ResultSection[];
   questions: ResultQuestion[];
 }
 
@@ -82,6 +111,7 @@ export interface RankingEntry {
 export interface SubjectHistoryPoint {
   exam_id: number;
   exam_title: string;
+  exam_type: "nazorat" | "chorak";
   score: number;
   max_score: number;
   date: string;
@@ -113,6 +143,12 @@ export async function listMyExams(includeOld = false): Promise<ExamListItem[]> {
   const { data } = await apiClient.get<ExamListItem[]>("/student/me/exams", {
     params: includeOld ? { include_old: true } : undefined,
   });
+  return data;
+}
+
+/** What the "before you start" screen shows. Reading it never starts the clock. */
+export async function getExamInfo(examId: number): Promise<ExamListItem> {
+  const { data } = await apiClient.get<ExamListItem>(`/student/exams/${examId}/info`);
   return data;
 }
 

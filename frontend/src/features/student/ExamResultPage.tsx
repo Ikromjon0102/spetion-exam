@@ -5,6 +5,8 @@ import { AnswerOption, AppHeader, Card, ListRow, RankBadge } from "../../compone
 import RichText from "../../components/ui/RichText";
 import { useLanguage } from "../../i18n/LanguageContext";
 import { formatDateTimeUz } from "../../utils/formatDate";
+import { formatPoints } from "../../utils/formatPoints";
+import "./examtaking.css";
 
 export default function ExamResultPage() {
   const { examId } = useParams();
@@ -52,6 +54,7 @@ export default function ExamResultPage() {
   // percentTone — a score page and the subject-performance page disagreeing
   // on what counts as "good" (this used to be a flat 60% pass/fail cutoff)
   // sent contradictory signals for the same number.
+  const sectionNames = new Map(result.sections.map((s) => [s.section_id, s.subject_name]));
   const scoreColor = result.percent < 50 ? "var(--danger)" : result.percent < 70 ? "var(--warning)" : "var(--success)";
 
   return (
@@ -78,10 +81,58 @@ export default function ExamResultPage() {
               color: scoreColor,
             }}
           >
-            {result.score} / {result.max_score}
+            {formatPoints(result.score)} / {formatPoints(result.max_score)}
           </span>
-          <span className="h4 ink-muted">({result.percent}%)</span>
+          <span className="h4 ink-muted">({formatPoints(result.percent)}%)</span>
         </div>
+
+        {result.sections.length > 0 && (
+          <Card style={{ marginBottom: "var(--space-8)" }}>
+            <h2 className="h4" style={{ marginBottom: "var(--space-3)" }}>
+              {t("result.byBlock")}
+            </h2>
+            <table className="sp-block-table">
+              <thead>
+                <tr>
+                  <th>{t("blocks.subject")}</th>
+                  <th>{t("blocks.correct")}</th>
+                  <th>{t("blocks.score")}</th>
+                  <th>%</th>
+                </tr>
+              </thead>
+              <tbody>
+                {result.sections.map((s) => (
+                  <tr key={s.section_id}>
+                    <td>
+                      {s.subject_name}
+                      <span className="sp-block-table__kind">{t(`blocks.kind.${s.kind}`)}</span>
+                    </td>
+                    <td>
+                      {s.correct_count}/{s.question_count}
+                    </td>
+                    <td>
+                      {formatPoints(s.score)} / {formatPoints(s.max_score)}
+                    </td>
+                    <td>{s.max_score ? Math.round((100 * s.score) / s.max_score) : 0}%</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td>{t("blocks.total")}</td>
+                  <td>
+                    {result.sections.reduce((n, s) => n + s.correct_count, 0)}/
+                    {result.sections.reduce((n, s) => n + s.question_count, 0)}
+                  </td>
+                  <td>
+                    {formatPoints(result.score)} / {formatPoints(result.max_score)}
+                  </td>
+                  <td>{Math.round(result.percent)}%</td>
+                </tr>
+              </tfoot>
+            </table>
+          </Card>
+        )}
 
         <h2 className="h4" style={{ marginBottom: "var(--space-4)" }}>
           {t("result.byQuestion")}
@@ -97,6 +148,7 @@ export default function ExamResultPage() {
             <Card key={q.question_id}>
               <div className="data-eyebrow" style={{ marginBottom: "var(--space-2)" }}>
                 {t("result.question")} {idx + 1}
+                {q.section_id !== null && sectionNames.get(q.section_id) ? ` · ${sectionNames.get(q.section_id)}` : ""}
               </div>
               <div className="body" style={{ marginBottom: "var(--space-4)", fontWeight: 600 }}>
                 <RichText block text={q.prompt_text} />
@@ -155,7 +207,7 @@ export default function ExamResultPage() {
                 </div>
               )}
               <p className="caption" style={{ marginTop: "var(--space-3)" }}>
-                {q.points_awarded ?? 0} / {q.points} {t("result.points")}
+                {formatPoints(q.points_awarded ?? 0)} / {formatPoints(q.points)} {t("result.points")}
               </p>
             </Card>
           ))}
@@ -175,7 +227,7 @@ export default function ExamResultPage() {
                   title={r.full_name}
                   trailing={
                     <span className="data-value">
-                      {r.score} {t("result.points")}
+                      {formatPoints(r.score)} {t("result.points")}
                     </span>
                   }
                 />

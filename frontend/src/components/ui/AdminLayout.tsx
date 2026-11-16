@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
 import { useLanguage } from "../../i18n/LanguageContext";
 import Icon from "./Icon";
@@ -70,6 +70,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           { to: "/admin/manage/subjects", label: t("adminNav.subjects"), icon: "book" },
           { to: "/admin/manage/students", label: t("adminNav.students"), icon: "users" },
           { to: "/admin/manage/teachers", label: t("adminNav.teachers"), icon: "user-check" },
+          { to: "/admin/manage/templates", label: t("adminNav.templates"), icon: "layers" },
         ] as const)
       : []),
   ];
@@ -85,28 +86,30 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           {items.map((item) => {
             const active = location.pathname === item.to || location.pathname.startsWith(item.to + "/");
             return (
-              <a
+              // Link, not <a href>: a plain anchor reloaded the whole app (and
+              // re-fetched the session) on every menu click.
+              <Link
                 key={item.to}
-                href={item.to}
+                to={item.to}
                 className={`sp-sidebar__link${active ? " sp-sidebar__link--active" : ""}`}
                 title={effectiveCollapsed ? item.label : undefined}
               >
                 <Icon name={item.icon} />
                 {!effectiveCollapsed && <span>{item.label}</span>}
-              </a>
+              </Link>
             );
           })}
         </nav>
 
         <div className="sp-sidebar__foot">
-          <a
-            href="/change-password"
+          <Link
+            to="/change-password"
             className="sp-sidebar__link"
             title={effectiveCollapsed ? t("header.changePassword") : undefined}
           >
             <Icon name="lock" />
             {!effectiveCollapsed && <span>{t("header.changePassword")}</span>}
-          </a>
+          </Link>
           <button className="sp-sidebar__link sp-sidebar__link--button" onClick={handleLogout}>
             <Icon name="log-out" />
             {!effectiveCollapsed && <span>{t("header.logout")}</span>}

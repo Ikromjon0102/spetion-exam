@@ -124,7 +124,8 @@ export default function ExamUploadPage() {
           setSubmitting(false);
           setError(upload.parse_error ?? t("upload.parseFailed"));
         } else {
-          setStatus(`${t("upload.statusPrefix")}: ${upload.status}`);
+          // a sentence, not the raw English status ("Holat: parsing")
+          setStatus(t("upload.parsing"));
         }
       } catch {
         clearInterval(interval);

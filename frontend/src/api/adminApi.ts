@@ -67,6 +67,24 @@ export interface ExamUpload {
 }
 
 export type ExamPhase = "draft" | "upcoming" | "live" | "finished";
+export type ExamType = "nazorat" | "chorak";
+export type SectionKind = "asosiy" | "majburiy";
+
+/** One subject block of a chorak exam, with how far along it is. */
+export interface ExamSection {
+  id: number;
+  subject_id: number;
+  subject_name: string;
+  kind: SectionKind;
+  order_index: number;
+  question_count: number; // how many the block must have
+  points_per_question: number;
+  actual_count: number;
+  needs_review_count: number;
+  is_ready: boolean;
+  can_edit: boolean; // may the signed-in user write this block
+  teacher_names: string[];
+}
 
 export interface ExamSummary {
   id: number;
@@ -89,6 +107,12 @@ export interface ExamSummary {
   archived_at: string | null;
   can_archive: boolean;
   can_edit: boolean;
+  exam_type: ExamType;
+  quarter: number | null;
+  sections: ExamSection[];
+  // Exam-wide actions (schedule, publish, close, delete, copy). On a chorak
+  // exam only an admin has them; a block's teacher edits their block only.
+  can_administer: boolean;
 }
 
 export interface QuestionOption {
@@ -110,6 +134,7 @@ export interface Question {
   needs_review: boolean;
   parse_confidence: "high" | "low" | null;
   reference_answer: string | null;
+  section_id: number | null;
   options: QuestionOption[];
 }
 
@@ -132,6 +157,7 @@ export interface ClassRankingRow {
   student_id: number;
   full_name: string;
   score: number;
+  max_score: number;
   percentile: number | null;
 }
 
@@ -159,18 +185,31 @@ export interface OverallRanking {
   rankings: OverallRankingRow[];
 }
 
-export async function getClassOverallRanking(classId: number): Promise<OverallRanking> {
-  const { data } = await apiClient.get<OverallRanking>(`/admin/classes/${classId}/overall-ranking`);
+/** Which exams an overall ranking counts: everything, or one kind only. */
+export type RankingExamType = "all" | ExamType;
+
+function examTypeParams(examType: RankingExamType) {
+  return examType === "all" ? undefined : { params: { exam_type: examType } };
+}
+
+export async function getClassOverallRanking(classId: number, examType: RankingExamType = "all"): Promise<OverallRanking> {
+  const { data } = await apiClient.get<OverallRanking>(
+    `/admin/classes/${classId}/overall-ranking`,
+    examTypeParams(examType)
+  );
   return data;
 }
 
-export async function getGradeOverallRanking(gradeLevel: number): Promise<OverallRanking> {
-  const { data } = await apiClient.get<OverallRanking>(`/admin/grades/${gradeLevel}/overall-ranking`);
+export async function getGradeOverallRanking(gradeLevel: number, examType: RankingExamType = "all"): Promise<OverallRanking> {
+  const { data } = await apiClient.get<OverallRanking>(
+    `/admin/grades/${gradeLevel}/overall-ranking`,
+    examTypeParams(examType)
+  );
   return data;
 }
 
-export async function getSchoolOverallRanking(): Promise<OverallRanking> {
-  const { data } = await apiClient.get<OverallRanking>("/admin/school/overall-ranking");
+export async function getSchoolOverallRanking(examType: RankingExamType = "all"): Promise<OverallRanking> {
+  const { data } = await apiClient.get<OverallRanking>("/admin/school/overall-ranking", examTypeParams(examType));
   return data;
 }
 
@@ -423,6 +462,7 @@ export interface ExamListParams {
   q?: string;
   needs_review?: boolean;
   exam_status?: string;
+  exam_type?: ExamType;
   limit?: number;
   offset?: number;
 }
@@ -519,6 +559,7 @@ export async function updateExam(
     shuffle_questions: boolean;
     shuffle_options: boolean;
     expected_question_count: number | null;
+    quarter: number | null;
   }>
 ): Promise<ExamSummary> {
   const { data } = await apiClient.put<ExamSummary>(`/admin/exams/${examId}`, body);
@@ -572,6 +613,7 @@ export async function addQuestion(
     prompt_text: string;
     points?: number;
     reference_answer?: string;
+    section_id?: number | null;
     options: { option_text: string; is_correct: boolean }[];
   }
 ): Promise<Question> {
@@ -648,6 +690,8 @@ export async function listExamAttempts(examId: number): Promise<AttemptMonitor[]
 
 export interface AttemptAnswerReview {
   question_id: number;
+  section_id: number | null;
+  correct_option_text: string | null;
   question_type: string;
   prompt_text: string;
   points: number;
@@ -709,6 +753,7 @@ export async function getStudentPerformance(studentId: number): Promise<StudentP
 export interface SubjectHistoryPoint {
   exam_id: number;
   exam_title: string;
+  exam_type: ExamType;
   score: number;
   max_score: number;
   date: string;
@@ -727,5 +772,106 @@ export async function getStudentSubjectHistory(studentId: number, subjectId: num
   const { data } = await apiClient.get<SubjectHistory>(
     `/admin/students/${studentId}/subjects/${subjectId}/history`
   );
+  return data;
+}
+
+// ---- chorak exams: templates, creation, blocks, block results ----
+
+export interface ExamTemplateSection {
+  id: number;
+  subject_id: number;
+  subject_name: string;
+  kind: SectionKind;
+  order_index: number;
+  question_count: number;
+  points_per_question: number;
+}
+
+export interface ExamTemplate {
+  id: number;
+  name: string;
+  duration_minutes: number;
+  total_questions: number;
+  total_points: number;
+  sections: ExamTemplateSection[];
+}
+
+export interface ExamTemplateInput {
+  name: string;
+  duration_minutes: number;
+  sections: { subject_id: number; kind: SectionKind; question_count: number; points_per_question: number }[];
+}
+
+export async function listExamTemplates(): Promise<ExamTemplate[]> {
+  const { data } = await apiClient.get<ExamTemplate[]>("/admin/exams/templates");
+  return data;
+}
+
+export async function createExamTemplate(body: ExamTemplateInput): Promise<ExamTemplate> {
+  const { data } = await apiClient.post<ExamTemplate>("/admin/exams/templates", body);
+  return data;
+}
+
+export async function updateExamTemplate(templateId: number, body: ExamTemplateInput): Promise<ExamTemplate> {
+  const { data } = await apiClient.put<ExamTemplate>(`/admin/exams/templates/${templateId}`, body);
+  return data;
+}
+
+export async function deleteExamTemplate(templateId: number): Promise<void> {
+  await apiClient.delete(`/admin/exams/templates/${templateId}`);
+}
+
+/** One draft chorak exam per class, each with its own copy of the template's blocks. */
+export async function createChorakExams(body: {
+  title: string;
+  template_id: number;
+  class_ids: number[];
+  quarter: number | null;
+  start_at: string | null;
+  end_at: string | null;
+  duration_minutes: number | null;
+}): Promise<ExamSummary[]> {
+  const { data } = await apiClient.post<ExamSummary[]>("/admin/exams/chorak", body);
+  return data;
+}
+
+export async function setSectionReady(examId: number, sectionId: number, ready: boolean): Promise<ExamSummary> {
+  const { data } = await apiClient.put<ExamSummary>(`/admin/exams/${examId}/sections/${sectionId}/ready`, { ready });
+  return data;
+}
+
+/** Imports a PDF/DOCX's questions into one block of an existing chorak exam. */
+export async function uploadSectionFile(examId: number, sectionId: number, file: File): Promise<ExamUpload> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("exam_id", String(examId));
+  form.append("section_id", String(sectionId));
+  const { data } = await apiClient.post<ExamUpload>("/admin/exams/uploads", form, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data;
+}
+
+export interface SectionResults {
+  exam_id: number;
+  exam_title: string;
+  class_name: string;
+  max_total: number;
+  // false for a block's teacher: they see their own blocks, not the total
+  shows_total: boolean;
+  sections: { section_id: number; subject_name: string; kind: SectionKind; max_score: number; question_count: number }[];
+  students: {
+    student_id: number;
+    full_name: string;
+    status: string;
+    rank: number | null;
+    scores: (number | null)[]; // index-aligned with `sections`
+    correct_counts: (number | null)[];
+    total: number | null;
+  }[];
+}
+
+export async function getSectionResults(examId: number): Promise<SectionResults> {
+  const { data } = await apiClient.get<SectionResults>(`/admin/exams/${examId}/section-results`);
   return data;
 }

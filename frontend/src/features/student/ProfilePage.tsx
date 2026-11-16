@@ -4,6 +4,7 @@ import { getSubjectHistory, listSubjects, type Subject, type SubjectHistory } fr
 import { AppHeader, Badge, Card, LineChart, ListRow, type BadgeStatus } from "../../components/ui";
 import { formatDateUz } from "../../utils/formatDate";
 import { useLanguage } from "../../i18n/LanguageContext";
+import { formatPoints } from "../../utils/formatPoints";
 
 const TREND_KEYS: Record<string, string> = {
   improving: "trend.improving",
@@ -90,10 +91,14 @@ export default function ProfilePage() {
                     key={p.exam_id}
                     leading={<span className="data-value">{Math.round((100 * p.score) / p.max_score)}%</span>}
                     title={p.exam_title}
-                    subtitle={formatDateUz(p.date)}
+                    subtitle={
+                      p.exam_type === "chorak"
+                        ? `${formatDateUz(p.date)} · ${t("examType.chorakShort")}`
+                        : formatDateUz(p.date)
+                    }
                     trailing={
                       <span className="data-value ink-muted">
-                        {p.score}/{p.max_score}
+                        {formatPoints(p.score)}/{formatPoints(p.max_score)}
                       </span>
                     }
                   />

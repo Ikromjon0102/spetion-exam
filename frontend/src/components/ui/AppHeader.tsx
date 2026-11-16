@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
 import { useLanguage } from "../../i18n/LanguageContext";
 import Logo from "./Logo";
@@ -22,20 +22,21 @@ export default function AppHeader() {
   return (
     <header className="sp-header">
       <div className="sp-header__inner">
-        <a href="/student/exams" className="sp-header__brand">
+        {/* Links, not <a href>: a plain anchor reloads the whole app. */}
+        <Link to="/student/exams" className="sp-header__brand">
           <Logo variant="horizontal" tone="red" height={24} />
-        </a>
+        </Link>
         <div className="sp-header__user">
-          <LanguageSwitcher />
+          <LanguageSwitcher compact />
           <ThemeToggle />
           {user && (
             <>
-              <a href="/student/profile" className="body-sm sp-header__link">
+              <Link to="/student/profile" className="body-sm sp-header__link">
                 {t("header.profile")}
-              </a>
-              <a href="/change-password" className="body-sm sp-header__link">
+              </Link>
+              <Link to="/change-password" className="body-sm sp-header__link">
                 {t("header.changePassword")}
-              </a>
+              </Link>
               <span className="body-sm ink-muted sp-header__name">{user.full_name}</span>
               <Button variant="ghost" size="sm" onClick={handleLogout}>
                 {t("header.logout")}

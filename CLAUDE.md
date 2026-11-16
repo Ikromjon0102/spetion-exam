@@ -51,7 +51,7 @@ subject performance over time (not just per-exam).
 
 ## Current status
 
-Backend is implemented end-to-end (78 passing tests in `backend/app/tests/`,
+Backend is implemented end-to-end (193 passing tests as of Nov 2026; originally 78 in `backend/app/tests/`,
 run with `pytest app/tests -q` against an in-memory SQLite DB — no live
 Postgres needed to test) and has been exercised live: Node.js + Docker
 Desktop were installed into this dev environment, the frontend was built
@@ -1251,6 +1251,75 @@ Decisions already confirmed with the user, so don't re-litigate them:
       days (`include_old=true` for everything), live first.
     - Deliberately not done: automatic archiving by age (a button instead — a
       silent status change at 3am is surprising), and a physical folder entity.
+
+11. **Choraklik (end-of-quarter) exams + the UX audit fixes (Nov 2026) — built
+    and verified locally (incl. the migration against a real Postgres 16);
+    not deployed, not pushed.** Two exam kinds now: *nazorat* (fortnightly,
+    one subject — everything before this) and *chorak* (once a quarter, sat
+    like the national entrance test: e.g. Kimyo 30x3.1, Biologiya 30x2.1,
+    Ona tili/Matematika/Tarix 10x1.1 each = 189 points, 180 minutes).
+    Decisions confirmed with the user: classes from grade 8 up sit it; **each
+    block is written by that subject's own teacher**; chorak results show in
+    the portfolio marked "Choraklik", and the overall ranking has a
+    Hammasi / Nazorat / Choraklik filter (a 93-point block would otherwise
+    drown the small tests).
+    - **Model** (migration `b4c8e1f7a3d5`): `Exam.exam_type` (a plain string,
+      "nazorat"|"chorak") + `quarter`; `exam_sections` (subject, kind
+      asosiy/majburiy, `question_count`, `points_per_question`, `ready_at`);
+      `Question.section_id`; `exam_templates` / `exam_template_sections`;
+      `attempt_section_scores` (derived, written by
+      `grading_service.store_section_scores`). **For a chorak exam
+      `Exam.subject_id` is only the first block's subject** (the column is NOT
+      NULL and listing code reads it) — never use it as "the exam's subject";
+      use the sections. A block question's points always equal the block's
+      weight (forced on create/update/publish).
+    - **Who may do what** lives in `exam_service`: `ensure_can_manage_exam`
+      (open it: admin, or a teacher of any block), `ensure_can_edit_section`
+      (question-level edits: own block only), `ensure_exam_owner` (schedule,
+      publish, close, delete, copy, archive: on a chorak exam **admin only**),
+      `results_scope` (None = whole table for admin + the class's homeroom
+      teacher; a set of section ids for a block's teacher, who never sees the
+      paper's total or a colleague's questions). A new question-mutating
+      endpoint must call `ensure_can_edit_section` with the question's
+      `section_id`, not just `ensure_can_manage_exam`.
+    - **Flow**: admin makes a template (`/admin/manage/templates`), creates the
+      exam for one or more classes (`/admin/exams/chorak/new`, one draft per
+      class), each teacher fills their block (by hand or "Fayldan yuklash" into
+      the block — `ExamUpload.target_exam_id/target_section_id`), marks
+      "Blok tayyor" (only accepted with exactly the agreed number of reviewed
+      questions), admin publishes once every block is ready. Router:
+      `routers/admin_chorak.py`, **registered before `admin_exams.router`** so
+      `/exams/templates` and `/exams/chorak` aren't swallowed by
+      `/exams/{exam_id}`.
+    - Questions shuffle inside a block; blocks keep the paper's order
+      (`attempt_service._build_question_order`). Scores are rounded to 2
+      decimals everywhere (3.1 x 27 must be 83.7, not 83.70000000000002) and
+      shown through `utils/formatPoints.ts`.
+    - Per-subject stats/portfolio read `ranking_service.subject_results`
+      (nazorat attempts + chorak block scores). The daily-results image gets
+      one column per block. Tests: `tests/test_chorak_exam.py`.
+    - **Exam-taking page rewritten** (`ExamTakingPage.tsx`): an intro screen
+      (`GET /student/exams/{id}/info` — reading it never starts the clock; only
+      "Boshlash" calls `/start`); a question navigator (side panel, drawer on a
+      phone) and block tabs; "Topshirish" asks first and lists blanks per
+      block; answers go through a queue that retries until the server has them,
+      flags unsaved questions, debounces typed answers and flushes before
+      submit; a failed submit stays on the page (and after time-out waits for
+      the server's sweep) instead of navigating to a missing result. The exam
+      screen deliberately has no navigation links.
+    - **Staff UX**: a "Natijalar" button on every published exam (the results
+      page used to be reachable only from the dashboard's live block);
+      `RankingPage` refreshes itself while live, exports CSV for Excel, prints,
+      shows score/max/% (not the percentile that read as "100%"); the editor
+      has "Tasdiqlash" / "Hammasini tasdiqlash" instead of a checkbox to untick
+      per question, lists why "Nashr qilish" is disabled, and gained rename,
+      close, per-question points and a confirm on question delete. Sidebar and
+      header are router `Link`s (plain `<a href>` reloaded the whole app).
+    - Not done from the audit, still open: per-question analytics ("which
+      questions were missed most"), student-preview of an exam, schedule
+      presets, hiding classmates' names in the student-facing class ranking,
+      result-page images for image questions, a "pending manual check" state
+      for AI-ungraded short answers.
 
 ## Next steps (in order)
 

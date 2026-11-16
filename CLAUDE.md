@@ -51,7 +51,7 @@ subject performance over time (not just per-exam).
 
 ## Current status
 
-Backend is implemented end-to-end (193 passing tests as of Nov 2026; originally 78 in `backend/app/tests/`,
+Backend is implemented end-to-end (192 passing tests as of Nov 2026; originally 78 in `backend/app/tests/`,
 run with `pytest app/tests -q` against an in-memory SQLite DB — no live
 Postgres needed to test) and has been exercised live: Node.js + Docker
 Desktop were installed into this dev environment, the frontend was built

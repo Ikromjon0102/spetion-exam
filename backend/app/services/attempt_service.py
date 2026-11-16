@@ -45,9 +45,20 @@ def _insert(db: Session):
 
 def _build_question_order(exam: Exam, seed: int) -> dict:
     rng = random.Random(seed)
-    question_ids = [q.id for q in exam.questions]
-    if exam.shuffle_questions:
-        rng.shuffle(question_ids)
+    if exam.sections:
+        # A chorak exam is shuffled inside each block only — the blocks
+        # themselves stay in the paper's order (Kimyo, then Biologiya, ...).
+        question_ids = []
+        groups = [[q.id for q in exam.questions if q.section_id == s.id] for s in exam.sections]
+        groups.append([q.id for q in exam.questions if q.section_id is None])
+        for ids in groups:
+            if exam.shuffle_questions:
+                rng.shuffle(ids)
+            question_ids.extend(ids)
+    else:
+        question_ids = [q.id for q in exam.questions]
+        if exam.shuffle_questions:
+            rng.shuffle(question_ids)
 
     option_order: dict[str, list[int]] = {}
     for q in exam.questions:

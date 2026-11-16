@@ -10,11 +10,13 @@ time and they're threaded through as task args rather than stored on the
 upload row.
 """
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.storage import download_exam_file
 from app.models.exam import (
     Exam,
+    ExamSection,
     ExamStatus,
     ExamUpload,
     Question,
@@ -65,6 +67,9 @@ def process_upload(
         ],
     }
 
+    if upload.target_exam_id is not None:
+        return _import_into_section(db, upload, parsed_questions)
+
     exam = Exam(
         title=title or upload.original_filename.rsplit(".", 1)[0],
         subject_id=subject_id,
@@ -98,6 +103,53 @@ def process_upload(
                 )
             )
 
+    upload.status = UploadStatus.parsed
+    db.commit()
+    db.refresh(exam)
+    return exam
+
+
+def _import_into_section(db: Session, upload: ExamUpload, parsed_questions) -> Exam:
+    """The file's questions go into one block of an existing chorak exam,
+    after whatever the block already holds. Same rule as a fresh upload:
+    every parsed question arrives needs_review=True. Each is worth the
+    block's own points-per-question."""
+    exam = db.get(Exam, upload.target_exam_id)
+    section = db.get(ExamSection, upload.target_section_id) if exam is not None else None
+    if exam is None or section is None or section.exam_id != exam.id:
+        upload.status = UploadStatus.parse_failed
+        upload.parse_error = "Blok topilmadi"
+        db.commit()
+        raise ValueError("target section not found")
+
+    next_index = db.query(Question).filter_by(exam_id=exam.id).count()
+    for offset, parsed_q in enumerate(parsed_questions):
+        question = Question(
+            exam_id=exam.id,
+            section_id=section.id,
+            order_index=next_index + offset,
+            prompt_text=parsed_q.prompt,
+            points=section.points_per_question,
+            source=QuestionSource.parsed,
+            needs_review=True,
+            parse_confidence=parsed_q.confidence,
+        )
+        db.add(question)
+        db.flush()
+        for opt_index, parsed_opt in enumerate(parsed_q.options):
+            db.add(
+                QuestionOption(
+                    question_id=question.id,
+                    order_index=opt_index,
+                    option_text=parsed_opt.text,
+                    is_correct=parsed_opt.is_correct,
+                )
+            )
+    # New, unreviewed questions: the block is no longer finished.
+    section.ready_at = None
+    db.flush()
+    total = db.query(func.sum(Question.points)).filter_by(exam_id=exam.id).scalar()
+    exam.total_points = round(float(total), 2) if total else None
     upload.status = UploadStatus.parsed
     db.commit()
     db.refresh(exam)

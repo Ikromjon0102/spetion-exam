@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import JSON, Enum, ForeignKey, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Enum, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.timeutil import UTCDateTime
@@ -39,6 +39,27 @@ class ExamAttempt(Base):
     question_order: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     answers: Mapped[list["StudentAnswer"]] = relationship(back_populates="attempt")
+
+
+class AttemptSectionScore(Base):
+    """One student's result in one block of a chorak exam, written at grading
+    time. Derived data (re-derivable from the answers), kept so per-subject
+    stats, the portfolio and the block-by-block result table don't have to
+    re-grade anything."""
+
+    __tablename__ = "attempt_section_scores"
+    __table_args__ = (UniqueConstraint("attempt_id", "section_id", name="uq_section_score_attempt_section"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    attempt_id: Mapped[int] = mapped_column(ForeignKey("exam_attempts.id"))
+    section_id: Mapped[int] = mapped_column(ForeignKey("exam_sections.id"))
+    exam_id: Mapped[int] = mapped_column(ForeignKey("exams.id"))
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id"))
+    subject_id: Mapped[int] = mapped_column(ForeignKey("subjects.id"))
+    score: Mapped[float] = mapped_column(Numeric, default=0)
+    max_score: Mapped[float] = mapped_column(Numeric, default=0)
+    correct_count: Mapped[int] = mapped_column(Integer, default=0)
+    question_count: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class StudentAnswer(Base):

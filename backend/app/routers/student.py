@@ -12,8 +12,10 @@ from sqlalchemy.orm import Session
 from app.core.timeutil import aware
 from app.db.base import get_db
 from app.dependencies import get_current_student
-from app.models.attempt import AttemptStatus, ExamAttempt
-from app.models.exam import Exam, ExamStatus
+from sqlalchemy import func
+
+from app.models.attempt import AttemptSectionScore, AttemptStatus, ExamAttempt
+from app.models.exam import Exam, ExamSection, ExamStatus, Question
 from app.models.ranking import ExamRanking, StudentSubjectStats
 from app.models.user import Student, Subject
 from app.schemas.admin_management import SubjectOut
@@ -21,16 +23,18 @@ from app.schemas.attempt import (
     AnswerIn,
     AttemptOptionOut,
     AttemptQuestionOut,
+    AttemptSectionOut,
     AttemptStateOut,
     ExamListItemOut,
     ExamResultOut,
     RankingEntryOut,
     ResultQuestionOut,
+    ResultSectionOut,
     SubjectHistoryOut,
     SubjectHistoryPointOut,
     SubmitResultOut,
 )
-from app.services import attempt_service
+from app.services import attempt_service, ranking_service
 
 router = APIRouter(prefix="/api/v1/student", tags=["student"])
 
@@ -44,6 +48,28 @@ def _window_state(exam: Exam) -> str:
     return "closed"
 
 
+def _section_outs(db: Session, exams: list[Exam]) -> dict[int, list[AttemptSectionOut]]:
+    """Blocks of the chorak exams among `exams`, keyed by exam id (one query
+    for the sections, one for the subject names)."""
+    ids = [e.id for e in exams if e.is_chorak]
+    if not ids:
+        return {}
+    sections = db.query(ExamSection).filter(ExamSection.exam_id.in_(ids)).order_by(ExamSection.order_index).all()
+    names = dict(db.query(Subject.id, Subject.name).filter(Subject.id.in_({s.subject_id for s in sections})))
+    out: dict[int, list[AttemptSectionOut]] = {}
+    for s in sections:
+        out.setdefault(s.exam_id, []).append(
+            AttemptSectionOut(
+                id=s.id,
+                subject_name=names.get(s.subject_id, ""),
+                kind=s.kind,
+                question_count=s.question_count,
+                points_per_question=float(s.points_per_question),
+            )
+        )
+    return out
+
+
 def _attempt_state_out(db: Session, exam: Exam, attempt: ExamAttempt) -> AttemptStateOut:
     answers_by_question = {a.question_id: a for a in attempt.answers}
     questions_out = []
@@ -52,6 +78,7 @@ def _attempt_state_out(db: Session, exam: Exam, attempt: ExamAttempt) -> Attempt
         questions_out.append(
             AttemptQuestionOut(
                 id=q.id,
+                section_id=q.section_id,
                 order_index=q.order_index,
                 question_type=q.question_type.value,
                 prompt_text=q.prompt_text,
@@ -73,6 +100,8 @@ def _attempt_state_out(db: Session, exam: Exam, attempt: ExamAttempt) -> Attempt
         exam_title=exam.title,
         deadline_at=attempt.deadline_at,
         duration_minutes=exam.duration_minutes,
+        exam_type=exam.exam_type,
+        sections=_section_outs(db, [exam]).get(exam.id, []),
         questions=questions_out,
     )
 
@@ -122,23 +151,58 @@ def list_my_exams(
         )
     }
 
+    return _list_items(db, exams, attempts)
+
+
+def _list_items(db: Session, exams: list[Exam], attempts: dict[int, ExamAttempt]) -> list[ExamListItemOut]:
+    if not exams:
+        return []
+    subject_names = dict(db.query(Subject.id, Subject.name).filter(Subject.id.in_({e.subject_id for e in exams})))
+    question_counts = dict(
+        db.query(Question.exam_id, func.count(Question.id))
+        .filter(Question.exam_id.in_([e.id for e in exams]))
+        .group_by(Question.exam_id)
+    )
+    sections = _section_outs(db, exams)
     result = []
     for exam in exams:
-        subject = db.get(Subject, exam.subject_id)
         attempt = attempts.get(exam.id)
+        exam_sections = sections.get(exam.id, [])
         result.append(
             ExamListItemOut(
                 id=exam.id,
                 title=exam.title,
-                subject_name=subject.name if subject else "",
+                subject_name=(
+                    ", ".join(s.subject_name for s in exam_sections)
+                    if exam.is_chorak
+                    else subject_names.get(exam.subject_id, "")
+                ),
                 start_at=exam.start_at,
                 end_at=exam.end_at,
                 duration_minutes=exam.duration_minutes,
                 window_state=_window_state(exam),
                 my_attempt_status=attempt.status.value if attempt else None,
+                exam_type=exam.exam_type,
+                question_count=question_counts.get(exam.id, 0),
+                total_points=float(exam.total_points) if exam.total_points is not None else None,
+                my_deadline_at=(
+                    attempt.deadline_at if attempt and attempt.status == AttemptStatus.in_progress else None
+                ),
+                sections=exam_sections,
             )
         )
     return result
+
+
+@router.get("/exams/{exam_id}/info", response_model=ExamListItemOut)
+def get_exam_info(exam_id: int, db: Session = Depends(get_db), student: Student = Depends(get_current_student)):
+    """What the "before you start" screen shows: how long, how many questions,
+    which blocks. Reading it never starts the clock — only POST .../start does."""
+    exam = _get_exam_for_student(db, exam_id, student)
+    if exam.status not in (ExamStatus.scheduled, ExamStatus.active, ExamStatus.closed):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Imtihon topilmadi")
+    attempt = db.query(ExamAttempt).filter_by(exam_id=exam_id, student_id=student.id).first()
+    return _list_items(db, [exam], {exam.id: attempt} if attempt else {})[0]
 
 
 @router.post("/exams/{exam_id}/start", response_model=AttemptStateOut)
@@ -219,6 +283,7 @@ def get_result(exam_id: int, db: Session = Depends(get_db), student: Student = D
         questions_out.append(
             ResultQuestionOut(
                 question_id=question.id,
+                section_id=question.section_id,
                 question_type=question.question_type.value,
                 prompt_text=question.prompt_text,
                 points=float(question.points),
@@ -249,8 +314,32 @@ def get_result(exam_id: int, db: Session = Depends(get_db), student: Student = D
         percent=round(100 * score / max_score, 2) if max_score else 0.0,
         answers_revealed=answers_revealed,
         reveal_at=exam.end_at if not answers_revealed else None,
+        exam_type=exam.exam_type,
+        sections=_result_sections(db, exam, attempt),
         questions=questions_out,
     )
+
+
+def _result_sections(db: Session, exam: Exam, attempt: ExamAttempt) -> list[ResultSectionOut]:
+    if not exam.is_chorak:
+        return []
+    scores = {sc.section_id: sc for sc in db.query(AttemptSectionScore).filter_by(attempt_id=attempt.id)}
+    info = {s.id: s for s in _section_outs(db, [exam]).get(exam.id, [])}
+    out = []
+    for section in exam.sections:
+        sc = scores.get(section.id)
+        out.append(
+            ResultSectionOut(
+                section_id=section.id,
+                subject_name=info[section.id].subject_name,
+                kind=section.kind,
+                score=float(sc.score) if sc else 0.0,
+                max_score=float(sc.max_score) if sc else round(section.question_count * float(section.points_per_question), 2),
+                correct_count=sc.correct_count if sc else 0,
+                question_count=sc.question_count if sc else section.question_count,
+            )
+        )
+    return out
 
 
 @router.get("/exams/{exam_id}/ranking", response_model=list[RankingEntryOut])
@@ -285,28 +374,16 @@ def get_subject_history(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Fan topilmadi")
 
     stats = db.query(StudentSubjectStats).filter_by(student_id=student.id, subject_id=subject_id).first()
-    attempts = (
-        db.query(ExamAttempt)
-        .join(Exam, Exam.id == ExamAttempt.exam_id)
-        .filter(
-            ExamAttempt.student_id == student.id,
-            Exam.subject_id == subject_id,
-            ExamAttempt.status.in_([AttemptStatus.submitted, AttemptStatus.auto_submitted]),
-            ExamAttempt.score.isnot(None),
-        )
-        .order_by(ExamAttempt.submitted_at)
-        .all()
-    )
-
     timeline = [
         SubjectHistoryPointOut(
-            exam_id=a.exam_id,
-            exam_title=db.get(Exam, a.exam_id).title,
-            score=float(a.score or 0),
-            max_score=float(a.max_score or 0),
-            date=a.submitted_at,
+            exam_id=r.exam_id,
+            exam_title=r.exam_title,
+            exam_type=r.exam_type,
+            score=r.score,
+            max_score=r.max_score,
+            date=r.submitted_at,
         )
-        for a in attempts
+        for r in ranking_service.subject_results(db, student.id, subject_id)
     ]
 
     return SubjectHistoryOut(

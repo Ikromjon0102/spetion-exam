@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.core.timeutil import local_day_bounds_utc
 from app.db.base import get_db
 from app.dependencies import require_role
-from app.models.attempt import AttemptStatus, ExamAttempt
+from app.models.attempt import AttemptSectionScore, AttemptStatus, ExamAttempt
 from app.models.exam import Exam, Question
 from app.models.ranking import ExamRanking, StudentSubjectStats
 from app.models.user import Student, Subject, User
@@ -28,19 +28,22 @@ from app.schemas.results import (
     StudentPerformanceOut,
     StudentPerformanceSubjectOut,
 )
-from app.services import ranking_service
+from app.services import exam_service, ranking_service
 
 router = APIRouter(prefix="/api/v1/admin", tags=["results"])
 
 
 @router.get("/exams/{exam_id}/ranking", response_model=ClassRankingOut)
 def get_exam_ranking(
-    exam_id: int, db: Session = Depends(get_db), _user: User = Depends(require_role("teacher", "admin"))
+    exam_id: int, db: Session = Depends(get_db), user: User = Depends(require_role("teacher", "admin"))
 ):
     exam = db.get(Exam, exam_id)
     if exam is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Imtihon topilmadi")
     rows = db.query(ExamRanking).filter_by(exam_id=exam_id).order_by(ExamRanking.rank_in_class).all()
+    if exam.is_chorak and exam_service.results_scope(db, user, exam) is not None:
+        # a block's teacher: the whole-paper leaderboard isn't theirs to see
+        rows = []
     names = {
         s.id: s.user.full_name
         for s in db.query(Student)
@@ -56,6 +59,7 @@ def get_exam_ranking(
                 student_id=r.student_id,
                 full_name=names.get(r.student_id, ""),
                 score=float(r.score),
+                max_score=float(exam.total_points or 0),
                 percentile=float(r.percentile) if r.percentile is not None else None,
             )
             for r in rows
@@ -115,28 +119,16 @@ def get_student_subject_history(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Fan topilmadi")
 
     stats = db.query(StudentSubjectStats).filter_by(student_id=student_id, subject_id=subject_id).first()
-    attempts = (
-        db.query(ExamAttempt)
-        .join(Exam, Exam.id == ExamAttempt.exam_id)
-        .filter(
-            ExamAttempt.student_id == student_id,
-            Exam.subject_id == subject_id,
-            ExamAttempt.status.in_([AttemptStatus.submitted, AttemptStatus.auto_submitted]),
-            ExamAttempt.score.isnot(None),
-        )
-        .order_by(ExamAttempt.submitted_at)
-        .all()
-    )
-
     timeline = [
         SubjectHistoryPointOut(
-            exam_id=a.exam_id,
-            exam_title=db.get(Exam, a.exam_id).title,
-            score=float(a.score or 0),
-            max_score=float(a.max_score or 0),
-            date=a.submitted_at,
+            exam_id=r.exam_id,
+            exam_title=r.exam_title,
+            exam_type=r.exam_type,
+            score=r.score,
+            max_score=r.max_score,
+            date=r.submitted_at,
         )
-        for a in attempts
+        for r in ranking_service.subject_results(db, student_id, subject_id)
     ]
 
     return SubjectHistoryOut(
@@ -180,12 +172,24 @@ def get_class_subject_performance(
     return ClassSubjectPerformanceOut(class_id=class_id, subject_id=subject_id, exams=points)
 
 
+def _exam_type(value: str | None) -> str | None:
+    """The overall ranking's Nazorat / Choraklik / Hammasi filter; None = all."""
+    if value in (None, "", "all"):
+        return None
+    if value not in ("nazorat", "chorak"):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Noma'lum imtihon turi")
+    return value
+
+
 @router.get("/classes/{class_id}/overall-ranking", response_model=OverallRankingOut)
 def get_class_overall_ranking(
-    class_id: int, db: Session = Depends(get_db), user: User = Depends(require_role("teacher", "admin"))
+    class_id: int,
+    exam_type: str | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role("teacher", "admin")),
 ):
     klass = _ensure_class_view_access(db, user, class_id)
-    rows = ranking_service.compute_overall_ranking(db, class_id=class_id)
+    rows = ranking_service.compute_overall_ranking(db, class_id=class_id, exam_type=_exam_type(exam_type))
     return OverallRankingOut(
         scope="class",
         class_id=klass.id,
@@ -207,8 +211,10 @@ def get_grade_overall_ranking(
 
 
 @router.get("/school/overall-ranking", response_model=OverallRankingOut)
-def get_school_overall_ranking(db: Session = Depends(get_db), _user: User = Depends(require_role("admin"))):
-    rows = ranking_service.compute_overall_ranking(db, class_id=None)
+def get_school_overall_ranking(
+    exam_type: str | None = None, db: Session = Depends(get_db), _user: User = Depends(require_role("admin"))
+):
+    rows = ranking_service.compute_overall_ranking(db, class_id=None, exam_type=_exam_type(exam_type))
     return OverallRankingOut(scope="school", rankings=[OverallRankingRowOut(**row) for row in rows])
 
 
@@ -260,12 +266,30 @@ def get_class_daily_results(
     )
 
     exam_outs: list[DailyResultsExamOut] = []
-    # One {student_id: score} map per exam, same order as exam_outs — a
-    # student's row is built by indexing into every map at their id, so a
-    # missing entry (didn't take that particular exam) naturally becomes
-    # None rather than a misleading 0.
     per_exam_scores: list[dict[int, float]] = []
     for exam in exams:
+        if exam.is_chorak:
+            # One column per block, so the table reads Kimyo | Biologiya | ...
+            # | Umumiy exactly like a day of separate single-subject exams.
+            names = dict(
+                db.query(Subject.id, Subject.name).filter(Subject.id.in_([s.subject_id for s in exam.sections]))
+            )
+            block_scores: dict[int, dict[int, float]] = {}
+            for sc in db.query(AttemptSectionScore).filter_by(exam_id=exam.id):
+                block_scores.setdefault(sc.section_id, {})[sc.student_id] = float(sc.score)
+            for section in exam.sections:
+                exam_outs.append(
+                    DailyResultsExamOut(
+                        exam_id=exam.id,
+                        exam_title=exam.title,
+                        subject_name=names.get(section.subject_id, ""),
+                        end_at=exam.end_at,
+                        question_count=section.question_count,
+                        max_score=round(section.question_count * float(section.points_per_question), 2),
+                    )
+                )
+                per_exam_scores.append(block_scores.get(section.id, {}))
+            continue
         subject = db.get(Subject, exam.subject_id)
         question_count = db.query(Question).filter_by(exam_id=exam.id).count()
         exam_outs.append(
@@ -282,11 +306,6 @@ def get_class_daily_results(
         score_map: dict[int, float] = {r.student_id: float(r.score) for r in rows}
         per_exam_scores.append(score_map)
 
-    # Every student currently enrolled in the class gets a row, not just
-    # ones who happened to submit one of today's exams — the user asked
-    # for the full roster so absentees/no-shows are visibly missing (a
-    # dash per column, via per_exam_scores.get() below) rather than just
-    # silently not appearing at all.
     student_names: dict[int, str] = {
         s.id: s.user.full_name
         for s in db.query(Student).options(joinedload(Student.user)).filter_by(class_id=class_id).all()

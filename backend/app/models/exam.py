@@ -49,6 +49,21 @@ class QuestionSource(str, enum.Enum):
     manual = "manual"
 
 
+class ExamType(str, enum.Enum):
+    """nazorat: the fortnightly single-subject test (everything this app did
+    before). chorak: the end-of-quarter exam, sat like the national university
+    entrance test — one sitting, several subject blocks (ExamSection), each
+    with its own fixed points-per-question."""
+
+    nazorat = "nazorat"
+    chorak = "chorak"
+
+
+class SectionKind(str, enum.Enum):
+    asosiy = "asosiy"
+    majburiy = "majburiy"
+
+
 class ExamUpload(Base):
     __tablename__ = "exam_uploads"
 
@@ -61,6 +76,12 @@ class ExamUpload(Base):
     parse_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     raw_parse_debug: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, server_default=func.now())
+    # Set when the file is imported into one block of an existing chorak exam
+    # rather than becoming a new exam of its own (see parsing_service).
+    # Plain integers, not FKs: exams.exam_upload_id already points this way,
+    # and a foreign key back would make the two tables depend on each other.
+    target_exam_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    target_section_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
 class Exam(Base):
@@ -97,8 +118,79 @@ class Exam(Base):
     # to null out Question.exam_id (a NOT NULL column) instead of deleting
     # the rows, the exact same bug already found once on Question.options.
     questions: Mapped[list["Question"]] = relationship(
-        back_populates="exam", order_by="Question.order_index", cascade="all, delete-orphan"
+        back_populates="exam",
+        order_by="Question.order_index",
+        cascade="all, delete-orphan",
+        foreign_keys="Question.exam_id",
     )
+    # A plain string, not a DB enum: "nazorat" | "chorak" (ExamType). For a
+    # chorak exam `subject_id` above is only the first block's subject (the
+    # column is NOT NULL and a lot of listing code reads it) — the real
+    # subjects are the exam's sections.
+    exam_type: Mapped[str] = mapped_column(String(20), default=ExamType.nazorat.value, server_default="nazorat")
+    # Which quarter (1-4) of the school year the exam belongs to; optional.
+    quarter: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    sections: Mapped[list["ExamSection"]] = relationship(
+        back_populates="exam", order_by="ExamSection.order_index", cascade="all, delete-orphan"
+    )
+
+    @property
+    def is_chorak(self) -> bool:
+        return self.exam_type == ExamType.chorak.value
+
+
+class ExamSection(Base):
+    """One subject block of a chorak exam, e.g. "Kimyo · 30 questions · 3.1
+    points each". Every question in the block is worth points_per_question —
+    that is set here, never per question — and the block is written by the
+    teacher who teaches this subject to the exam's class."""
+
+    __tablename__ = "exam_sections"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    exam_id: Mapped[int] = mapped_column(ForeignKey("exams.id"))
+    subject_id: Mapped[int] = mapped_column(ForeignKey("subjects.id"))
+    order_index: Mapped[int] = mapped_column(Integer, default=0)
+    kind: Mapped[str] = mapped_column(String(20), default=SectionKind.asosiy.value)
+    question_count: Mapped[int] = mapped_column(Integer)
+    points_per_question: Mapped[float] = mapped_column(Numeric)
+    # Set when the block's teacher (or an admin) declares it finished.
+    ready_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+
+    exam: Mapped["Exam"] = relationship(back_populates="sections")
+    questions: Mapped[list["Question"]] = relationship(
+        back_populates="section", order_by="Question.order_index", foreign_keys="Question.section_id"
+    )
+
+
+class ExamTemplate(Base):
+    """A reusable set of blocks ("Tibbiyot": Kimyo 30x3.1, Biologiya 30x2.1,
+    ...) the admin applies to classes when creating a chorak exam."""
+
+    __tablename__ = "exam_templates"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), unique=True)
+    duration_minutes: Mapped[int] = mapped_column(Integer, default=180)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, server_default=func.now())
+
+    sections: Mapped[list["ExamTemplateSection"]] = relationship(
+        back_populates="template", order_by="ExamTemplateSection.order_index", cascade="all, delete-orphan"
+    )
+
+
+class ExamTemplateSection(Base):
+    __tablename__ = "exam_template_sections"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    template_id: Mapped[int] = mapped_column(ForeignKey("exam_templates.id"))
+    subject_id: Mapped[int] = mapped_column(ForeignKey("subjects.id"))
+    order_index: Mapped[int] = mapped_column(Integer, default=0)
+    kind: Mapped[str] = mapped_column(String(20), default=SectionKind.asosiy.value)
+    question_count: Mapped[int] = mapped_column(Integer)
+    points_per_question: Mapped[float] = mapped_column(Numeric)
+
+    template: Mapped["ExamTemplate"] = relationship(back_populates="sections")
 
 
 class Question(Base):
@@ -133,8 +225,11 @@ class Question(Base):
     # alone, so the AI never has to independently "know" the right answer.
     # Null/unused for mcq questions.
     reference_answer: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # The chorak block this question belongs to; null on a nazorat exam.
+    section_id: Mapped[int | None] = mapped_column(ForeignKey("exam_sections.id"), nullable=True)
 
-    exam: Mapped["Exam"] = relationship(back_populates="questions")
+    exam: Mapped["Exam"] = relationship(back_populates="questions", foreign_keys=[exam_id])
+    section: Mapped["ExamSection | None"] = relationship(back_populates="questions", foreign_keys=[section_id])
     # delete-orphan: deleting a question must take its options with it — the
     # NOT NULL question_id FK on QuestionOption means SQLAlchemy's default
     # cascade (nulling the FK first) fails instead of deleting them.

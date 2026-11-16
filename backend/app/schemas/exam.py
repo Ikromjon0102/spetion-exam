@@ -46,6 +46,7 @@ class ExamUpdate(BaseModel):
     shuffle_questions: bool | None = None
     shuffle_options: bool | None = None
     expected_question_count: int | None = None
+    quarter: int | None = Field(default=None, ge=1, le=4)
 
 
 class ExamIdsIn(BaseModel):
@@ -103,7 +104,28 @@ class QuestionOut(BaseModel):
     needs_review: bool
     parse_confidence: str | None = None
     reference_answer: str | None = None
+    section_id: int | None = None
     options: list[QuestionOptionOut] = []
+
+
+class SectionOut(BaseModel):
+    """One block of a chorak exam, with how far along it is."""
+
+    id: int
+    subject_id: int
+    subject_name: str
+    kind: str  # "asosiy" | "majburiy"
+    order_index: int
+    question_count: int  # how many the block must have
+    points_per_question: float
+    actual_count: int = 0
+    needs_review_count: int = 0
+    is_ready: bool = False
+    # may the requesting user write this block's questions
+    can_edit: bool = False
+    # who teaches this subject to the exam's class — empty means nobody is
+    # assigned and the admin has to fill the block in themselves
+    teacher_names: list[str] = []
 
 
 class ExamOut(BaseModel):
@@ -128,6 +150,12 @@ class ExamOut(BaseModel):
     archived_at: datetime | None = None
     can_archive: bool = False
     can_edit: bool
+    exam_type: str = "nazorat"
+    quarter: int | None = None
+    sections: list[SectionOut] = []
+    # exam-wide actions (schedule, publish, close, delete, copy). On a chorak
+    # exam only an admin has them; a block's teacher edits their block only.
+    can_administer: bool = True
 
 
 class ExamDetailOut(ExamOut):
@@ -163,6 +191,8 @@ class QuestionCreate(BaseModel):
     prompt_text: str
     points: float = 1
     reference_answer: str | None = None
+    # required on a chorak exam: which block the question goes into
+    section_id: int | None = None
     options: list[QuestionOptionCreate] = []
 
     _sanitize_prompt = field_validator("prompt_text")(_clean_rich)
@@ -180,6 +210,9 @@ class AttemptMonitorOut(BaseModel):
 
 class AttemptAnswerReviewOut(BaseModel):
     question_id: int
+    section_id: int | None = None
+    # mcq only, so the teacher sees the key next to what the student picked
+    correct_option_text: str | None = None
     question_type: str
     prompt_text: str
     points: float
@@ -197,3 +230,90 @@ class AttemptAnswerReviewOut(BaseModel):
 
 class AttemptAnswerOverrideIn(BaseModel):
     points_awarded: float
+
+
+# ---- chorak exams: templates, creation, block results ----
+
+
+class TemplateSectionIn(BaseModel):
+    subject_id: int
+    kind: str = "asosiy"
+    question_count: int = Field(ge=1, le=200)
+    points_per_question: float = Field(gt=0, le=100)
+
+    @field_validator("kind")
+    @classmethod
+    def _known_kind(cls, v: str) -> str:
+        if v not in ("asosiy", "majburiy"):
+            raise ValueError("kind: asosiy yoki majburiy")
+        return v
+
+
+class TemplateIn(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    duration_minutes: int = Field(default=180, ge=1, le=600)
+    sections: list[TemplateSectionIn] = Field(min_length=1, max_length=12)
+
+
+class TemplateSectionOut(BaseModel):
+    id: int
+    subject_id: int
+    subject_name: str
+    kind: str
+    order_index: int
+    question_count: int
+    points_per_question: float
+
+
+class TemplateOut(BaseModel):
+    id: int
+    name: str
+    duration_minutes: int
+    total_questions: int
+    total_points: float
+    sections: list[TemplateSectionOut]
+
+
+class ChorakCreateIn(BaseModel):
+    title: str = Field(min_length=1, max_length=255)
+    template_id: int
+    class_ids: list[int] = Field(min_length=1, max_length=60)
+    quarter: int | None = Field(default=None, ge=1, le=4)
+    start_at: datetime | None = None
+    end_at: datetime | None = None
+    duration_minutes: int | None = Field(default=None, ge=1, le=600)
+
+
+class SectionReadyIn(BaseModel):
+    ready: bool
+
+
+class SectionResultColumnOut(BaseModel):
+    section_id: int
+    subject_name: str
+    kind: str
+    max_score: float
+    question_count: int
+
+
+class SectionResultRowOut(BaseModel):
+    student_id: int
+    full_name: str
+    status: str
+    rank: int | None = None
+    # index-aligned with `sections`; None = no result in that block (not
+    # taken, or a block this viewer isn't allowed to see)
+    scores: list[float | None]
+    correct_counts: list[int | None]
+    total: float | None = None
+
+
+class SectionResultsOut(BaseModel):
+    exam_id: int
+    exam_title: str
+    class_name: str
+    max_total: float
+    # False for a block's teacher: they see their own blocks, not the total
+    shows_total: bool
+    sections: list[SectionResultColumnOut]
+    students: list[SectionResultRowOut]

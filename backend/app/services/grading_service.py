@@ -11,7 +11,7 @@ rather than as a separate async step (see ai_grading_service's docstring).
 from sqlalchemy.orm import Session
 
 from app.core import rich_text
-from app.models.attempt import ExamAttempt
+from app.models.attempt import AttemptSectionScore, ExamAttempt
 from app.models.exam import Exam, Question, QuestionOption, QuestionType
 from app.services import ai_grading_service
 
@@ -50,11 +50,49 @@ def grade_attempt(db: Session, attempt: ExamAttempt) -> ExamAttempt:
             answer.points_awarded = float(question.points) if is_correct else 0.0
         total_score += answer.points_awarded
 
-    attempt.score = total_score
+    # Rounded: block weights are decimals (3.1 x 27 = 83.7, not 83.70000000000002).
+    attempt.score = round(total_score, 2)
     attempt.max_score = float(exam.total_points or 0)
+    store_section_scores(db, attempt, exam)
     db.commit()
     db.refresh(attempt)
     return attempt
+
+
+def store_section_scores(db: Session, attempt: ExamAttempt, exam: Exam) -> None:
+    """(Re)writes one AttemptSectionScore per block of a chorak exam from the
+    attempt's already-graded answers. A no-op for a nazorat exam. A block the
+    student left entirely blank still gets its row (0 of max) — "took the
+    exam, scored nothing in Tarix" is a result, not missing data."""
+    if not exam.sections:
+        return
+    db.query(AttemptSectionScore).filter_by(attempt_id=attempt.id).delete()
+    answers = {a.question_id: a for a in attempt.answers}
+    for section in exam.sections:
+        questions = [q for q in exam.questions if q.section_id == section.id]
+        earned = 0.0
+        correct = 0
+        for q in questions:
+            answer = answers.get(q.id)
+            if answer is None or answer.points_awarded is None:
+                continue
+            earned += float(answer.points_awarded)
+            if answer.is_correct:
+                correct += 1
+        db.add(
+            AttemptSectionScore(
+                attempt_id=attempt.id,
+                section_id=section.id,
+                exam_id=exam.id,
+                student_id=attempt.student_id,
+                subject_id=section.subject_id,
+                score=round(earned, 2),
+                max_score=round(sum(float(q.points) for q in questions), 2),
+                correct_count=correct,
+                question_count=len(questions),
+            )
+        )
+    db.flush()
 
 
 def recompute_score_from_answers(db: Session, attempt: ExamAttempt) -> ExamAttempt:
@@ -63,7 +101,10 @@ def recompute_score_from_answers(db: Session, attempt: ExamAttempt) -> ExamAttem
     one short_answer's points_awarded (admin_exams.py's override endpoint),
     so recomputing the total doesn't stomp that override by re-invoking AI
     grading on every answer via grade_attempt."""
-    attempt.score = sum(float(a.points_awarded) for a in attempt.answers if a.points_awarded is not None)
+    attempt.score = round(
+        sum(float(a.points_awarded) for a in attempt.answers if a.points_awarded is not None), 2
+    )
+    store_section_scores(db, attempt, db.get(Exam, attempt.exam_id))
     db.commit()
     db.refresh(attempt)
     return attempt

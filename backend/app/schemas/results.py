@@ -8,6 +8,7 @@ class ClassRankingRowOut(BaseModel):
     student_id: int
     full_name: str
     score: float
+    max_score: float = 0
     percentile: float | None = None
 
 

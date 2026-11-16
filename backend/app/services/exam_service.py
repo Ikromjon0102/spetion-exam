@@ -22,7 +22,8 @@ from sqlalchemy.orm import Session
 from app.core.timeutil import aware
 from app.models.attempt import AttemptStatus, ExamAttempt
 from app.models.exam import Exam, ExamStatus, Question, QuestionType
-from app.models.user import TeacherClassSubject, User, UserRole
+from app.models.org import Class
+from app.models.user import Subject, TeacherClassSubject, User, UserRole
 
 
 def ensure_can_author_exam(db: Session, user: User, class_id: int, subject_id: int) -> None:
@@ -45,7 +46,107 @@ def ensure_can_author_exam(db: Session, user: User, class_id: int, subject_id: i
 
 
 def ensure_can_manage_exam(db: Session, user: User, exam: Exam) -> None:
-    ensure_can_author_exam(db, user, exam.class_id, exam.subject_id)
+    """May `user` open this exam at all (see it, its questions, its attempts)?
+    A nazorat exam: admin, or the teacher of its (class, subject). A chorak
+    exam: admin, or a teacher of at least one of its blocks — what such a
+    teacher may then *change* is narrower, see ensure_can_edit_section and
+    ensure_exam_owner."""
+    if not exam.is_chorak:
+        ensure_can_author_exam(db, user, exam.class_id, exam.subject_id)
+        return
+    if user.role == UserRole.admin:
+        return
+    if not editable_section_ids(db, user, exam):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Bu imtihon uchun ruxsatingiz yo'q")
+
+
+def editable_section_ids(db: Session, user: User, exam: Exam) -> set[int]:
+    """The blocks of a chorak exam `user` may write questions for: all of
+    them for an admin, for a teacher only the blocks whose subject they teach
+    to the exam's class."""
+    if user.role == UserRole.admin:
+        return {s.id for s in exam.sections}
+    if user.role != UserRole.teacher or user.teacher is None:
+        return set()
+    taught = {
+        row[0]
+        for row in db.query(TeacherClassSubject.subject_id).filter_by(
+            teacher_id=user.teacher.id, class_id=exam.class_id
+        )
+    }
+    return {s.id for s in exam.sections if s.subject_id in taught}
+
+
+def results_scope(db: Session, user: User, exam: Exam) -> set[int] | None:
+    """Whose results of this exam `user` may see. None = everything (the
+    total and every block): any exam's manager for a nazorat exam; the admin
+    or the class's homeroom teacher for a chorak one. A set = only those
+    blocks of a chorak exam (a block's teacher sees their own subject, not
+    the whole paper). Raises 403 when there is nothing they may see."""
+    if not exam.is_chorak:
+        ensure_can_manage_exam(db, user, exam)
+        return None
+    if user.role == UserRole.admin:
+        return None
+    if user.role == UserRole.teacher and user.teacher is not None:
+        klass = db.get(Class, exam.class_id)
+        if klass is not None and klass.homeroom_teacher_id == user.teacher.id:
+            return None
+        own = editable_section_ids(db, user, exam)
+        if own:
+            return own
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Bu imtihon natijalari uchun ruxsatingiz yo'q")
+
+
+def ensure_exam_owner(db: Session, user: User, exam: Exam) -> None:
+    """Exam-wide actions — schedule, publish, close, delete, duplicate,
+    archive. On a chorak exam these belong to the admin alone: no single
+    block's teacher owns the whole paper."""
+    if exam.is_chorak:
+        if user.role != UserRole.admin:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Choraklik imtihonni faqat administrator boshqaradi",
+            )
+        return
+    ensure_can_manage_exam(db, user, exam)
+
+
+def ensure_can_edit_section(db: Session, user: User, exam: Exam, section_id: int | None) -> None:
+    """Question-level edits. On a nazorat exam this is just
+    ensure_can_manage_exam; on a chorak exam the question's block must be one
+    of the user's own."""
+    if not exam.is_chorak:
+        ensure_can_manage_exam(db, user, exam)
+        return
+    if section_id is None or section_id not in editable_section_ids(db, user, exam):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Bu blok sizga biriktirilmagan")
+
+
+def section_problem(section, questions: list[Question]) -> str | None:
+    """Why a block isn't finished yet, or None if it is: the agreed number of
+    questions, all reviewed, each well-formed."""
+    if len(questions) != section.question_count:
+        return f"{section.question_count} ta savol kerak, hozir {len(questions)} ta"
+    for i, q in enumerate(questions, start=1):
+        if q.needs_review:
+            return f"{i}-savol hali tekshirilmagan"
+        problem = _question_problem(q)
+        if problem:
+            return f"{i}-savol: {problem}"
+    return None
+
+
+def _question_problem(q: Question) -> str | None:
+    if q.question_type == QuestionType.mcq:
+        if len(q.options) < 2:
+            return "kamida 2 ta variant bo'lishi kerak"
+        if sum(1 for o in q.options if o.is_correct) != 1:
+            return "aynan 1 ta to'g'ri javob bo'lishi kerak"
+    elif q.question_type == QuestionType.short_answer:
+        if not (q.reference_answer or "").strip():
+            return "namunaviy javob kiritilmagan"
+    return None
 
 
 _STARTED_STATUSES = (AttemptStatus.in_progress, AttemptStatus.submitted, AttemptStatus.auto_submitted)
@@ -127,7 +228,9 @@ def recompute_total_points(db: Session, exam: Exam) -> None:
     # child's exam_id FK was set directly, not via the relationship, so the
     # parent's loaded collection doesn't auto-update).
     total = db.query(func.sum(Question.points)).filter_by(exam_id=exam.id).scalar()
-    exam.total_points = float(total) if total else None
+    # Rounded: block weights are decimals (3.1, 2.1, 1.1) and thirty of them
+    # summed as floats come out as 93.00000000000001.
+    exam.total_points = round(float(total), 2) if total else None
 
 
 def publish_exam(db: Session, exam: Exam) -> Exam:
@@ -165,15 +268,36 @@ def publish_exam(db: Session, exam: Exam) -> Exam:
                     detail=f"Savol #{q.order_index + 1} uchun namunaviy javob kiritilmagan",
                 )
 
+    if exam.is_chorak:
+        if not exam.sections:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Imtihonda blok yo'q")
+        names = dict(db.query(Subject.id, Subject.name).filter(Subject.id.in_([s.subject_id for s in exam.sections])))
+        for section in exam.sections:
+            label = names.get(section.subject_id, "")
+            questions = [q for q in exam.questions if q.section_id == section.id]
+            problem = section_problem(section, questions)
+            if problem:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"{label} bloki: {problem}")
+            if section.ready_at is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, detail=f"{label} bloki hali tayyor deb belgilanmagan"
+                )
+            # The block's weight is the single source of truth for points.
+            for q in questions:
+                q.points = section.points_per_question
+        if any(q.section_id is None for q in exam.questions):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Blokka biriktirilmagan savol bor")
+        db.flush()
+
     if exam.start_at is None or exam.end_at is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="start_at/end_at belgilanmagan")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Boshlanish va tugash vaqti belgilanmagan")
     if exam.start_at >= exam.end_at:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="start_at end_at'dan oldin bo'lishi kerak")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tugash vaqti boshlanishdan keyin bo'lishi kerak")
     window_minutes = (exam.end_at - exam.start_at).total_seconds() / 60
     if exam.duration_minutes > window_minutes:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="duration_minutes oyna uzunligidan katta bo'lishi mumkin emas",
+            detail="Davomiylik boshlanish va tugash orasidagi vaqtdan uzun bo'lmasligi kerak",
         )
 
     recompute_total_points(db, exam)

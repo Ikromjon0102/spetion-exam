@@ -1337,7 +1337,19 @@ Decisions already confirmed with the user, so don't re-litigate them:
     - Schedule presets in the editor ("Bugun, hozirdan 18:00 gacha", "Ertaga
       8:00–18:00"); the schedule inputs are uncontrolled and keyed on the saved
       values so a preset can replace what they show.
-    - Not done from the audit, still open: a student-eye preview of an exam,
+    - **"O'quvchi ko'zi bilan ko'rish" (student-eye preview)** — a button in
+      the editor opens `/admin/exams/:id/preview` (`ExamPreviewPage.tsx`),
+      which renders the paper with **the same component the real exam uses**:
+      `features/student/ExamScreen.tsx` (timer bar, block tabs, questions,
+      navigator) is purely presentational and is shared by `ExamTakingPage`
+      (real attempt: queue/retry/submit/guard live there) and the preview (fed
+      from `getExamDetail`, `is_correct` dropped). Change the student's screen
+      in `ExamScreen` only, never by copying markup into either page. The
+      preview calls no student endpoint and writes nothing (verified: zero
+      non-GET requests, attempt count unchanged); it works on drafts; a block's
+      teacher sees only their own block; questions are shown in authored order
+      with a note that each student's order is shuffled.
+    - Not done from the audit, still open:
       hiding classmates' names in the student-facing class ranking (the
       school's call), result-page images for image questions. Offered and not
       decided: refusing to *start* an exam from a phone, now that exams are

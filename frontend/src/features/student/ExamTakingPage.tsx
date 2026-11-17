@@ -16,7 +16,7 @@
  *     when the field lost focus, so text being typed as the timer ran out
  *     was gone).
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import {
   getExamInfo,
@@ -32,46 +32,22 @@ import { useAuth } from "../../auth/AuthContext";
 import { enterFullscreen, exitFullscreen, useExamGuard } from "../../hooks/useExamGuard";
 import { useExamTimer } from "../../hooks/useExamTimer";
 import ExamGuardOverlay from "./ExamGuardOverlay";
-import {
-  AnswerOption,
-  AppHeader,
-  AuthedImage,
-  Badge,
-  Button,
-  Card,
-  LanguageSwitcher,
-  Logo,
-  Modal,
-  ThemeToggle,
-  Toast,
-} from "../../components/ui";
-import RichText from "../../components/ui/RichText";
+import ExamScreen, { groupQuestions, isAnswered, type SaveState } from "./ExamScreen";
+import { AppHeader, Button, Card, Modal, Toast } from "../../components/ui";
 import { useLanguage } from "../../i18n/LanguageContext";
 import { formatDateTimeUz } from "../../utils/formatDate";
 import { formatPoints } from "../../utils/formatPoints";
-import { questionImageUrl } from "../../utils/questionImage";
-import "../../components/ui/examtimer.css";
 import "./examtaking.css";
 
 const FAR_FUTURE = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-const LETTERS = ["A", "B", "C", "D", "E", "F", "G", "H"];
 const TEXT_SAVE_DELAY_MS = 1200;
 const RETRY_EVERY_MS = 5000;
 const FLUSH_TIMEOUT_MS = 6000;
 
 type AnswerPayload = { selected_option_id?: number | null; answer_text?: string | null };
-type SaveState = "saving" | "error";
 
 function isFinished(status: string | null | undefined): boolean {
   return status === "submitted" || status === "auto_submitted";
-}
-
-function formatClock(totalSeconds: number): string {
-  const h = Math.floor(totalSeconds / 3600);
-  const m = Math.floor((totalSeconds % 3600) / 60);
-  const s = totalSeconds % 60;
-  const mm = h > 0 ? String(m).padStart(2, "0") : String(m);
-  return `${h > 0 ? `${h}:` : ""}${mm}:${String(s).padStart(2, "0")}`;
 }
 
 export default function ExamTakingPage() {
@@ -91,8 +67,6 @@ export default function ExamTakingPage() {
   const [saveStates, setSaveStates] = useState<Record<number, SaveState>>({});
   const [toast, setToast] = useState<string | null>(null);
 
-  const [activeSectionId, setActiveSectionId] = useState<number | null>(null);
-  const [navOpen, setNavOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -117,7 +91,6 @@ export default function ExamTakingPage() {
     });
     setAnswers(initial);
     setTextAnswers(initialText);
-    setActiveSectionId(state.sections[0]?.id ?? null);
   }
 
   useEffect(() => {
@@ -340,45 +313,7 @@ export default function ExamTakingPage() {
     }
   }
 
-  // ---- derived ------------------------------------------------------------
-
-  const isAnswered = useCallback(
-    (q: AttemptQuestion) =>
-      q.question_type === "short_answer" ? (textAnswers[q.id] ?? "").trim().length > 0 : answers[q.id] != null,
-    [answers, textAnswers]
-  );
-
-  const numberOf = useMemo(() => {
-    const map = new Map<number, number>();
-    attempt?.questions.forEach((q, i) => map.set(q.id, i + 1));
-    return map;
-  }, [attempt]);
-
-  const groups = useMemo(() => {
-    if (!attempt) return [];
-    if (attempt.sections.length === 0) return [{ section: null, questions: attempt.questions }];
-    return attempt.sections.map((section) => ({
-      section,
-      questions: attempt.questions.filter((q) => q.section_id === section.id),
-    }));
-  }, [attempt]);
-
-  function goToQuestion(q: AttemptQuestion) {
-    setActiveSectionId(q.section_id);
-    setNavOpen(false);
-    // after the (possibly different) block has rendered
-    requestAnimationFrame(() =>
-      requestAnimationFrame(() => {
-        document.getElementById(`q-${q.id}`)?.scrollIntoView({ block: "start", behavior: "smooth" });
-      })
-    );
-  }
-
-  function goToSection(sectionId: number) {
-    setActiveSectionId(sectionId);
-    setNavOpen(false);
-    requestAnimationFrame(() => window.scrollTo({ top: 0 }));
-  }
+  const answered = (q: AttemptQuestion) => isAnswered(q, answers, textAnswers);
 
   // ---- screens ------------------------------------------------------------
 
@@ -507,216 +442,49 @@ export default function ExamTakingPage() {
   }
 
   const remainingSeconds = Math.max(0, Math.floor(remainingMs / 1000));
-  const timerClass = remainingSeconds <= 60 ? "sp-timer--danger" : remainingSeconds <= 300 ? "sp-timer--warning" : "";
   const total = attempt.questions.length;
-  const answeredCount = attempt.questions.filter(isAnswered).length;
+  const answeredCount = attempt.questions.filter(answered).length;
   const unsavedCount = Object.values(saveStates).filter((s) => s === "error").length;
   const hasSections = attempt.sections.length > 0;
-  const visibleGroups = hasSections ? groups.filter((g) => g.section?.id === activeSectionId) : groups;
-  const activeIndex = attempt.sections.findIndex((s) => s.id === activeSectionId);
-  const nextSection = hasSections && activeIndex >= 0 ? attempt.sections[activeIndex + 1] : undefined;
   const locked = submitting || waitingForServer;
-
-  const navigator = (
-    <div className="sp-qnav">
-      {groups.map((group) => {
-        const done = group.questions.filter(isAnswered).length;
-        return (
-          <div key={group.section?.id ?? "all"} className="sp-qnav__group">
-            {group.section && (
-              <div className="sp-qnav__title">
-                <span>{group.section.subject_name}</span>
-                <span className="data-sub">
-                  {done}/{group.questions.length}
-                </span>
-              </div>
-            )}
-            <div className="sp-qnav__grid">
-              {group.questions.map((q) => {
-                const classes = [
-                  "sp-qnav__cell",
-                  isAnswered(q) ? "sp-qnav__cell--answered" : "",
-                  saveStates[q.id] === "error" ? "sp-qnav__cell--unsaved" : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ");
-                return (
-                  <button key={q.id} type="button" className={classes} onClick={() => goToQuestion(q)}>
-                    {numberOf.get(q.id)}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })}
-      <div className="sp-qnav__legend caption">
-        <span>
-          <i className="sp-qnav__swatch sp-qnav__swatch--answered" /> {t("taking.legendAnswered")}
-        </span>
-        <span>
-          <i className="sp-qnav__swatch" /> {t("taking.legendBlank")}
-        </span>
-      </div>
-      <Button block onClick={() => setConfirmOpen(true)} disabled={locked}>
-        {t("taking.submit")}
-      </Button>
-    </div>
-  );
-
-  const blankBySection = groups
-    .map((g) => ({ name: g.section?.subject_name ?? "", blank: g.questions.filter((q) => !isAnswered(q)).length }))
+  const blankBySection = groupQuestions(attempt.sections, attempt.questions)
+    .map((g) => ({ name: g.section?.subject_name ?? "", blank: g.questions.filter((q) => !answered(q)).length }))
     .filter((g) => g.blank > 0);
   const blankTotal = total - answeredCount;
 
   return (
     <>
-      <header className="sp-header">
-        <div className="sp-header__inner sp-exam-header">
-          {/* No links here on purpose: leaving this page mid-exam costs time. */}
-          <Logo variant="horizontal" tone="red" height={22} />
-          <div className="sp-header__user">
-            <LanguageSwitcher compact />
-            <ThemeToggle />
-            <span className="body-sm ink-muted sp-header__name">{user?.full_name}</span>
-          </div>
-        </div>
-      </header>
       <ExamGuardOverlay kind={guard.overlay} warnings={guard.warnings} onResume={guard.resume} />
-
-      <div className="sp-exam">
-        <div className="sp-exam__main">
-          <div className={`sp-timer sp-exam__bar ${timerClass}`}>
-            <div>
-              <div className="data-eyebrow">{t("taking.timeLeft")}</div>
-              <div className="sp-timer__value">{formatClock(remainingSeconds)}</div>
-            </div>
-            <div className="sp-exam__bar-right">
-              <div className="caption sp-exam__title" title={attempt.exam_title}>
-                {attempt.exam_title}
-              </div>
-              <button type="button" className="sp-exam__progress" onClick={() => setNavOpen((v) => !v)}>
-                {answeredCount} / {total} {t("taking.answeredOf")}
-                <span className="sp-exam__progress-hint"> · {t("taking.questionsButton")}</span>
-              </button>
-            </div>
-          </div>
-
-          {hasSections && (
-            <div className="sp-exam__tabs" role="tablist">
-              {groups.map((g) =>
-                g.section ? (
-                  <button
-                    key={g.section.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={g.section.id === activeSectionId}
-                    className={`sp-exam__tab${g.section.id === activeSectionId ? " sp-exam__tab--active" : ""}`}
-                    onClick={() => goToSection(g.section!.id)}
-                  >
-                    {g.section.subject_name}
-                    <span className="sp-exam__tab-count">
-                      {g.questions.filter(isAnswered).length}/{g.questions.length}
-                    </span>
-                  </button>
-                ) : null
-              )}
-            </div>
-          )}
-
-          {navOpen && <div className="sp-exam__nav-drawer">{navigator}</div>}
-
-          {unsavedCount > 0 && (
-            <p role="alert" className="sp-exam__unsaved body-sm">
-              {t("taking.unsavedBanner", { count: unsavedCount })}
-            </p>
-          )}
-          {waitingForServer && (
-            <p role="status" className="sp-exam__unsaved body-sm">
-              {t("taking.timeUpWaiting")}
-            </p>
-          )}
-
-          <div className="stack sp-exam-guarded">
-            {visibleGroups.map((group) => (
-              <div key={group.section?.id ?? "all"} className="stack">
-                {group.section && (
-                  <div className="sp-exam__section-head">
-                    <h2 className="h4">{group.section.subject_name}</h2>
-                    <span className="body-sm ink-muted">
-                      {group.questions.length} {t("blocks.questionsShort")} ·{" "}
-                      {t("blocks.pointsEachValue", { points: formatPoints(group.section.points_per_question) })}
-                    </span>
-                  </div>
-                )}
-                {group.questions.map((q) => (
-                  <Card key={q.id} id={`q-${q.id}`} className="sp-exam__question">
-                    <div className="sp-exam__question-head">
-                      <span className="data-eyebrow">
-                        {t("taking.question")} {numberOf.get(q.id)} / {total}
-                      </span>
-                      {saveStates[q.id] === "error" && <Badge status="danger">{t("taking.notSaved")}</Badge>}
-                    </div>
-                    {q.prompt_image_key ? (
-                      <div style={{ marginBottom: "var(--space-4)" }}>
-                        <AuthedImage src={questionImageUrl(q.prompt_image_key)} maxHeight={320} />
-                      </div>
-                    ) : (
-                      <div className="body-lg" style={{ marginBottom: "var(--space-4)" }}>
-                        <RichText block text={q.prompt_text} />
-                      </div>
-                    )}
-                    {q.question_type === "short_answer" ? (
-                      <textarea
-                        className="sp-input"
-                        rows={3}
-                        disabled={locked}
-                        placeholder={t("taking.shortAnswerPlaceholder")}
-                        value={textAnswers[q.id] ?? ""}
-                        onChange={(e) => changeText(q.id, e.target.value)}
-                        onBlur={() => blurText(q.id)}
-                        style={{ resize: "vertical" }}
-                      />
-                    ) : (
-                      <div className="stack" style={{ gap: "var(--space-2)" }}>
-                        {q.options.map((opt, optIdx) => (
-                          <AnswerOption
-                            key={opt.id}
-                            letter={LETTERS[optIdx] ?? String(optIdx + 1)}
-                            selected={answers[q.id] === opt.id}
-                            disabled={locked}
-                            onClick={() => selectOption(q.id, opt.id)}
-                          >
-                            {opt.option_image_key ? (
-                              <AuthedImage src={questionImageUrl(opt.option_image_key)} maxHeight={80} />
-                            ) : (
-                              <RichText text={opt.option_text} />
-                            )}
-                          </AnswerOption>
-                        ))}
-                      </div>
-                    )}
-                  </Card>
-                ))}
-              </div>
-            ))}
-          </div>
-
-          <div className="sp-exam__footer">
-            {nextSection ? (
-              <Button size="lg" block variant="secondary" onClick={() => goToSection(nextSection.id)}>
-                {t("taking.nextBlock", { name: nextSection.subject_name })} →
-              </Button>
-            ) : (
-              <Button size="lg" block onClick={() => setConfirmOpen(true)} disabled={locked}>
-                {submitting ? t("taking.submitting") : t("taking.submit")}
-              </Button>
+      <ExamScreen
+        title={attempt.exam_title}
+        userName={user?.full_name}
+        sections={attempt.sections}
+        questions={attempt.questions}
+        answers={answers}
+        textAnswers={textAnswers}
+        saveStates={saveStates}
+        remainingSeconds={remainingSeconds}
+        locked={locked}
+        submitting={submitting}
+        onSelectOption={selectOption}
+        onChangeText={changeText}
+        onBlurText={blurText}
+        onSubmitClick={() => setConfirmOpen(true)}
+        notices={
+          <>
+            {unsavedCount > 0 && (
+              <p role="alert" className="sp-exam__unsaved body-sm">
+                {t("taking.unsavedBanner", { count: unsavedCount })}
+              </p>
             )}
-          </div>
-        </div>
-
-        <aside className="sp-exam__aside">{navigator}</aside>
-      </div>
+            {waitingForServer && (
+              <p role="status" className="sp-exam__unsaved body-sm">
+                {t("taking.timeUpWaiting")}
+              </p>
+            )}
+          </>
+        }
+      />
 
       <Modal open={confirmOpen} onClose={() => !submitting && setConfirmOpen(false)} title={t("taking.confirmTitle")}>
         <div className="stack">

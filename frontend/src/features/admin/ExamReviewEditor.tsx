@@ -661,6 +661,15 @@ export default function ExamReviewEditor() {
                 {t("adminExamList.results")}
               </Button>
             )}
+            {/* how the paper will look to a student — nothing is saved there */}
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={exam.questions.length === 0 || editing !== null}
+              onClick={() => navigate(`/admin/exams/${id}/preview`)}
+            >
+              {t("preview.open")}
+            </Button>
             {canAdminister && (
               <Button variant="secondary" size="sm" onClick={openDuplicateModal}>
                 {t("review.duplicate")}

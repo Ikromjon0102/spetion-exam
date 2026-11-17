@@ -877,4 +877,24 @@ export const translations: Record<string, Record<Lang, string>> = {
   "schedule.quick": { uz: "Tez belgilash:", ru: "Быстро:" },
   "schedule.presetToday": { uz: "Bugun, hozirdan 18:00 gacha", ru: "Сегодня, с этой минуты до 18:00" },
   "schedule.presetTomorrow": { uz: "Ertaga 8:00–18:00", ru: "Завтра 8:00–18:00" },
+  "preview.open": { uz: "O'quvchi ko'zi bilan ko'rish", ru: "Посмотреть глазами ученика" },
+  "preview.back": { uz: "Tahrirga qaytish", ru: "Вернуться к редактированию" },
+  "preview.bannerTitle": {
+    uz: "Ko'rib chiqish rejimi — o'quvchi imtihonni aynan shunday ko'radi",
+    ru: "Режим просмотра — именно так экзамен увидит ученик",
+  },
+  "preview.bannerText": {
+    uz: "{questions} ta savol · {points} ball · {minutes} daqiqa. Bu yerda belgilagan javoblaringiz saqlanmaydi va hech narsa topshirilmaydi.",
+    ru: "Вопросов: {questions} · баллов: {points} · минут: {minutes}. Отмеченные здесь ответы не сохраняются, ничего не сдаётся.",
+  },
+  "preview.shuffleNote": {
+    uz: "Har bir o'quvchida savollar va variantlar tartibi aralashtiriladi.",
+    ru: "У каждого ученика порядок вопросов и вариантов перемешивается.",
+  },
+  "preview.submitNote": {
+    uz: "O'quvchi shu oynani ko'radi. Bu ko'rib chiqish — hech narsa topshirilmaydi.",
+    ru: "Ученик увидит это окно. Это просмотр — ничего не сдаётся.",
+  },
+  "preview.keepLooking": { uz: "Ko'rishda davom etish", ru: "Продолжить просмотр" },
+  "preview.empty": { uz: "Ko'rsatish uchun hali savol yo'q.", ru: "Пока нет вопросов для показа." },
 };

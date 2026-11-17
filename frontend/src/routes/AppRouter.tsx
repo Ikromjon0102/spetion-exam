@@ -13,6 +13,7 @@ const ExamUploadPage = lazy(() => import("../features/admin/ExamUploadPage"));
 const ExamReviewEditor = lazy(() => import("../features/admin/ExamReviewEditor"));
 const ChorakCreatePage = lazy(() => import("../features/admin/chorak/ChorakCreatePage"));
 const ExamTemplatesPage = lazy(() => import("../features/admin/chorak/ExamTemplatesPage"));
+const ExamPreviewPage = lazy(() => import("../features/admin/ExamPreviewPage"));
 const RankingPage = lazy(() => import("../features/admin/RankingPage"));
 const AttemptAnswerReviewPage = lazy(() => import("../features/admin/AttemptAnswerReviewPage"));
 const OverallRankingPage = lazy(() => import("../features/admin/OverallRankingPage"));
@@ -134,6 +135,14 @@ export default function AppRouter() {
           element={
             <RequireRole roles={["teacher", "admin"]}>
               <ExamReviewEditor />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="/admin/exams/:examId/preview"
+          element={
+            <RequireRole roles={["teacher", "admin"]}>
+              <ExamPreviewPage />
             </RequireRole>
           }
         />

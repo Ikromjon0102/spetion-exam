@@ -49,6 +49,9 @@ from app.schemas.exam import (
     QuestionOptionOut,
     QuestionOptionUpdate,
     QuestionOut,
+    QuestionStatOut,
+    QuestionStatsOut,
+    OptionPickOut,
     QuestionUpdate,
     SectionOut,
 )
@@ -1045,9 +1048,17 @@ def list_attempts(
     students = db.query(Student).options(joinedload(Student.user)).filter_by(class_id=exam.class_id).all()
     attempts_by_student = {a.student_id: a for a in db.query(ExamAttempt).filter_by(exam_id=exam_id)}
 
+    pending = dict(
+        db.query(ExamAttempt.student_id, func.count(StudentAnswer.id))
+        .join(StudentAnswer, StudentAnswer.attempt_id == ExamAttempt.id)
+        .filter(ExamAttempt.exam_id == exam_id, StudentAnswer.graded_by == "pending")
+        .group_by(ExamAttempt.student_id)
+    )
+
     return [
         AttemptMonitorOut(
             student_id=s.id,
+            pending_manual_count=pending.get(s.id, 0),
             full_name=s.user.full_name,
             status=(attempts_by_student[s.id].status.value if s.id in attempts_by_student else "not_started"),
             started_at=attempts_by_student[s.id].started_at if s.id in attempts_by_student else None,
@@ -1061,6 +1072,75 @@ def list_attempts(
         )
         for s in students
     ]
+
+
+@router.get("/{exam_id}/question-stats", response_model=QuestionStatsOut)
+def get_question_stats(
+    exam_id: int, db: Session = Depends(get_db), user: User = Depends(require_role("teacher", "admin"))
+):
+    """Per-question analysis over everyone who sat the exam: how many got each
+    question right / wrong / left it blank, and for a test question how many
+    picked each option — which is what tells a teacher *what* to re-teach, not
+    just who scored low. Scoped like the results themselves: a block's teacher
+    on a chorak exam gets their own block's questions."""
+    exam = _get_exam_or_404(db, exam_id)
+    scope = exam_service.results_scope(db, user, exam)
+
+    graded_ids = [
+        row[0]
+        for row in db.query(ExamAttempt.id).filter(
+            ExamAttempt.exam_id == exam_id,
+            ExamAttempt.status.in_([AttemptStatus.submitted, AttemptStatus.auto_submitted]),
+        )
+    ]
+    answers_by_question: dict[int, list[StudentAnswer]] = {}
+    if graded_ids:
+        for answer in db.query(StudentAnswer).filter(StudentAnswer.attempt_id.in_(graded_ids)):
+            answers_by_question.setdefault(answer.question_id, []).append(answer)
+
+    subject_names = (
+        dict(db.query(Subject.id, Subject.name).filter(Subject.id.in_([s.subject_id for s in exam.sections])))
+        if exam.sections
+        else {}
+    )
+    section_subject = {s.id: subject_names.get(s.subject_id, "") for s in exam.sections}
+    section_order = {s.id: s.order_index for s in exam.sections}
+
+    questions = [q for q in exam.questions if scope is None or q.section_id in scope]
+    questions.sort(key=lambda q: (section_order.get(q.section_id, 0), q.order_index))
+    total = len(graded_ids)
+    out = []
+    for number, q in enumerate(questions, start=1):
+        answers = answers_by_question.get(q.id, [])
+        answered = [
+            a for a in answers if a.selected_option_id is not None or (a.answer_text or "").strip()
+        ]
+        correct = sum(1 for a in answered if a.is_correct)
+        picks: dict[int, int] = {}
+        for a in answered:
+            if a.selected_option_id is not None:
+                picks[a.selected_option_id] = picks.get(a.selected_option_id, 0) + 1
+        out.append(
+            QuestionStatOut(
+                question_id=q.id,
+                number=number,
+                section_id=q.section_id,
+                subject_name=section_subject.get(q.section_id) if q.section_id else None,
+                question_type=q.question_type.value,
+                prompt_text=q.prompt_text,
+                has_image=q.prompt_image_key is not None,
+                points=float(q.points),
+                correct=correct,
+                wrong=len(answered) - correct,
+                blank=total - len(answered),
+                correct_percent=round(100 * correct / total, 1) if total else 0.0,
+                options=[
+                    OptionPickOut(option_text=o.option_text, is_correct=o.is_correct, picked=picks.get(o.id, 0))
+                    for o in q.options
+                ],
+            )
+        )
+    return QuestionStatsOut(exam_id=exam.id, students_graded=total, questions=out)
 
 
 @router.get("/{exam_id}/attempts/{student_id}", response_model=AttemptMonitorOut)

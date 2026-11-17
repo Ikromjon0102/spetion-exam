@@ -85,6 +85,8 @@ export interface ResultQuestion {
   ai_feedback: string | null;
   is_correct: boolean | null;
   points_awarded: number | null;
+  // a written answer nobody has graded yet: the 0 shown is not a verdict
+  pending_review: boolean;
 }
 
 export interface ExamResult {

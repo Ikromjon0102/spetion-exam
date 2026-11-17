@@ -99,6 +99,9 @@ class ResultQuestionOut(BaseModel):
     ai_feedback: str | None = None
     is_correct: bool | None = None
     points_awarded: float | None = None
+    # short_answer the AI could not grade: waiting for the teacher, so the
+    # 0 points shown are not a verdict yet
+    pending_review: bool = False
 
 
 class ExamResultOut(BaseModel):

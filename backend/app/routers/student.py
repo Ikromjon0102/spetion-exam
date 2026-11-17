@@ -301,6 +301,7 @@ def get_result(exam_id: int, db: Session = Depends(get_db), student: Student = D
                 ai_feedback=(answer.ai_feedback if answer and answers_revealed else None),
                 is_correct=answer.is_correct if answer else False,
                 points_awarded=float(answer.points_awarded) if answer and answer.points_awarded is not None else 0.0,
+                pending_review=bool(answer and answer.graded_by == "pending"),
             )
         )
 

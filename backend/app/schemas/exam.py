@@ -206,6 +206,8 @@ class AttemptMonitorOut(BaseModel):
     deadline_at: datetime | None = None
     submitted_at: datetime | None = None
     score: float | None = None
+    # written answers the AI could not grade, waiting for the teacher
+    pending_manual_count: int = 0
 
 
 class AttemptAnswerReviewOut(BaseModel):
@@ -317,3 +319,34 @@ class SectionResultsOut(BaseModel):
     shows_total: bool
     sections: list[SectionResultColumnOut]
     students: list[SectionResultRowOut]
+
+
+class OptionPickOut(BaseModel):
+    option_text: str
+    is_correct: bool
+    picked: int
+
+
+class QuestionStatOut(BaseModel):
+    """How a class did on one question."""
+
+    question_id: int
+    number: int  # position in the paper as authored (1-based)
+    section_id: int | None = None
+    subject_name: str | None = None  # the block, on a chorak exam
+    question_type: str
+    prompt_text: str
+    has_image: bool = False
+    points: float
+    correct: int
+    wrong: int
+    blank: int
+    # share of the students who sat the exam that got it right, 0-100
+    correct_percent: float
+    options: list[OptionPickOut] = []
+
+
+class QuestionStatsOut(BaseModel):
+    exam_id: int
+    students_graded: int
+    questions: list[QuestionStatOut]

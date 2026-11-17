@@ -51,7 +51,7 @@ subject performance over time (not just per-exam).
 
 ## Current status
 
-Backend is implemented end-to-end (192 passing tests as of Nov 2026; originally 78 in `backend/app/tests/`,
+Backend is implemented end-to-end (194 passing tests as of Nov 2026; originally 78 in `backend/app/tests/`,
 run with `pytest app/tests -q` against an in-memory SQLite DB — no live
 Postgres needed to test) and has been exercised live: Node.js + Docker
 Desktop were installed into this dev environment, the frontend was built
@@ -1315,11 +1315,33 @@ Decisions already confirmed with the user, so don't re-litigate them:
       per question, lists why "Nashr qilish" is disabled, and gained rename,
       close, per-question points and a confirm on question delete. Sidebar and
       header are router `Link`s (plain `<a href>` reloaded the whole app).
-    - Not done from the audit, still open: per-question analytics ("which
-      questions were missed most"), student-preview of an exam, schedule
-      presets, hiding classmates' names in the student-facing class ranking,
-      result-page images for image questions, a "pending manual check" state
-      for AI-ungraded short answers.
+    - **Exams are sat on school computers under supervision — the exam-taking
+      screen is a desktop surface (user's explicit decision, Nov 2026).** Don't
+      spend effort on a phone layout for `ExamTakingPage`/the intro/result
+      pages, and don't count "doesn't fit 390px" there as a bug. (The narrow
+      -screen navigator drawer that already exists is harmless; leave it, don't
+      extend it.) Staff pages are a separate question — teachers do open those
+      on phones.
+    - **Question analysis** — `GET /admin/exams/{id}/question-stats` (right /
+      wrong / blank per question over everyone who submitted, plus how many
+      picked each option; scoped by `results_scope`, so a block's teacher gets
+      their own block) and the "Savollar tahlili" table on `RankingPage`
+      (hardest first by default; a row opens to the option counts).
+    - **`graded_by = "pending"`** — a written answer the AI could not grade (no
+      key / failed call; `ai_grading_service.NEEDS_MANUAL_FEEDBACK`) is no
+      longer stored as an "ai" grade of 0. The student's result shows it as
+      "ustoz tekshiradi" (`ResultQuestionOut.pending_review`), the results page
+      shows "N ta javob baholanmagan" per student
+      (`AttemptMonitorOut.pending_manual_count`), and a teacher's override
+      turns it into "teacher". An *empty* answer is still a plain 0, not pending.
+    - Schedule presets in the editor ("Bugun, hozirdan 18:00 gacha", "Ertaga
+      8:00–18:00"); the schedule inputs are uncontrolled and keyed on the saved
+      values so a preset can replace what they show.
+    - Not done from the audit, still open: a student-eye preview of an exam,
+      hiding classmates' names in the student-facing class ranking (the
+      school's call), result-page images for image questions. Offered and not
+      decided: refusing to *start* an exam from a phone, now that exams are
+      supervised on school computers.
 
 ## Next steps (in order)
 

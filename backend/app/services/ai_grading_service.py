@@ -44,6 +44,16 @@ _SYSTEM_PROMPT = (
 )
 
 
+# What grade_short_answer returns as feedback when the AI could not grade at
+# all. grading_service recognises these and marks the answer graded_by=
+# "pending" instead of "ai", so a 0 that only means "nobody has graded this
+# yet" is shown to the student as "being checked", not as a wrong answer, and
+# to the teacher as work waiting for them.
+FEEDBACK_NOT_CONFIGURED = "AI baholash sozlanmagan (ANTHROPIC_API_KEY yo'q) — ustoz qo'lda baholashi kerak."
+FEEDBACK_FAILED = "AI baholashda xatolik yuz berdi — ustoz qo'lda tekshirib chiqishi kerak."
+NEEDS_MANUAL_FEEDBACK = frozenset({FEEDBACK_NOT_CONFIGURED, FEEDBACK_FAILED})
+
+
 class _ShortAnswerGrade(BaseModel):
     score: float
     feedback: str
@@ -74,7 +84,7 @@ def grade_short_answer(
 
     client = _get_client()
     if client is None:
-        return 0.0, "AI baholash sozlanmagan (ANTHROPIC_API_KEY yo'q) — ustoz qo'lda baholashi kerak."
+        return 0.0, FEEDBACK_NOT_CONFIGURED
 
     try:
         response = client.messages.parse(
@@ -103,4 +113,4 @@ def grade_short_answer(
         return round(score * max_points, 2), graded.feedback.strip()
     except (AnthropicError, ValueError):
         logger.exception("AI grading call failed")
-        return 0.0, "AI baholashda xatolik yuz berdi — ustoz qo'lda tekshirib chiqishi kerak."
+        return 0.0, FEEDBACK_FAILED

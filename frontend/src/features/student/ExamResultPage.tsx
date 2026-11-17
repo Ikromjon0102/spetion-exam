@@ -134,6 +134,12 @@ export default function ExamResultPage() {
           </Card>
         )}
 
+        {result.questions.some((q) => q.pending_review) && (
+          <p role="status" className="sp-review-bar body-sm" style={{ borderColor: "var(--info)" }}>
+            {t("result.pendingReviewBanner", { count: result.questions.filter((q) => q.pending_review).length })}
+          </p>
+        )}
+
         <h2 className="h4" style={{ marginBottom: "var(--space-4)" }}>
           {t("result.byQuestion")}
         </h2>
@@ -156,9 +162,9 @@ export default function ExamResultPage() {
               {q.question_type === "short_answer" ? (
                 <div className="stack" style={{ gap: "var(--space-2)" }}>
                   <AnswerOption
-                    letter={q.answer_text ? (q.is_correct ? "✓" : "✕") : "—"}
-                    correct={!!q.answer_text && !!q.is_correct}
-                    incorrect={!!q.answer_text && !q.is_correct}
+                    letter={q.pending_review ? "…" : q.answer_text ? (q.is_correct ? "✓" : "✕") : "—"}
+                    correct={!q.pending_review && !!q.answer_text && !!q.is_correct}
+                    incorrect={!q.pending_review && !!q.answer_text && !q.is_correct}
                     disabled
                   >
                     {q.answer_text ? (
@@ -169,8 +175,12 @@ export default function ExamResultPage() {
                       t("result.noAnswer")
                     )}
                   </AnswerOption>
-                  {result.answers_revealed && q.ai_feedback && (
-                    <p className="body-sm ink-muted">{q.ai_feedback}</p>
+                  {q.pending_review ? (
+                    <p className="body-sm" style={{ color: "var(--info)" }}>
+                      {t("result.pendingReview")}
+                    </p>
+                  ) : (
+                    result.answers_revealed && q.ai_feedback && <p className="body-sm ink-muted">{q.ai_feedback}</p>
                   )}
                 </div>
               ) : (

@@ -365,3 +365,53 @@ p {
   text-decoration: underline;
   cursor: pointer;
 }
+
+/* results page: per-question analysis */
+.sp-stats-row {
+  cursor: pointer;
+}
+.sp-stats-row:hover td {
+  background: var(--surface-sunken);
+}
+.sp-data-table td.sp-stats-row__question {
+  white-space: normal;
+  font-weight: 400;
+  min-width: 280px;
+  max-width: 560px;
+}
+.sp-stats-row__clip {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.sp-stats-options {
+  list-style: none;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--ink-muted);
+}
+.sp-stats-options__count {
+  display: inline-block;
+  min-width: 28px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--ink);
+}
+.sp-stats-bar {
+  display: inline-block;
+  width: 90px;
+  height: 8px;
+  margin-right: var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--surface-sunken);
+  overflow: hidden;
+  vertical-align: middle;
+}
+.sp-stats-bar > span {
+  display: block;
+  height: 100%;
+}

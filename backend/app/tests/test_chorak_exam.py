@@ -593,3 +593,30 @@ def test_a_file_is_imported_into_one_block_and_arrives_unreviewed(client, db_ses
         files={"file": ("x.docx", b"x", "application/octet-stream")},
     )
     assert resp.status_code == 403
+
+
+def test_question_stats_count_right_wrong_blank_and_option_picks(client, db_session):
+    ctx = _setup(client, db_session)
+    _fill_and_publish(client, ctx)
+    _sit(client, db_session, ctx, "ali", {"Kimyo": 3, "Biologiya": 2, "Tarix": 2})  # everything right
+    _sit(client, db_session, ctx, "vali", {})  # everything wrong ("Xato 1")
+    # a third student submits a blank paper
+    make_student(db_session, ctx["klass"], username="bo'sh")
+    db_session.commit()
+    blank = _login(client, "bo'sh", class_id=ctx["klass"].id)
+    client.post(f"/api/v1/student/exams/{ctx['exam']['id']}/start", headers=blank)
+    client.post(f"/api/v1/student/exams/{ctx['exam']['id']}/submit", headers=blank)
+
+    url = f"{API}/{ctx['exam']['id']}/question-stats"
+    stats = client.get(url, headers=ctx["admin"]).json()
+    assert stats["students_graded"] == 3
+    assert [q["number"] for q in stats["questions"]] == [1, 2, 3, 4, 5, 6, 7]
+    first = stats["questions"][0]
+    assert (first["correct"], first["wrong"], first["blank"], first["correct_percent"]) == (1, 1, 1, 33.3)
+    assert first["subject_name"] == "Kimyo"
+    assert {o["option_text"]: o["picked"] for o in first["options"]} == {"To'g'ri": 1, "Xato 1": 1, "Xato 2": 0}
+
+    # a block's teacher gets their own block only
+    own = client.get(url, headers=_login(client, "tarix_t")).json()
+    assert {q["subject_name"] for q in own["questions"]} == {"Tarix"}
+    assert len(own["questions"]) == 2

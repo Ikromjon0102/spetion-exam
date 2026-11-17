@@ -150,6 +150,8 @@ export interface AttemptMonitor {
   deadline_at: string | null;
   submitted_at: string | null;
   score: number | null;
+  // written answers the AI could not grade, waiting for the teacher
+  pending_manual_count: number;
 }
 
 export interface ClassRankingRow {
@@ -702,7 +704,8 @@ export interface AttemptAnswerReview {
   is_correct: boolean | null;
   points_awarded: number | null;
   ai_feedback: string | null;
-  graded_by: "ai" | "teacher" | null;
+  // "pending": the AI could not grade it — the 0 is a placeholder
+  graded_by: "ai" | "teacher" | "pending" | null;
 }
 
 export async function getAttemptAnswers(examId: number, studentId: number): Promise<AttemptAnswerReview[]> {
@@ -873,5 +876,33 @@ export interface SectionResults {
 
 export async function getSectionResults(examId: number): Promise<SectionResults> {
   const { data } = await apiClient.get<SectionResults>(`/admin/exams/${examId}/section-results`);
+  return data;
+}
+
+export interface QuestionStat {
+  question_id: number;
+  number: number;
+  section_id: number | null;
+  subject_name: string | null;
+  question_type: string;
+  prompt_text: string;
+  has_image: boolean;
+  points: number;
+  correct: number;
+  wrong: number;
+  blank: number;
+  correct_percent: number;
+  options: { option_text: string; is_correct: boolean; picked: number }[];
+}
+
+export interface QuestionStats {
+  exam_id: number;
+  students_graded: number;
+  questions: QuestionStat[];
+}
+
+/** How the class did on each question — what to re-teach, not just who scored low. */
+export async function getQuestionStats(examId: number): Promise<QuestionStats> {
+  const { data } = await apiClient.get<QuestionStats>(`/admin/exams/${examId}/question-stats`);
   return data;
 }

@@ -39,7 +39,9 @@ def grade_attempt(db: Session, attempt: ExamAttempt) -> ExamAttempt:
             answer.points_awarded = points
             answer.is_correct = points >= float(question.points)
             answer.ai_feedback = feedback
-            answer.graded_by = "ai"
+            # "pending": the AI never produced a grade (no key, or the call
+            # failed) — the 0 is a placeholder until a teacher grades it.
+            answer.graded_by = "pending" if feedback in ai_grading_service.NEEDS_MANUAL_FEEDBACK else "ai"
         else:
             if answer.selected_option_id is not None:
                 option = options_by_id.get(answer.selected_option_id)

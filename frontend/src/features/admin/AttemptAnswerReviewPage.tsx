@@ -73,6 +73,7 @@ export default function AttemptAnswerReviewPage() {
   const GRADED_BY_BADGE: Record<string, { status: BadgeStatus; key: string }> = {
     ai: { status: "info", key: "attemptReview.gradedByAi" },
     teacher: { status: "success", key: "attemptReview.gradedByTeacher" },
+    pending: { status: "warning", key: "attemptReview.gradedPending" },
   };
 
   return (

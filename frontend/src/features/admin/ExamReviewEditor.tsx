@@ -229,6 +229,24 @@ export default function ExamReviewEditor() {
     }
   }
 
+  /** One click for the usual sitting: the exam can be started from now until
+   * the end of today's school day, or during tomorrow's. */
+  function applyPreset(day: "today" | "tomorrow") {
+    const start = new Date();
+    const end = new Date();
+    if (day === "tomorrow") {
+      start.setDate(start.getDate() + 1);
+      start.setHours(8, 0, 0, 0);
+      end.setDate(end.getDate() + 1);
+    } else {
+      start.setSeconds(0, 0);
+    }
+    end.setHours(18, 0, 0, 0);
+    // late in the day there may be less than the exam's own length left
+    const minEnd = new Date(start.getTime() + (exam?.duration_minutes ?? 30) * 60000);
+    saveSchedule({ start_at: start.toISOString(), end_at: (end > minEnd ? end : minEnd).toISOString() });
+  }
+
   async function saveQuestion(
     questionId: number,
     patch: Partial<{ prompt_text: string; points: number; needs_review: boolean; reference_answer: string }>
@@ -684,7 +702,20 @@ export default function ExamReviewEditor() {
 
         <Card className="stack" style={{ marginBottom: "var(--space-8)" }}>
           <h2 className="h4">{t("review.schedule")}</h2>
-          <div className="sp-form-row">
+          {!scheduleLocked && (
+            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", flexWrap: "wrap" }}>
+              <span className="caption">{t("schedule.quick")}</span>
+              <Button variant="secondary" size="sm" onClick={() => applyPreset("today")}>
+                {t("schedule.presetToday")}
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => applyPreset("tomorrow")}>
+                {t("schedule.presetTomorrow")}
+              </Button>
+            </div>
+          )}
+          {/* keyed on the saved values: these are uncontrolled inputs, and a
+              preset has to be able to replace what they show */}
+          <div className="sp-form-row" key={`${exam.start_at}|${exam.end_at}|${exam.duration_minutes}`}>
             <div className="sp-field" style={{ flex: 1 }}>
               <label className="sp-field__label">{t("review.startAt")}</label>
               <input

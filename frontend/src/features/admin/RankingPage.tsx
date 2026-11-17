@@ -4,11 +4,13 @@ import {
   deleteAttempt,
   getClassRanking,
   getExamDetail,
+  getQuestionStats,
   getSectionResults,
   listExamAttempts,
   type AttemptMonitor,
   type ClassRanking,
   type ExamDetail,
+  type QuestionStats,
   type SectionResults,
 } from "../../api/adminApi";
 import { AdminLayout, Badge, Button, ConfirmButton, ListRow, RankBadge, StatCard, type BadgeStatus } from "../../components/ui";
@@ -16,6 +18,7 @@ import { formatDateTimeUz } from "../../utils/formatDate";
 import { formatPoints } from "../../utils/formatPoints";
 import { useLanguage } from "../../i18n/LanguageContext";
 import { useAuth } from "../../auth/AuthContext";
+import RichText from "../../components/ui/RichText";
 
 const STATUS_KEY: Record<string, { status: BadgeStatus; key: string }> = {
   not_started: { status: "neutral", key: "attemptStatus.not_started" },
@@ -55,6 +58,10 @@ export default function RankingPage() {
   const [attempts, setAttempts] = useState<AttemptMonitor[]>([]);
   const [blocks, setBlocks] = useState<SectionResults | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [stats, setStats] = useState<QuestionStats | null>(null);
+  // hardest first is what a teacher wants; paper order is there to look one up
+  const [statsOrder, setStatsOrder] = useState<"hardest" | "paper">("hardest");
+  const [openQuestionId, setOpenQuestionId] = useState<number | null>(null);
   const { t } = useLanguage();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -74,6 +81,9 @@ export default function RankingPage() {
     getClassRanking(id)
       .then(setRanking)
       .catch(() => undefined);
+    getQuestionStats(id)
+      .then(setStats)
+      .catch(() => setStats(null));
     if (detail === null || detail.exam_type === "chorak") {
       getSectionResults(id)
         .then(setBlocks)
@@ -286,6 +296,88 @@ export default function RankingPage() {
           )
         )}
 
+        {stats && stats.students_graded > 0 && stats.questions.length > 0 && (
+          <div style={{ marginBottom: "var(--space-8)" }}>
+            <div className="sp-page-head" style={{ marginBottom: "var(--space-3)" }}>
+              <div>
+                <h2 className="h4">{t("stats.title")}</h2>
+                <p className="body-sm ink-muted">{t("stats.subtitle", { count: stats.students_graded })}</p>
+              </div>
+              <div className="no-print" style={{ display: "flex", gap: "var(--space-2)" }}>
+                <Button size="sm" variant={statsOrder === "hardest" ? "secondary" : "ghost"} onClick={() => setStatsOrder("hardest")}>
+                  {t("stats.orderHardest")}
+                </Button>
+                <Button size="sm" variant={statsOrder === "paper" ? "secondary" : "ghost"} onClick={() => setStatsOrder("paper")}>
+                  {t("stats.orderPaper")}
+                </Button>
+              </div>
+            </div>
+            <div className="sp-table-scroll">
+              <table className="sp-data-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th className="sp-data-table__text">{t("stats.question")}</th>
+                    <th>{t("stats.correct")}</th>
+                    <th>{t("stats.wrong")}</th>
+                    <th>{t("stats.blank")}</th>
+                    <th className="sp-data-table__text">{t("stats.share")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...stats.questions]
+                    .sort((a, b) =>
+                      statsOrder === "hardest" ? a.correct_percent - b.correct_percent || a.number - b.number : a.number - b.number
+                    )
+                    .map((q) => {
+                      const tone =
+                        q.correct_percent < 50 ? "var(--danger)" : q.correct_percent < 70 ? "var(--warning)" : "var(--success)";
+                      const open = openQuestionId === q.question_id;
+                      return (
+                        <tr
+                          key={q.question_id}
+                          className="sp-stats-row"
+                          onClick={() => setOpenQuestionId(open ? null : q.question_id)}
+                        >
+                          <td>{q.number}</td>
+                          <td className="sp-data-table__text sp-stats-row__question">
+                            {q.subject_name && <span className="sp-block-table__kind" style={{ marginLeft: 0, marginRight: 8 }}>{q.subject_name}</span>}
+                            <span className={open ? undefined : "sp-stats-row__clip"}>
+                              {q.has_image ? t("stats.imageQuestion") : <RichText text={q.prompt_text} />}
+                            </span>
+                            {open && q.options.length > 0 && (
+                              <ul className="sp-stats-options">
+                                {q.options.map((o, i) => (
+                                  <li key={i} style={{ color: o.is_correct ? "var(--success)" : undefined }}>
+                                    <span className="sp-stats-options__count">{o.picked}</span>
+                                    {o.is_correct ? "✓ " : ""}
+                                    {o.option_text ? <RichText text={o.option_text} /> : "—"}
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </td>
+                          <td>{q.correct}</td>
+                          <td>{q.wrong}</td>
+                          <td>{q.blank}</td>
+                          <td className="sp-data-table__text">
+                            <span className="sp-stats-bar">
+                              <span style={{ width: `${q.correct_percent}%`, background: tone }} />
+                            </span>
+                            <span style={{ color: tone, fontFamily: "var(--font-mono)" }}>{Math.round(q.correct_percent)}%</span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
+            <p className="caption no-print" style={{ marginTop: "var(--space-2)" }}>
+              {t("stats.clickHint")}
+            </p>
+          </div>
+        )}
+
         <div className="no-print">
           <h2 className="h4" style={{ marginBottom: "var(--space-4)" }}>
             {t("ranking.allStudents")}
@@ -313,6 +405,9 @@ export default function RankingPage() {
                         <span className="data-value">
                           {formatPoints(a.score)} {t("result.points")}
                         </span>
+                      )}
+                      {a.pending_manual_count > 0 && (
+                        <Badge status="warning">{t("ranking.pendingManual", { count: a.pending_manual_count })}</Badge>
                       )}
                       <Badge status={badge.status}>{badge.key ? t(badge.key) : a.status}</Badge>
                       {isDone(a.status) && exam && (

@@ -272,3 +272,49 @@ def test_ai_grading_service_empty_answer_never_calls_the_api(monkeypatch):
     )
     assert points == 0.0
     assert feedback
+
+
+def test_an_answer_the_ai_could_not_grade_is_pending_not_wrong(client, db_session, monkeypatch):
+    """No API key / a failed call leaves 0 points as a placeholder: the answer
+    is marked "pending" so the student sees "being checked" and the teacher
+    sees it waiting, instead of a silent zero. A teacher's grade clears it."""
+    from app.services import ai_grading_service
+
+    monkeypatch.setattr(
+        "app.services.ai_grading_service.grade_short_answer",
+        lambda **kwargs: (0.0, ai_grading_service.FEEDBACK_FAILED),
+    )
+    klass = make_class(db_session)
+    subject = make_subject(db_session)
+    make_admin(db_session, username="pending_admin")
+    student = make_student(db_session, klass, username="pending_student")
+    db_session.commit()
+    now = datetime.now(timezone.utc)
+    exam = make_exam(db_session, klass, subject, duration_minutes=30, start_at=now - timedelta(minutes=5), end_at=now + timedelta(hours=1))
+    question = add_short_answer_question(db_session, exam, reference_answer="Namunaviy javob", points=2)
+    db_session.commit()
+    publish_exam(db_session, exam)
+    attempt = attempt_service.start_attempt(db_session, exam, student)
+    attempt_service.record_answer(db_session, attempt, question.id, None, "Javob")
+    attempt = attempt_service.submit_attempt(db_session, attempt.id)
+    assert attempt.answers[0].graded_by == "pending"
+
+    student_token = client.post(
+        "/api/v1/auth/login", json={"username": "pending_student", "password": "secret123", "class_id": klass.id}
+    ).json()["access_token"]
+    result = client.get(
+        f"/api/v1/student/exams/{exam.id}/result", headers={"Authorization": f"Bearer {student_token}"}
+    ).json()
+    assert result["questions"][0]["pending_review"] is True
+
+    admin = {"Authorization": f"Bearer {_login(client, 'pending_admin')}"}
+    monitor = client.get(f"/api/v1/admin/exams/{exam.id}/attempts", headers=admin).json()
+    assert monitor[0]["pending_manual_count"] == 1
+
+    resp = client.put(
+        f"/api/v1/admin/exams/{exam.id}/attempts/{student.id}/answers/{question.id}",
+        headers=admin,
+        json={"points_awarded": 2},
+    )
+    assert resp.json()["graded_by"] == "teacher"
+    assert client.get(f"/api/v1/admin/exams/{exam.id}/attempts", headers=admin).json()[0]["pending_manual_count"] == 0

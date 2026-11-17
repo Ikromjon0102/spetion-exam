@@ -51,7 +51,7 @@ subject performance over time (not just per-exam).
 
 ## Current status
 
-Backend is implemented end-to-end (194 passing tests as of Nov 2026; originally 78 in `backend/app/tests/`,
+Backend is implemented end-to-end (205 passing tests as of Nov 2026; originally 78 in `backend/app/tests/`,
 run with `pytest app/tests -q` against an in-memory SQLite DB — no live
 Postgres needed to test) and has been exercised live: Node.js + Docker
 Desktop were installed into this dev environment, the frontend was built
@@ -1354,6 +1354,64 @@ Decisions already confirmed with the user, so don't re-litigate them:
       school's call), result-page images for image questions. Offered and not
       decided: refusing to *start* an exam from a phone, now that exams are
       supervised on school computers.
+
+12. **Parser rework against three real teacher files (Nov 2026) — built
+    locally, committed, not deployed.** The old line-by-line block splitter
+    parsed the real chemistry DOCX as 15 questions (of 20), the biology DOCX
+    as 14 (of 20) and the maths PDF as **0**. Now 20/20/20, each upload
+    verified through `POST /admin/exams/uploads` end to end. The real files
+    are teachers' exam content and are NOT in the repo; `test_parsers.py`
+    models their layouts synthetically — add a synthetic test for any new
+    layout rather than committing a real exam.
+    - **One engine** (`parsers/text_split.py: parse_questions`) for DOCX and
+      PDF. A line is `{"text", "fmt" (one bit-set per char: BOLD/SUB/SUP),
+      "ocr", "flags"}` (`make_line` normalises it). What real files showed:
+      options sit several to a line (`A)34 B)16 C)13 D)10`, tab-separated, even
+      `A) KMnO4<tab>В) MnO2`), mixed Latin/Cyrillic look-alike letters (А В С Е
+      Н are mapped to Latin; Б/Г/Д are deliberately NOT — they are different
+      letters in a Russian test, ask for a sample before guessing), the
+      correct answer is **one bold run** (no answer key at all), statements
+      `1) ... 2) ... 3) ...` precede the options, and `10)Ona...` style
+      numbering. So: option markers are accepted only in sequence from the
+      start of a line (`a)og'iz B)ichak ...` inside a question is text;
+      lowercase options only in a file that never uses uppercase); a number
+      marker starts a new question only once the current one has an option;
+      the answer-key header must START the line ("To'g'ri javoblar sonini
+      toping" used to cut the file off — 4 questions became 1); options A–H
+      and lowercase key letters work; a `)` marker needs no `(?!\d)` guard
+      (`A)34` didn't match before — the reason the PDF gave 0).
+    - **Correct answer** = key letter, else exactly one bold option, else
+      unknown (never guessed). `confidence="high"` when resolved that way —
+      **a single bold option is now "high" (it was "low" by design before);
+      the real files all mark answers by bold only, and every question
+      showing the red "Parser noaniq o'qigan" badge taught teachers to ignore
+      it. Flip it back in `_finish` if you want the stricter meaning.** Every
+      parsed question is still `needs_review=True`. `ParsedQuestion.warnings`
+      (`no_correct_answer`, `few_options`, `ocr`, `formula_lost`,
+      `image_lost`) is stored in `raw_parse_debug`, not shown in the UI yet.
+    - DOCX: tables are read (questions in a table used to be 0), except
+      Savol/Javob answer-key tables; a Word equation (OMML) keeps its text but
+      is flagged low (`formula_lost` — layout not rebuilt, no OMML→LaTeX yet);
+      inline images are flagged `image_lost` (not extracted yet).
+      Sub/superscript runs become rich text (`CaCO<sub>3</sub>`); a question
+      without any stays plain text exactly as before.
+    - PDF: exponents recovered from char size + baseline (`30153016` was really
+      3015^3016, `99129` was 99^129) via `extract_text_lines(return_chars=
+      True)`; a running header repeated on every page and bare page numbers
+      are dropped (they used to be glued onto the last option); math-italic
+      letters (𝑎) are normalised, stray combining overlines dropped. **Not
+      recoverable**: stacked fractions (they come out as several lines) and
+      two-column layouts — such questions are flagged low for a screenshot
+      paste. A PDF with no key and no bold (the maths one) parses with no
+      correct answer marked: the teacher picks them in the editor.
+    - **Uploads no longer freeze the site.** `create_upload` is `async def`
+      and, under `CELERY_EAGER` (production), `.delay()` parses in-process —
+      a slow parse (scanned PDF OCR) blocked the single uvicorn process:
+      measured, a 6 s parse made an unrelated request wait 5.1 s (students'
+      answer saves included). Now `BackgroundTasks.add_task(parse_exam_upload.
+      delay, ...)`: the response is immediate (0.0 s measured) and the upload
+      page's existing status polling picks up the result. Never call
+      `.delay()`/a parser directly inside an `async def` handler.
 
 ## Next steps (in order)
 

@@ -4,7 +4,7 @@ monitoring. See docs/spec.md sections 2-4.
 
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi import Response as FastAPIResponse
 from fastapi.responses import Response
 from sqlalchemy import and_, case, exists, false, func, or_
@@ -258,6 +258,7 @@ def _upload_out(db: Session, upload: ExamUpload) -> ExamUploadOut:
 
 @router.post("/uploads", response_model=ExamUploadOut, status_code=status.HTTP_202_ACCEPTED)
 async def create_upload(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     subject_id: int | None = Form(None),
     class_id: int | None = Form(None),
@@ -308,7 +309,14 @@ async def create_upload(
     # always opens a broker connection even under task_always_eager (a
     # Celery quirk), while calling the task object's own apply_async/delay
     # correctly short-circuits to an in-process call in eager dev mode.
-    parse_exam_upload.delay(upload.id, subject_id, class_id, title, expected_question_count)
+    #
+    # Never call it inline here: this handler runs ON the event loop, and with
+    # CELERY_EAGER (production on the shared VPS) .delay() parses in-process —
+    # a scanned PDF's OCR took the whole single-process server with it, every
+    # student's answer save included (measured: a 6 s parse made an unrelated
+    # request wait 5 s). A background task runs in the threadpool after the
+    # response; the upload page already polls the upload's status.
+    background_tasks.add_task(parse_exam_upload.delay, upload.id, subject_id, class_id, title, expected_question_count)
 
     return _upload_out(db, upload)
 

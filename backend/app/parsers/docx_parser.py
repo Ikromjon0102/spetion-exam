@@ -1,6 +1,6 @@
 """DOCX question extraction via python-docx. Splits paragraphs into question
 blocks (PARSER_QUESTION_PATTERNS), extracts options per block
-(PARSER_OPTION_PATTERNS), and detects the correct option via, in order:
+(see text_split.py), and detects the correct option via, in order:
 a trailing "Javoblar:" answer key in the paragraph text, an answer-key
 *table* (a real format seen in the wild: a "Savol"/"Javob" row pair with
 question numbers and letters), or bold-run fallback. Never auto-clears
@@ -13,15 +13,20 @@ import re
 
 from docx import Document
 from docx.oxml.ns import qn
+from docx.table import Table
+from docx.text.paragraph import Paragraph
+from docx.text.run import Run
 
-from app.parsers.base import BaseParser, ParsedOption, ParsedQuestion
+from app.parsers.base import BaseParser, ParsedQuestion
 from app.parsers.text_split import (
+    BOLD,
+    SUB,
+    SUP,
     extract_answer_key,
     is_option_start,
     is_question_start,
-    question_number,
-    split_block,
-    split_into_blocks,
+    make_line,
+    parse_questions,
     split_off_answer_key,
 )
 
@@ -130,49 +135,98 @@ class _AutoNumbering:
         return template.replace(f"%{ilvl + 1}", value)
 
 
+def _paragraph_line(paragraph, numbering: "_AutoNumbering") -> dict | None:
+    """One paragraph as a line with per-character formatting (bold / sub /
+    superscript), so an inline row like "A)4 ta  B)6 ta" with ONE bold run
+    still tells which option is marked correct."""
+    label = numbering.label_for(paragraph)
+    text_parts: list[str] = []
+    fmt: list[int] = []
+    flags: set[str] = set()
+
+    def add(text: str, bits: int) -> None:
+        text_parts.append(text)
+        fmt.extend([bits] * len(text))
+
+    for child in paragraph._p.iterchildren():
+        tag = child.tag
+        runs = []
+        if tag == qn("w:r"):
+            runs = [Run(child, paragraph)]
+        elif tag == qn("w:hyperlink"):
+            runs = [Run(r, paragraph) for r in child.findall(qn("w:r"))]
+        elif tag in (qn("m:oMath"), qn("m:oMathPara")):
+            # A Word equation isn't in paragraph.text at all. Keep its text so
+            # the question doesn't silently lose it, and mark the question as
+            # needing a look — the layout (fractions, roots) is not rebuilt.
+            add("".join(t.text or "" for t in child.iter(qn("m:t"))), 0)
+            flags.add("formula")
+        for run in runs:
+            if run._r.findall(qn("w:drawing")) or run._r.findall(qn("w:pict")):
+                flags.add("image")
+            bits = 0
+            if run.bold:
+                bits |= BOLD
+            if run.font.subscript:
+                bits |= SUB
+            if run.font.superscript:
+                bits |= SUP
+            add(run.text, bits)
+
+    text = "".join(text_parts)
+    if not text.strip():
+        return None
+    # Only prepend Word's auto-number when the text doesn't already carry a
+    # literal marker of its own (a hand-typed "1." inside a list item would
+    # otherwise end up doubled).
+    if label and not is_question_start(text.strip()) and not is_option_start(text.strip()):
+        fmt = [0] * (len(label) + 1) + fmt
+        text = f"{label} {text}"
+    return make_line(text, fmt, flags=flags)
+
+
+def _is_answer_key_table(table) -> bool:
+    for row in table.rows:
+        first = row.cells[0].text.strip().lower() if row.cells else ""
+        if first in _QUESTION_ROW_LABELS | _ANSWER_ROW_LABELS:
+            return True
+    return False
+
+
+def _document_lines(document: Document, numbering: "_AutoNumbering") -> list[dict]:
+    """Every paragraph in document order, INCLUDING paragraphs inside tables
+    (a test laid out as a table used to parse as 0 questions). An answer-key
+    table is skipped here — _extract_table_answer_key reads it."""
+    lines: list[dict] = []
+    body = document.element.body
+    for child in body.iterchildren():
+        if child.tag == qn("w:p"):
+            line = _paragraph_line(Paragraph(child, document), numbering)
+            if line:
+                lines.append(line)
+        elif child.tag == qn("w:tbl"):
+            table = Table(child, document)
+            if _is_answer_key_table(table):
+                continue
+            seen: set[int] = set()
+            for row in table.rows:
+                for cell in row.cells:
+                    if id(cell._tc) in seen:  # a merged cell repeats itself
+                        continue
+                    seen.add(id(cell._tc))
+                    for p in cell.paragraphs:
+                        line = _paragraph_line(p, numbering)
+                        if line:
+                            lines.append(line)
+    return lines
+
+
 class DocxParser(BaseParser):
     def parse(self, file_bytes: bytes) -> list[ParsedQuestion]:
         document = Document(io.BytesIO(file_bytes))
         numbering = _AutoNumbering(document)
 
-        lines: list[dict] = []
-        for paragraph in document.paragraphs:
-            text = paragraph.text.strip()
-            label = numbering.label_for(paragraph)
-            if not text:
-                continue
-            # Only prepend Word's auto-number when the text doesn't already
-            # carry a literal marker of its own (a hand-typed "1." inside a
-            # list item would otherwise end up doubled).
-            if label and not is_question_start(text) and not is_option_start(text):
-                text = f"{label} {text}"
-            bold = any(run.bold for run in paragraph.runs if run.text.strip())
-            lines.append({"text": text, "bold": bool(bold)})
-
+        lines = _document_lines(document, numbering)
         body_lines, key_lines = split_off_answer_key(lines)
         answer_key = {**_extract_table_answer_key(document), **extract_answer_key(key_lines)}
-        blocks = split_into_blocks(body_lines)
-
-        questions: list[ParsedQuestion] = []
-        for block in blocks:
-            prompt, option_lines = split_block(block)
-            if not prompt or not option_lines:
-                continue
-
-            num = question_number(block)
-            correct_letter = answer_key.get(num) if num is not None else None
-
-            options: list[ParsedOption] = []
-            for i, opt in enumerate(option_lines):
-                letter = chr(ord("A") + i)
-                is_correct = (correct_letter == letter) if correct_letter else opt["bold"]
-                options.append(ParsedOption(text=opt["text"], is_correct=is_correct))
-
-            # "high" no longer requires exactly 4 options — publish_exam
-            # only requires >=2 now (the fixed-4-option rule was relaxed on
-            # the user's explicit request), so a clean 3- or 5-option parse
-            # with a matched answer-key letter deserves "high" just as much.
-            confidence = "high" if (correct_letter and len(options) >= 2) else "low"
-            questions.append(ParsedQuestion(prompt=prompt, options=options, confidence=confidence))
-
-        return questions
+        return parse_questions(body_lines, answer_key)

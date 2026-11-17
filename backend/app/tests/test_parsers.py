@@ -65,7 +65,9 @@ def test_docx_parser_falls_back_to_bold_when_no_answer_key():
     questions = DocxParser().parse(buf.getvalue())
     assert len(questions) == 1
     q = questions[0]
-    assert q.confidence == "low"
+    # exactly one bold option is a clear signal (the real teacher files mark
+    # the correct answer this way and have no answer key at all)
+    assert q.confidence == "high"
     correct = [o for o in q.options if o.is_correct]
     assert len(correct) == 1
     assert correct[0].text == "Yer"
@@ -216,22 +218,31 @@ def test_bullet_marker_option_pattern_and_space_separated_answer_table():
     Both new patterns (bullet-marker options, space-separated answer
     entries) covered directly against text_split.py's real functions.
     """
-    from app.parsers.text_split import extract_answer_key, is_option_start, split_block, strip_option_marker
+    from app.parsers.text_split import (
+        extract_answer_key,
+        is_option_start,
+        make_line,
+        parse_questions,
+        strip_option_marker,
+    )
 
     assert is_option_start("● A 198")
     assert strip_option_marker("● A 198") == "198"
 
-    block = [
-        {"text": "1. Amallar tartibi:", "bold": False},
-        {"text": "Hisoblang: 35 - 4 * 6 + 12", "bold": False},
-        {"text": "● A 198", "bold": False},
-        {"text": "● B 23", "bold": False},
-        {"text": "● C 15", "bold": False},
-        {"text": "● D 27", "bold": False},
+    lines = [
+        make_line(t)
+        for t in [
+            "1. Amallar tartibi:",
+            "Hisoblang: 35 - 4 * 6 + 12",
+            "● A 198",
+            "● B 23",
+            "● C 15",
+            "● D 27",
+        ]
     ]
-    prompt, options = split_block(block)
-    assert "Amallar tartibi" in prompt
-    assert [o["text"] for o in options] == ["198", "23", "15", "27"]
+    (question,) = parse_questions(lines, {})
+    assert "Amallar tartibi" in question.prompt
+    assert [o.text for o in question.options] == ["198", "23", "15", "27"]
 
     key_lines = [
         {"text": "Savol Javob Savol Javob Savol Javob Savol Javob", "bold": False},
@@ -299,3 +310,225 @@ def test_docx_parser_reconstructs_wordss_automatic_list_numbers():
     assert len(questions) == 3
     assert [q.prompt for q in questions] == ["Savol matni 1?", "Savol matni 2?", "Savol matni 3?"]
     assert [[o.is_correct for o in q.options] for q in questions] == [[True, False], [False, True], [True, False]]
+
+
+# ---- real-world layouts (modelled on three teachers' actual files) ----------
+
+
+def _line_with_bold_option(doc, prefix, options, bold_index):
+    """One paragraph holding several options, only one of them a bold run —
+    how the chemistry/biology files mark the correct answer."""
+    p = doc.add_paragraph()
+    for i, text in enumerate(options):
+        run = p.add_run(f"{chr(65 + i)}) {text}" + ("\t" if i < len(options) - 1 else ""))
+        run.bold = i == bold_index
+    return p
+
+
+def test_docx_inline_options_with_one_bold_run_mark_the_correct_one():
+    doc = Document()
+    doc.add_paragraph("1. Qaysi son eng katta?")
+    _line_with_bold_option(doc, "", ["4 ta", "6 ta", "8 ta", "10 ta"], bold_index=2)
+    doc.add_paragraph("2. Keyingi savol?")
+    _line_with_bold_option(doc, "", ["a", "b", "c", "d"], bold_index=0)
+
+    questions = DocxParser().parse(_docx_bytes(doc))
+
+    assert len(questions) == 2
+    assert [o.text for o in questions[0].options] == ["4 ta", "6 ta", "8 ta", "10 ta"]
+    assert [o.is_correct for o in questions[0].options] == [False, False, True, False]
+    assert [o.is_correct for o in questions[1].options] == [True, False, False, False]
+    assert questions[0].confidence == "high"
+
+
+def test_a_question_mentioning_javoblar_does_not_cut_the_file_short():
+    """"To'g'ri javoblar sonini toping" contains the word the answer-key
+    header looks for — the rest of the file used to vanish after it."""
+    doc = Document()
+    for n in (1, 2, 3):
+        text = "To'g'ri javoblar sonini toping?" if n == 2 else f"Savol {n}?"
+        doc.add_paragraph(f"{n}. {text}")
+        for letter in "ABCD":
+            doc.add_paragraph(f"{letter}) variant")
+    doc.add_paragraph("Javoblar: 1-A, 2-B, 3-C")
+
+    questions = DocxParser().parse(_docx_bytes(doc))
+
+    assert len(questions) == 3
+    assert [[o.is_correct for o in q.options].index(True) for q in questions] == [0, 1, 2]
+
+
+def test_statement_lists_inside_a_question_are_not_split_into_questions():
+    """"1) ... 2) ... 3) ..." statements precede the options; they used to be
+    torn into fake questions, taking the real question's text with them."""
+    doc = Document()
+    doc.add_paragraph("1. Quyidagilardan shaharlarni ko'rsating.")
+    doc.add_paragraph("1) Toshkent")
+    doc.add_paragraph("2) Samarqand")
+    doc.add_paragraph("3) Amudaryo")
+    doc.add_paragraph("A) 1,2")
+    doc.add_paragraph("B) 2,3")
+    doc.add_paragraph("2.Keyingi savol?")
+    doc.add_paragraph("1)bir  2)ikki  3)uch")
+    doc.add_paragraph("A)1,2   B)2,3")
+    doc.add_paragraph("Javoblar: 1-A, 2-B")
+
+    questions = DocxParser().parse(_docx_bytes(doc))
+
+    assert len(questions) == 2
+    assert "Toshkent" in questions[0].prompt and "Amudaryo" in questions[0].prompt
+    assert [o.text for o in questions[0].options] == ["1,2", "2,3"]
+    assert "1)bir" in questions[1].prompt
+    assert [o.is_correct for o in questions[1].options] == [False, True]
+
+
+def test_lowercase_and_stray_uppercase_markers_in_a_statement_line_are_text():
+    doc = Document()
+    doc.add_paragraph("1. Tartib bilan joylashtiring.")
+    doc.add_paragraph("a)og'iz B)ichak d)halqum e)oshqozon")
+    for letter, text in zip("ABCD", ["a,d,b,e", "a,b,d,e", "d,a,b,e", "e,d,b,a"]):
+        doc.add_paragraph(f"{letter}){text}")
+    doc.add_paragraph("Javoblar: 1-B")
+
+    (q,) = DocxParser().parse(_docx_bytes(doc))
+
+    assert "a)og'iz" in q.prompt
+    assert [o.text for o in q.options] == ["a,d,b,e", "a,b,d,e", "d,a,b,e", "e,d,b,a"]
+
+
+def test_cyrillic_lookalike_option_letters_are_read_as_latin():
+    doc = Document()
+    doc.add_paragraph("1. Savol?")
+    doc.add_paragraph("А) bir\tВ) ikki")  # Cyrillic А and В
+    doc.add_paragraph("C) uch\tD) to'rt")
+    doc.add_paragraph("Javoblar: 1-B")
+
+    (q,) = DocxParser().parse(_docx_bytes(doc))
+
+    assert [o.text for o in q.options] == ["bir", "ikki", "uch", "to'rt"]
+    assert [o.is_correct for o in q.options] == [False, True, False, False]
+
+
+def test_five_options_and_lowercase_answer_key():
+    doc = Document()
+    doc.add_paragraph("1. Savol?")
+    for letter in "ABCDE":
+        doc.add_paragraph(f"{letter}) {letter.lower()}")
+    doc.add_paragraph("Javoblar: 1-e")
+
+    (q,) = DocxParser().parse(_docx_bytes(doc))
+
+    assert len(q.options) == 5
+    assert [o.is_correct for o in q.options] == [False, False, False, False, True]
+
+
+def test_questions_inside_a_word_table_are_read():
+    doc = Document()
+    table = doc.add_table(rows=1, cols=1)
+    cell = table.cell(0, 0)
+    cell.paragraphs[0].text = "1. Jadval ichidagi savol?"
+    for letter in "ABCD":
+        cell.add_paragraph(f"{letter}) {letter}")
+    doc.add_paragraph("Javoblar: 1-C")
+
+    (q,) = DocxParser().parse(_docx_bytes(doc))
+
+    assert q.prompt == "Jadval ichidagi savol?"
+    assert [o.is_correct for o in q.options] == [False, False, True, False]
+
+
+def test_subscripts_survive_as_rich_text_and_plain_text_stays_plain():
+    doc = Document()
+    p = doc.add_paragraph("1. ")
+    p.add_run("H")
+    p.add_run("2").font.subscript = True
+    p.add_run("SO4 qaysi?")
+    doc.add_paragraph("A) bir")
+    doc.add_paragraph("B) ikki")
+    doc.add_paragraph("2. Oddiy savol?")
+    doc.add_paragraph("A) bir")
+    doc.add_paragraph("B) ikki")
+
+    q1, q2 = DocxParser().parse(_docx_bytes(doc))
+
+    assert q1.prompt == "<!--sp-rich--><p>H<sub>2</sub>SO4 qaysi?</p>"
+    assert q2.prompt == "Oddiy savol?"  # no formatting -> exactly the plain text as before
+
+
+def test_a_word_equation_is_flagged_not_silently_dropped():
+    from docx.oxml import parse_xml
+
+    ns = (
+        'xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math" '
+        'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
+    )
+    doc = Document()
+    p = doc.add_paragraph("1. Hisoblang: ")
+    p._p.append(parse_xml(f"<m:oMath {ns}><m:r><m:t>x+1</m:t></m:r></m:oMath>"))
+    for letter in "ABCD":
+        doc.add_paragraph(f"{letter}) {letter}")
+    doc.add_paragraph("Javoblar: 1-A")
+
+    (q,) = DocxParser().parse(_docx_bytes(doc))
+
+    assert "x+1" in q.prompt
+    assert q.confidence == "low"
+    assert "formula_lost" in q.warnings
+
+
+def _pdf_with(lines):
+    """lines: [(x, y, size, text)] drawn in Times."""
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    for x, y, size, text in lines:
+        c.setFont("Helvetica", size)
+        c.drawString(x, y, text)
+    c.save()
+    return buf.getvalue()
+
+
+def test_pdf_exponents_are_recovered_and_options_on_one_line_split():
+    # "30" then a small raised "15" -> 30^15, and "A)34 B)16 C)13 D)10" on one line
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+
+    pdf = _pdf_with(
+        [
+            (50, 780, 14, "7. Hisoblang 30"),
+            (50 + stringWidth("7. Hisoblang 30", "Helvetica", 14), 786, 9, "15"),
+            (50, 760, 14, "A)34 B)16 C)13 D)10"),
+            (50, 730, 14, "8. Ikkinchi savol?"),
+            (50, 710, 14, "A)1 B)2 C)3 D)4"),
+        ]
+    )
+    q1, q2 = PdfParser().parse(pdf)
+
+    assert "30<sup>15</sup>" in q1.prompt
+    assert [o.text for o in q1.options] == ["34", "16", "13", "10"]
+    assert [o.text for o in q2.options] == ["1", "2", "3", "4"]
+    assert q1.confidence == "low" and "no_correct_answer" in q1.warnings  # no key, no bold in a PDF
+
+
+def test_pdf_running_header_is_not_glued_onto_the_last_option():
+    pages = []
+    for page in range(2):
+        pages.append(
+            [
+                (50, 800, 11, "I-CHORAK MATEMATIKA"),
+                (50, 760, 12, f"{page + 1}. Savol?"),
+                (50, 740, 12, "A) bir"),
+                (50, 724, 12, "B) ikki"),
+                (50, 40, 10, str(page + 1)),  # page number
+            ]
+        )
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    for page in pages:
+        for x, y, size, text in page:
+            c.setFont("Helvetica", size)
+            c.drawString(x, y, text)
+        c.showPage()
+    c.save()
+
+    questions = PdfParser().parse(buf.getvalue())
+
+    assert [[o.text for o in q.options] for q in questions] == [["bir", "ikki"], ["bir", "ikki"]]

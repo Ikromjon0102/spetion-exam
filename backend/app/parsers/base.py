@@ -12,6 +12,9 @@ class ParsedQuestion:
     prompt: str
     options: list[ParsedOption] = field(default_factory=list)
     confidence: str = "low"  # "high" | "low" — surfaced to the review UI
+    # Why the parser is unsure (kept in the upload's debug dump): e.g.
+    # "no_correct_answer", "formula_lost", "image_lost", "few_options".
+    warnings: list[str] = field(default_factory=list)
 
 
 class BaseParser:

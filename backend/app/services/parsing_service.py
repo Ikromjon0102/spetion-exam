@@ -61,6 +61,7 @@ def process_upload(
             {
                 "prompt": q.prompt,
                 "confidence": q.confidence,
+                "warnings": q.warnings,
                 "options": [{"text": o.text, "is_correct": o.is_correct} for o in q.options],
             }
             for q in parsed_questions

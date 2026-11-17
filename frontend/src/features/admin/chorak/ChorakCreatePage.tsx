@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   createChorakExams,
+  getQuarters,
   listAdminClasses,
   listExamTemplates,
   type ClassOut,
@@ -44,6 +45,10 @@ export default function ChorakCreatePage() {
       })
       .catch(() => setTemplates([]));
     listAdminClasses().then(setClasses).catch(() => undefined);
+    // the chorak being sat is almost always the one we are in
+    getQuarters()
+      .then((q) => setQuarter((prev) => (prev === "" ? q.current_number : prev)))
+      .catch(() => undefined);
   }, []);
 
   const template = useMemo(() => templates?.find((x) => x.id === templateId) ?? null, [templates, templateId]);

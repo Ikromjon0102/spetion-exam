@@ -51,7 +51,7 @@ subject performance over time (not just per-exam).
 
 ## Current status
 
-Backend is implemented end-to-end (205 passing tests as of Nov 2026; originally 78 in `backend/app/tests/`,
+Backend is implemented end-to-end (223 passing tests as of Nov 2026; originally 78 in `backend/app/tests/`,
 run with `pytest app/tests -q` against an in-memory SQLite DB — no live
 Postgres needed to test) and has been exercised live: Node.js + Docker
 Desktop were installed into this dev environment, the frontend was built
@@ -1412,6 +1412,36 @@ Decisions already confirmed with the user, so don't re-litigate them:
       delay, ...)`: the response is immediate (0.0 s measured) and the upload
       page's existing status polling picks up the result. Never call
       `.delay()`/a parser directly inside an `async def` handler.
+
+13. **Exam list by chorak instead of archiving (Nov 2026) — built locally,
+    not deployed.** ~10 classes x 5-6 exams per quarter piled up in the admin's
+    list and archiving 60 exams by hand each quarter would be forgotten. The
+    exam list (`ExamListPage.tsx`) now defaults to **the current chorak** (a
+    selector: "Hozirgi chorak" / 1-4 / "Hammasi"); nothing is hidden by state,
+    nothing needs a click to maintain, results/portfolio are untouched. Archive
+    stays for junk/test exams. Dashboard links (`?needsReview=1`, `?status=`)
+    start on "Hammasi" because what they ask for can be from any chorak. The
+    chorak filter applies to the "Joriy" tab only; "Arxiv" is whole-school
+    (its count never changes with the selector).
+    - **Calendar** (user's, Nov 2026): chorak 1 = 1.09-5.11, 2 = 6.11-11.01,
+      3 = 12.01-7.04, 4 = 8.04-1.07. Stored as month/day only
+      (`SchoolQuarter`, migration `d6e1a9c3f7b2`, **no rows inserted** — an
+      empty table means `quarter_service.DEFAULTS`), so it repeats every year;
+      the admin edits it at `/admin/manage/quarters` (`QuartersPage.tsx`,
+      `GET/PUT /admin/quarters`, PUT admin-only, validated: real dates — no
+      29 Feb —, start <= end, each quarter ends before the next starts).
+    - **Which chorak an exam is in** (`services/quarter_service.py`): the
+      school year is 1 Sep - 31 Aug; an exam's date is `coalesce(start_at,
+      created_at)` (a draft has no start); the *effective* ranges absorb every
+      gap — chorak 1 reaches back to 1 Sep, a holiday between two quarters goes
+      to the earlier one, chorak 4 runs to 31 Aug. It is derived at read time,
+      so changing the calendar re-files old exams (deliberate; no per-exam
+      stored quarter is read — `Exam.quarter` on chorak exams is just a label
+      the admin picks, defaulted to the current one). SQL twin:
+      `admin_exams._quarter_clause` (school day bounds are UTC+5). `GET
+      /admin/exams` and `/summary` take `quarter` (+ optional `school_year`,
+      default the current one); the summary's "current" count and facets follow
+      it, its archived count does not. Tests: `tests/test_quarters.py`.
 
 ## Next steps (in order)
 

@@ -71,6 +71,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           { to: "/admin/manage/students", label: t("adminNav.students"), icon: "users" },
           { to: "/admin/manage/teachers", label: t("adminNav.teachers"), icon: "user-check" },
           { to: "/admin/manage/templates", label: t("adminNav.templates"), icon: "layers" },
+          { to: "/admin/manage/quarters", label: t("adminNav.quarters"), icon: "calendar" },
         ] as const)
       : []),
   ];

@@ -5,12 +5,14 @@ import {
   archiveOldExams,
   deleteExam,
   getExamsSummary,
+  getQuarters,
   listExamsPage,
   restoreExams,
   type ExamBulkResult,
   type ExamPhase,
   type ExamSummary,
   type ExamType,
+  type QuartersInfo,
   type ExamsSummary,
 } from "../../api/adminApi";
 import { AdminLayout, Badge, Button, ConfirmButton, ListRow, Modal, Toast, type BadgeStatus } from "../../components/ui";
@@ -75,6 +77,16 @@ function blockProgress(exam: ExamSummary, t: (key: string, params?: Record<strin
   });
 }
 
+/** "6.11–11.01" for a quarter's first and last day. */
+function formatRange(q: { start_date: string; end_date: string } | undefined): string {
+  if (!q) return "";
+  const short = (iso: string) => {
+    const [, m, d] = iso.split("-");
+    return `${Number(d)}.${m}`;
+  };
+  return `${short(q.start_date)}–${short(q.end_date)}`;
+}
+
 export default function AdminExamListPage() {
   const { t } = useLanguage();
   const { user } = useAuth();
@@ -91,6 +103,16 @@ export default function AdminExamListPage() {
     if (flash) window.history.replaceState({}, "");
   }, [flash]);
 
+  // Which chorak the list shows. By default the current one, so a quarter's
+  // worth of exams (10 classes x 5-6 each) is out of the way without anyone
+  // having to archive anything; "all" shows everything. Coming from a
+  // dashboard link (needs review / a status) the exams asked for may be from
+  // any chorak, so those start on "all".
+  const [period, setPeriod] = useState<"current" | "all" | number>(
+    searchParams.get("needsReview") === "1" || searchParams.get("status") ? "all" : "current"
+  );
+  const [quarters, setQuarters] = useState<QuartersInfo | null>(null);
+  const [quartersFailed, setQuartersFailed] = useState(false);
   const [archived, setArchived] = useState(false);
   const [subjectId, setSubjectId] = useState<number | null>(null);
   const [classId, setClassId] = useState<number | null>(null);
@@ -124,12 +146,43 @@ export default function AdminExamListPage() {
     return () => clearTimeout(timer);
   }, [search]);
 
-  const filtersKey = JSON.stringify([archived, subjectId, classId, phase, debouncedSearch, needsReview, examStatus, examType]);
+  useEffect(() => {
+    getQuarters()
+      .then(setQuarters)
+      .catch(() => setQuartersFailed(true)); // without the calendar, just show everything
+  }, []);
+
+  // undefined = no chorak filter, null = still waiting for the calendar. The
+  // archive is a whole-school shelf and ignores the chorak.
+  const quarterParam: number | undefined | null = archived
+    ? undefined
+    : period === "all"
+    ? undefined
+    : typeof period === "number"
+    ? period
+    : quarters
+    ? quarters.current_number
+    : quartersFailed
+    ? undefined
+    : null;
+
+  const filtersKey = JSON.stringify([
+    archived,
+    subjectId,
+    classId,
+    phase,
+    debouncedSearch,
+    needsReview,
+    examStatus,
+    examType,
+    quarterParam,
+  ]);
   // Guards against a slow earlier response overwriting a newer one.
   const requestId = useRef(0);
 
   const fetchPage = useCallback(
     async (offset: number) => {
+      if (quarterParam === null) return; // the calendar hasn't arrived yet
       const mine = ++requestId.current;
       setLoading(true);
       try {
@@ -142,6 +195,7 @@ export default function AdminExamListPage() {
           needs_review: needsReview || undefined,
           exam_status: examStatus ?? undefined,
           exam_type: examType || undefined,
+          quarter: quarterParam,
           limit: PAGE_SIZE,
           offset,
         });
@@ -158,11 +212,17 @@ export default function AdminExamListPage() {
     [filtersKey]
   );
 
+  // The summary always carries the chorak, even on the archive tab, so the
+  // "Joriy (N)" count stays the same number on both tabs.
+  const summaryQuarter =
+    period === "all" ? undefined : typeof period === "number" ? period : quarters ? quarters.current_number : undefined;
   const refreshSummary = useCallback(() => {
-    getExamsSummary(archived)
+    if (period === "current" && !quarters && !quartersFailed) return;
+    getExamsSummary(archived, summaryQuarter)
       .then(setSummary)
       .catch(() => undefined);
-  }, [archived]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [archived, summaryQuarter, quarters, quartersFailed]);
 
   useEffect(() => {
     setSelected(new Set());
@@ -312,7 +372,9 @@ export default function AdminExamListPage() {
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: "var(--space-2)", marginBottom: "var(--space-4)" }}>
+        <div
+          style={{ display: "flex", gap: "var(--space-2)", marginBottom: "var(--space-4)", flexWrap: "wrap", alignItems: "center" }}
+        >
           <Button variant={archived ? "ghost" : "secondary"} onClick={() => switchTab(false)}>
             {t("examArchive.tabCurrent")}
             {summary ? ` (${summary.current})` : ""}
@@ -321,6 +383,31 @@ export default function AdminExamListPage() {
             {t("examArchive.tabArchive")}
             {summary ? ` (${summary.archived})` : ""}
           </Button>
+          {!archived && quarters && (
+            <select
+              className="sp-input"
+              style={{ maxWidth: 400, marginLeft: "auto" }}
+              value={String(period)}
+              aria-label={t("quarter.label")}
+              onChange={(e) => {
+                const v = e.target.value;
+                setPeriod(v === "current" || v === "all" ? v : Number(v));
+                setSubjectId(null);
+                setClassId(null);
+              }}
+            >
+              <option value="current">
+                {t("quarter.current", { n: quarters.current_number })} ·{" "}
+                {formatRange(quarters.quarters.find((q) => q.number === quarters.current_number))}
+              </option>
+              {quarters.quarters.map((q) => (
+                <option key={q.number} value={q.number}>
+                  {t("chorak.quarterN", { n: q.number })} · {formatRange(q)}
+                </option>
+              ))}
+              <option value="all">{t("quarter.all")}</option>
+            </select>
+          )}
         </div>
 
         {summary && summary.subjects.length > 0 && (
@@ -447,7 +534,13 @@ export default function AdminExamListPage() {
           <ListRow
             state="free"
             title={archived ? t("examArchive.emptyArchive") : hasFilter ? t("common.noSearchResults") : t("adminExamList.empty")}
-            subtitle={!archived && !hasFilter ? t("adminExamList.emptySubtitle") : undefined}
+            subtitle={
+              !archived && !hasFilter
+                ? period === "all"
+                  ? t("adminExamList.emptySubtitle")
+                  : t("quarter.emptyHint")
+                : undefined
+            }
           />
         )}
 

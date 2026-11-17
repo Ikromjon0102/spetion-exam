@@ -11,6 +11,7 @@ const PATHS: Record<string, string> = {
   "chevron-right": "M9 18l6-6-6-6",
   "arrow-left": "M19 12H5 M12 19l-7-7 7-7",
   "bar-chart": "M18 20V10 M12 20V4 M6 20v-6",
+  calendar: "M19 4H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z M16 2v4 M8 2v4 M3 10h18",
   layers: "M12 2L2 7l10 5 10-5-10-5z M2 17l10 5 10-5 M2 12l10 5 10-5",
   x: "M18 6L6 18 M6 6l12 12",
   plus: "M12 5v14 M5 12h14",

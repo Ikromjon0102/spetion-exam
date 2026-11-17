@@ -55,7 +55,7 @@ from app.schemas.exam import (
     QuestionUpdate,
     SectionOut,
 )
-from app.services import exam_service, grading_service, ranking_service
+from app.services import exam_service, grading_service, quarter_service, ranking_service
 from app.tasks.parsing_tasks import parse_exam_upload
 
 router = APIRouter(prefix="/api/v1/admin/exams", tags=["admin-exams"])
@@ -384,6 +384,18 @@ def visible_exams_query(db: Session, user: User):
     return query
 
 
+def _quarter_clause(db: Session, quarter: int, school_year: int | None):
+    """SQL for "falls in this chorak of this school year" (default: the
+    current school year). An exam's date is its start, or — for a draft with
+    none — the day it was created."""
+    quarters, _ = quarter_service.get_quarters(db)
+    year = school_year if school_year is not None else quarter_service.school_year_start_year(quarter_service.school_today())
+    start, end = quarter_service.effective_range(quarters, quarter, year)
+    lo, hi = quarter_service.utc_bounds(start, end)
+    when = func.coalesce(Exam.start_at, Exam.created_at)
+    return and_(when >= lo, when < hi)
+
+
 def _phase_clause(phase: str, now: datetime):
     """SQL twin of exam_service.exam_phase — keep the two in step."""
     live_statuses = [ExamStatus.scheduled, ExamStatus.active]
@@ -436,6 +448,8 @@ def list_exams(
     needs_review: bool = False,
     archived: bool = False,
     exam_type: str | None = None,
+    quarter: int | None = Query(None, ge=1, le=4),
+    school_year: int | None = Query(None, ge=2000, le=2100),
     limit: int | None = Query(None, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
@@ -457,6 +471,8 @@ def list_exams(
         query = query.filter(_phase_clause(phase, datetime.now(timezone.utc)))
     if exam_type:
         query = query.filter(Exam.exam_type == exam_type)
+    if quarter is not None:
+        query = query.filter(_quarter_clause(db, quarter, school_year))
     if q and q.strip():
         query = query.filter(Exam.title.ilike(f"%{q.strip()}%"))
     if needs_review:
@@ -472,6 +488,8 @@ def list_exams(
 @router.get("/summary", response_model=ExamsSummaryOut)
 def exams_summary(
     archived: bool = False,
+    quarter: int | None = Query(None, ge=1, le=4),
+    school_year: int | None = Query(None, ge=2000, le=2100),
     db: Session = Depends(get_db),
     user: User = Depends(require_role("teacher", "admin")),
 ):
@@ -479,9 +497,12 @@ def exams_summary(
     view (or the archive), plus the size of both tabs. Counted in SQL over the
     exams this user may see."""
     base = visible_exams_query(db, user)
-    current = base.filter(Exam.archived_at.is_(None)).count()
+    in_quarter = base.filter(_quarter_clause(db, quarter, school_year)) if quarter is not None else base
+    # "Joriy" follows the chorak being shown; the archive is a whole-school
+    # shelf and is never narrowed by it
+    current = in_quarter.filter(Exam.archived_at.is_(None)).count()
     archived_total = base.filter(Exam.archived_at.isnot(None)).count()
-    scoped = base.filter(Exam.archived_at.isnot(None) if archived else Exam.archived_at.is_(None))
+    scoped = base.filter(Exam.archived_at.isnot(None)) if archived else in_quarter.filter(Exam.archived_at.is_(None))
 
     def facets(column, model, name_column) -> list[FacetOut]:
         rows = scoped.with_entities(column, func.count(Exam.id)).group_by(column).all()

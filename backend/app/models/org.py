@@ -47,3 +47,19 @@ class Class(Base):
     homeroom_teacher_id: Mapped[int | None] = mapped_column(ForeignKey("teachers.id"), nullable=True)
 
     students: Mapped[list["Student"]] = relationship(back_populates="klass")  # noqa: F821
+
+
+class SchoolQuarter(Base):
+    """One of the school year's four chorak (quarters), stored as month/day
+    only so the same calendar repeats every year without anyone re-entering
+    it (a date range that crosses New Year — chorak 2 — is just
+    start 6 Nov, end 11 Jan). The school year runs 1 Sep - 31 Aug. An empty
+    table means "use the defaults in quarter_service.DEFAULTS"."""
+
+    __tablename__ = "school_quarters"
+
+    number: Mapped[int] = mapped_column(Integer, primary_key=True)  # 1..4
+    start_month: Mapped[int] = mapped_column(Integer)
+    start_day: Mapped[int] = mapped_column(Integer)
+    end_month: Mapped[int] = mapped_column(Integer)
+    end_day: Mapped[int] = mapped_column(Integer)

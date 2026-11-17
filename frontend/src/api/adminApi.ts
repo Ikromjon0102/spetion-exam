@@ -465,6 +465,8 @@ export interface ExamListParams {
   needs_review?: boolean;
   exam_status?: string;
   exam_type?: ExamType;
+  // chorak 1-4 of the current school year (omitted = every exam)
+  quarter?: number;
   limit?: number;
   offset?: number;
 }
@@ -488,8 +490,32 @@ export interface ExamsSummary {
   classes: ExamFacet[];
 }
 
-export async function getExamsSummary(archived: boolean): Promise<ExamsSummary> {
-  const { data } = await apiClient.get<ExamsSummary>("/admin/exams/summary", { params: { archived } });
+export async function getExamsSummary(archived: boolean, quarter?: number): Promise<ExamsSummary> {
+  const { data } = await apiClient.get<ExamsSummary>("/admin/exams/summary", { params: { archived, quarter } });
+  return data;
+}
+
+export interface QuarterInfo {
+  number: number;
+  start_date: string; // YYYY-MM-DD, in the current school year
+  end_date: string;
+}
+
+export interface QuartersInfo {
+  school_year_start: number;
+  current_number: number;
+  is_default: boolean;
+  quarters: QuarterInfo[];
+}
+
+export async function getQuarters(): Promise<QuartersInfo> {
+  const { data } = await apiClient.get<QuartersInfo>("/admin/quarters");
+  return data;
+}
+
+/** Only the month and day of each date are kept: the calendar repeats every school year. */
+export async function saveQuarters(quarters: QuarterInfo[]): Promise<QuartersInfo> {
+  const { data } = await apiClient.put<QuartersInfo>("/admin/quarters", { quarters });
   return data;
 }
 

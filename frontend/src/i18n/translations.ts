@@ -897,4 +897,28 @@ export const translations: Record<string, Record<Lang, string>> = {
   },
   "preview.keepLooking": { uz: "Ko'rishda davom etish", ru: "Продолжить просмотр" },
   "preview.empty": { uz: "Ko'rsatish uchun hali savol yo'q.", ru: "Пока нет вопросов для показа." },
+  "adminNav.quarters": { uz: "Choraklar sanasi", ru: "Даты четвертей" },
+  "quarter.label": { uz: "Chorak", ru: "Четверть" },
+  "quarter.current": { uz: "Hozirgi chorak ({n}-chorak)", ru: "Текущая четверть ({n}-я)" },
+  "quarter.all": { uz: "Hammasi (barcha choraklar)", ru: "Все (все четверти)" },
+  "quarter.emptyHint": {
+    uz: "Bu chorakda hali imtihon yo'q. Eski imtihonlarni ko'rish uchun yuqoridan boshqa chorak yoki «Hammasi»ni tanlang.",
+    ru: "В этой четверти пока нет экзаменов. Чтобы увидеть старые, выберите другую четверть или «Все» выше.",
+  },
+  "quarter.title": { uz: "Choraklar sanasi", ru: "Даты четвертей" },
+  "quarter.subtitle": {
+    uz: "{year} o'quv yili. Imtihonlar ro'yxati odatda hozirgi chorakni ko'rsatadi; imtihon chorakka boshlanish sanasi bo'yicha tegishli bo'ladi.",
+    ru: "{year} учебный год. Список экзаменов по умолчанию показывает текущую четверть; экзамен относится к четверти по дате начала.",
+  },
+  "quarter.from": { uz: "Boshlanishi", ru: "Начало" },
+  "quarter.to": { uz: "Tugashi", ru: "Конец" },
+  "quarter.now": { uz: "Hozir", ru: "Сейчас" },
+  "quarter.note": {
+    uz: "Faqat kun va oy saqlanadi — sanalar har yil takrorlanadi, qayta kiritish shart emas. Choraklar orasidagi ta'til kunlari oldingi chorakka qo'shiladi.",
+    ru: "Сохраняются только день и месяц — даты повторяются каждый год, вводить заново не нужно. Каникулы между четвертями относятся к предыдущей четверти.",
+  },
+  "quarter.useDefaults": { uz: "Standart sanalar", ru: "Стандартные даты" },
+  "quarter.saved": { uz: "Choraklar sanasi saqlandi", ru: "Даты четвертей сохранены" },
+  "quarter.needAllDates": { uz: "Hamma sanalarni kiriting", ru: "Заполните все даты" },
+  "quarter.loadError": { uz: "Choraklar sanasini yuklab bo'lmadi", ru: "Не удалось загрузить даты четвертей" },
 };

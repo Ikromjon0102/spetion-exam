@@ -28,7 +28,8 @@ from app.schemas.results import (
     StudentPerformanceOut,
     StudentPerformanceSubjectOut,
 )
-from app.services import exam_service, ranking_service
+from app.schemas.dynamics import DynamicsOut
+from app.services import dynamics_service, exam_service, ranking_service
 
 router = APIRouter(prefix="/api/v1/admin", tags=["results"])
 
@@ -95,6 +96,24 @@ def get_student_performance(
             )
         )
     return StudentPerformanceOut(student_id=student.id, full_name=student.user.full_name, subjects=subjects)
+
+
+@router.get("/students/{student_id}/dynamics", response_model=DynamicsOut)
+def get_student_dynamics(
+    student_id: int,
+    school_year: int | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role("teacher", "admin")),
+):
+    """A student's learning dynamics for staff — the same page the student
+    sees, plus their place in the class (which the student never gets).
+    Scoped like the rest of the student views: admin, or a teacher connected
+    to the student's class."""
+    student = db.get(Student, student_id)
+    if student is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="O'quvchi topilmadi")
+    _ensure_class_view_access(db, user, student.class_id)
+    return dynamics_service.build_dynamics(db, student, school_year, include_rank=True)
 
 
 @router.get("/students/{student_id}/subjects/{subject_id}/history", response_model=SubjectHistoryOut)

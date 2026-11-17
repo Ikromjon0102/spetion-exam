@@ -51,7 +51,7 @@ subject performance over time (not just per-exam).
 
 ## Current status
 
-Backend is implemented end-to-end (223 passing tests as of Nov 2026; originally 78 in `backend/app/tests/`,
+Backend is implemented end-to-end (232 passing tests as of Nov 2026 — the 5 in `test_question_images.py` need `STORAGE_BACKEND=local` when MinIO isn't running; originally 78 in `backend/app/tests/`,
 run with `pytest app/tests -q` against an in-memory SQLite DB — no live
 Postgres needed to test) and has been exercised live: Node.js + Docker
 Desktop were installed into this dev environment, the frontend was built
@@ -1442,6 +1442,42 @@ Decisions already confirmed with the user, so don't re-litigate them:
       /admin/exams` and `/summary` take `quarter` (+ optional `school_year`,
       default the current one); the summary's "current" count and facets follow
       it, its archived count does not. Tests: `tests/test_quarters.py`.
+
+14. **Learning-dynamics page (Nov 2026) — built and verified locally, not
+    deployed, no migration.** One page per student showing how results moved
+    "from the start of the year to now", across every graded exam of every
+    kind/subject. **The same page for student, teacher and admin**
+    (`features/shared/DynamicsPage.tsx` + `DynamicsView.tsx`; `ProfilePage`
+    and `StudentPerformancePage` are now thin wrappers that only supply the
+    data loader and the layout — the old per-subject cards are gone).
+    - **Rank is staff-only, by the user's decision**: `GET /student/me/
+      dynamics` never includes it (`show_rank=False`); `GET /admin/students/
+      {id}/dynamics` (scoped by `_ensure_class_view_access`) does. The PDF
+      report never includes rank either.
+    - `services/dynamics_service.build_dynamics` (schema `schemas/dynamics.py`,
+      test `tests/test_dynamics.py`). Everything is percent. A nazorat exam =
+      one result; a chorak exam = one result per subject block
+      (`AttemptSectionScore`). A missed exam is listed in `missed`, never
+      counted as 0. `baseline` = mean of the first k results, `current` = mean
+      of the last k (k=1 for <=3 results, else 2); `overall` weights each
+      subject equally. Class average shown only with >=3 graded attempts
+      (`MIN_CLASS_SAMPLE`). Quarter rank = points earned/possible within the
+      school year, RANK() ties. `provisional` = an answer still
+      `graded_by == "pending"` (drawn hollow, marked `*`).
+      **Known wart**: a pending written answer scores 0% until the teacher
+      grades it, and that 0 still enters the lines/moving average.
+    - Charts are dependency-free SVG/HTML in `components/dynamics/` and each
+      takes a `paper` mode (hex colours, no animation) so the same component
+      renders on screen (CSS vars, animated, `prefers-reduced-motion` aware)
+      and into the PDF.
+    - **A4 PDF for parents**: `DynamicsReport.tsx` (2 pages, Spetion logo)
+      is rendered off-screen only while exporting, captured with html2canvas
+      and wrapped by a hand-written PDF writer (`utils/imagesToPdf.ts`, JPEG
+      per page) — no PDF library. Checked with pdfplumber: 2 pages, 595x842.
+    - Long badge labels wrap inside the hero (`.sp-dyn-notes`); `.sp-badge`
+      is `nowrap` globally, which overflowed a phone before.
+    - Ideas not built: per-topic analysis (needs question topic tags), a
+      projected chorak score.
 
 ## Next steps (in order)
 

@@ -34,7 +34,8 @@ from app.schemas.attempt import (
     SubjectHistoryPointOut,
     SubmitResultOut,
 )
-from app.services import attempt_service, ranking_service
+from app.schemas.dynamics import DynamicsOut
+from app.services import attempt_service, dynamics_service, ranking_service
 
 router = APIRouter(prefix="/api/v1/student", tags=["student"])
 
@@ -364,6 +365,16 @@ def list_subjects(db: Session = Depends(get_db), _student: Student = Depends(get
     """Read-only subject list so the profile page can discover which
     subjects to fetch history for — /admin/subjects is teacher/admin-only."""
     return db.query(Subject).order_by(Subject.name).all()
+
+
+@router.get("/me/dynamics", response_model=DynamicsOut)
+def get_my_dynamics(
+    school_year: int | None = None, db: Session = Depends(get_db), student: Student = Depends(get_current_student)
+):
+    """The student's own learning dynamics. No class rank here on purpose —
+    a place in the class is for teachers, not a number for a child to be
+    measured by."""
+    return dynamics_service.build_dynamics(db, student, school_year, include_rank=False)
 
 
 @router.get("/me/subjects/{subject_id}/history", response_model=SubjectHistoryOut)

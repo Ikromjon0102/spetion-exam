@@ -112,7 +112,7 @@ export default function ExamTemplatesPage() {
     if (sections.some((s) => !s.subject_id || !(s.question_count > 0) || !(s.points_per_question > 0))) {
       return setFormError(t("templates.rowIncomplete"));
     }
-    if (new Set(sections.map((s) => s.subject_id)).size !== sections.length) {
+    if (new Set(sections.map((s) => `${s.subject_id}:${s.kind}`)).size !== sections.length) {
       return setFormError(t("templates.subjectTwice"));
     }
     setSaving(true);

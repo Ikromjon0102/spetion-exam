@@ -126,6 +126,12 @@ def _section_outs(db: Session, exams: list[Exam], user: User | None) -> dict[int
             (a.class_id, a.subject_id) for a in db.query(TeacherClassSubject).filter_by(teacher_id=user.teacher.id)
         }
     class_of = {e.id: e.class_id for e in chorak}
+    by_exam: dict[int, list] = {}
+    for section in sections:
+        by_exam.setdefault(section.exam_id, []).append(section)
+    labels: dict[int, str] = {}
+    for group in by_exam.values():
+        labels.update(exam_service.section_labels(group, subject_names))
     out: dict[int, list[SectionOut]] = {}
     for section in sections:
         class_id = class_of[section.exam_id]
@@ -134,7 +140,7 @@ def _section_outs(db: Session, exams: list[Exam], user: User | None) -> dict[int
             SectionOut(
                 id=section.id,
                 subject_id=section.subject_id,
-                subject_name=subject_names.get(section.subject_id, ""),
+                subject_name=labels.get(section.id, ""),
                 kind=section.kind,
                 order_index=section.order_index,
                 question_count=section.question_count,
@@ -1132,7 +1138,7 @@ def get_question_stats(
         if exam.sections
         else {}
     )
-    section_subject = {s.id: subject_names.get(s.subject_id, "") for s in exam.sections}
+    section_subject = exam_service.section_labels(exam.sections, subject_names)
     section_order = {s.id: s.order_index for s in exam.sections}
 
     questions = [q for q in exam.questions if scope is None or q.section_id in scope]

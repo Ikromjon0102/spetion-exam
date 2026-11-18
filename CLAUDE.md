@@ -51,7 +51,7 @@ subject performance over time (not just per-exam).
 
 ## Current status
 
-Backend is implemented end-to-end (232 passing tests as of Nov 2026 — the 5 in `test_question_images.py` need `STORAGE_BACKEND=local` when MinIO isn't running; originally 78 in `backend/app/tests/`,
+Backend is implemented end-to-end (233 passing tests as of Nov 2026 — the 5 in `test_question_images.py` need `STORAGE_BACKEND=local` when MinIO isn't running; originally 78 in `backend/app/tests/`,
 run with `pytest app/tests -q` against an in-memory SQLite DB — no live
 Postgres needed to test) and has been exercised live: Node.js + Docker
 Desktop were installed into this dev environment, the frontend was built
@@ -1478,6 +1478,25 @@ Decisions already confirmed with the user, so don't re-litigate them:
       is `nowrap` globally, which overflowed a phone before.
     - Ideas not built: per-topic analysis (needs question topic tags), a
       projected chorak score.
+
+15. **Same subject as both an asosiy and a majburiy block (Nov 2026) — built
+    locally, not deployed.** Economics sits Matematika twice (asosiy + majburiy)
+    next to Ingliz tili/Tarix/Ona tili; templates used to refuse a repeated
+    subject. Now only the same (subject, kind) pair is refused
+    (`_check_template_body`, mirrored in `ExamTemplatesPage.tsx`).
+    - **Display**: `exam_service.section_labels` gives "Matematika (asosiy)" /
+      "Matematika (majburiy)" only when a subject repeats within one exam; used
+      for every block name the API returns (`SectionOut`, student
+      `AttemptSectionOut`/result, results columns, daily-results columns,
+      question stats). Compute it over the exam's FULL block list, never a
+      teacher's filtered view. A new endpoint that names a block must use it.
+    - **Results**: `ranking_service.subject_results` and `dynamics_service`
+      merge a subject's blocks of one exam into ONE result (score and max
+      summed), so the portfolio shows one Matematika point per exam and class
+      averages pool per student, not per block. `AttemptSectionScore` rows stay
+      one per block. A block teacher is "teacher of the subject", so the same
+      teacher edits both Matematika blocks.
+    - Test: `test_one_subject_can_be_both_an_asosiy_and_a_majburiy_block`.
 
 ## Next steps (in order)
 

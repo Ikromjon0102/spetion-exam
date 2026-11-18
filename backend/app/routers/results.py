@@ -293,6 +293,7 @@ def get_class_daily_results(
             names = dict(
                 db.query(Subject.id, Subject.name).filter(Subject.id.in_([s.subject_id for s in exam.sections]))
             )
+            labels = exam_service.section_labels(exam.sections, names)
             block_scores: dict[int, dict[int, float]] = {}
             for sc in db.query(AttemptSectionScore).filter_by(exam_id=exam.id):
                 block_scores.setdefault(sc.section_id, {})[sc.student_id] = float(sc.score)
@@ -301,7 +302,7 @@ def get_class_daily_results(
                     DailyResultsExamOut(
                         exam_id=exam.id,
                         exam_title=exam.title,
-                        subject_name=names.get(section.subject_id, ""),
+                        subject_name=labels.get(section.id, ""),
                         end_at=exam.end_at,
                         question_count=section.question_count,
                         max_score=round(section.question_count * float(section.points_per_question), 2),

@@ -82,9 +82,12 @@ def subject_results(db, student_id: int, subject_id: int) -> list[SubjectResult]
             ExamAttempt.score.isnot(None),
         )
     ]
-    results += [
-        SubjectResult(e.id, e.title, e.exam_type, float(sc.score or 0), float(sc.max_score or 0), a.submitted_at)
-        for sc, a, e in db.query(AttemptSectionScore, ExamAttempt, Exam)
+    # A subject can be two blocks of one chorak exam (asosiy + majburiy, e.g.
+    # economics sits Matematika twice) — still ONE result for that subject in
+    # that exam, so the portfolio doesn't show two points on the same day.
+    merged: dict[int, SubjectResult] = {}
+    for sc, a, e in (
+        db.query(AttemptSectionScore, ExamAttempt, Exam)
         .join(ExamAttempt, ExamAttempt.id == AttemptSectionScore.attempt_id)
         .join(Exam, Exam.id == AttemptSectionScore.exam_id)
         .filter(
@@ -92,7 +95,14 @@ def subject_results(db, student_id: int, subject_id: int) -> list[SubjectResult]
             AttemptSectionScore.subject_id == subject_id,
             ExamAttempt.status.in_(_GRADED),
         )
-    ]
+    ):
+        got = merged.get(e.id)
+        if got is None:
+            merged[e.id] = SubjectResult(e.id, e.title, e.exam_type, float(sc.score or 0), float(sc.max_score or 0), a.submitted_at)
+        else:
+            got.score = round(got.score + float(sc.score or 0), 2)
+            got.max_score = round(got.max_score + float(sc.max_score or 0), 2)
+    results += list(merged.values())
     results.sort(key=lambda r: (r.submitted_at is None, r.submitted_at))
     return results
 

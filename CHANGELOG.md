@@ -7,6 +7,12 @@ Versiya raqamlari ish bosqichlariga qarab qo'yilgan (rasmiy release tag emas).
 
 ---
 
+## v2.2 — Iqtisod yo'nalishi uchun choraklik shablon (2026-noyabr)
+- Choraklik shablonda **bitta fan ham asosiy, ham majburiy** bo'lishi mumkin (masalan iqtisod: asosiy fanlar Matematika va Ingliz tili, majburiylari Matematika, Tarix, Ona tili). Faqat bir xil fan + bir xil tur ikki marta qo'shilmaydi.
+- Ikki "Matematika" bloki chalkashmasligi uchun nomlari "Matematika (asosiy)" / "Matematika (majburiy)" ko'rinishida chiqadi (faqat fan takrorlansa).
+- O'quvchi portfoliosi va dinamikada bir imtihondagi ikki Matematika bloki **bitta natija** bo'lib birlashadi.
+- Matematika ustozi ikkala Matematika blokini yozadi.
+
 ## v2.1 — O'zlashtirish dinamikasi (2026-noyabr)
 - Har bir o'quvchi uchun bitta sahifa: yil boshidan hozirgacha barcha imtihonlar (nazorat, choraklik, har qanday fan). O'quvchi, ustoz va admin uchun bir xil.
 - Umumiy daraja halqasi, "yil boshida → hozir" o'zgarishi, fanlar radari (animatsiya bilan), chorak-chorak ustunlari, vaqt chizig'i (sinf o'rtachasi bilan), fan × oy issiqlik xaritasi, fanlar bo'yicha kartalar.

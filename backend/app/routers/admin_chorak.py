@@ -77,8 +77,13 @@ def _template_out(db: Session, template: ExamTemplate) -> TemplateOut:
 
 def _check_template_body(db: Session, body: TemplateIn, template_id: int | None) -> None:
     subject_ids = [s.subject_id for s in body.sections]
-    if len(set(subject_ids)) != len(subject_ids):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Bitta fan ikki marta qo'shilgan")
+    # One subject may be both an asosiy and a majburiy block (economics sits
+    # Matematika twice), but not twice with the same kind.
+    pairs = [(s.subject_id, s.kind) for s in body.sections]
+    if len(set(pairs)) != len(pairs):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Bitta fan bir xil turda ikki marta qo'shilgan"
+        )
     known = {row[0] for row in db.query(Subject.id).filter(Subject.id.in_(subject_ids))}
     if known != set(subject_ids):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Noma'lum fan")
@@ -242,7 +247,8 @@ def get_section_results(
     scope = exam_service.results_scope(db, user, exam)
     sections = [s for s in exam.sections if scope is None or s.id in scope]
 
-    names = dict(db.query(Subject.id, Subject.name).filter(Subject.id.in_([s.subject_id for s in sections])))
+    names = dict(db.query(Subject.id, Subject.name).filter(Subject.id.in_([s.subject_id for s in exam.sections])))
+    labels = exam_service.section_labels(exam.sections, names)
     klass = db.get(Class, exam.class_id)
     students = db.query(Student).options(joinedload(Student.user)).filter_by(class_id=exam.class_id).all()
     attempts = {a.student_id: a for a in db.query(ExamAttempt).filter_by(exam_id=exam.id)}
@@ -299,7 +305,7 @@ def get_section_results(
         sections=[
             SectionResultColumnOut(
                 section_id=s.id,
-                subject_name=names.get(s.subject_id, ""),
+                subject_name=labels.get(s.id, ""),
                 kind=s.kind,
                 max_score=round(s.question_count * float(s.points_per_question), 2),
                 question_count=s.question_count,

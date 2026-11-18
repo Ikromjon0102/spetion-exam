@@ -35,7 +35,7 @@ from app.schemas.attempt import (
     SubmitResultOut,
 )
 from app.schemas.dynamics import DynamicsOut
-from app.services import attempt_service, dynamics_service, ranking_service
+from app.services import attempt_service, dynamics_service, exam_service, ranking_service
 
 router = APIRouter(prefix="/api/v1/student", tags=["student"])
 
@@ -58,11 +58,17 @@ def _section_outs(db: Session, exams: list[Exam]) -> dict[int, list[AttemptSecti
     sections = db.query(ExamSection).filter(ExamSection.exam_id.in_(ids)).order_by(ExamSection.order_index).all()
     names = dict(db.query(Subject.id, Subject.name).filter(Subject.id.in_({s.subject_id for s in sections})))
     out: dict[int, list[AttemptSectionOut]] = {}
+    by_exam: dict[int, list[ExamSection]] = {}
+    for s in sections:
+        by_exam.setdefault(s.exam_id, []).append(s)
+    labels: dict[int, str] = {}
+    for group in by_exam.values():
+        labels.update(exam_service.section_labels(group, names))
     for s in sections:
         out.setdefault(s.exam_id, []).append(
             AttemptSectionOut(
                 id=s.id,
-                subject_name=names.get(s.subject_id, ""),
+                subject_name=labels.get(s.id, ""),
                 kind=s.kind,
                 question_count=s.question_count,
                 points_per_question=float(s.points_per_question),

@@ -306,3 +306,25 @@ def publish_exam(db: Session, exam: Exam) -> Exam:
     db.commit()
     db.refresh(exam)
     return exam
+
+
+def section_labels(sections, names: dict[int, str]) -> dict[int, str]:
+    """{section_id: label} for the blocks of ONE chorak exam. A subject is
+    normally one block ("Kimyo"), but a direction may sit the same subject as
+    both an asosiy and a majburiy block (economics: Matematika 30x... and
+    Matematika 10x...). Then the two would be indistinguishable on every tab,
+    column and table, so those blocks get the kind appended:
+    "Matematika (asosiy)" / "Matematika (majburiy)". Compute it over the
+    exam's FULL block list — a block teacher's filtered view must still show
+    the same label as everyone else."""
+    count: dict[int, int] = {}
+    for s in sections:
+        count[s.subject_id] = count.get(s.subject_id, 0) + 1
+    return {
+        s.id: (
+            f"{names.get(s.subject_id, '')} ({s.kind})"
+            if count[s.subject_id] > 1
+            else names.get(s.subject_id, "")
+        )
+        for s in sections
+    }

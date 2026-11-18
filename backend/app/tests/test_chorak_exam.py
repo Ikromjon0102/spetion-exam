@@ -620,3 +620,107 @@ def test_question_stats_count_right_wrong_blank_and_option_picks(client, db_sess
     own = client.get(url, headers=_login(client, "tarix_t")).json()
     assert {q["subject_name"] for q in own["questions"]} == {"Tarix"}
     assert len(own["questions"]) == 2
+
+
+def test_one_subject_can_be_both_an_asosiy_and_a_majburiy_block(client, db_session):
+    """Economics sits Matematika twice (asosiy 4x2.0 and majburiy 2x1.0) next
+    to Ingliz tili. Same subject + same kind is still refused."""
+    make_admin(db_session, username="boss")
+    klass = make_class(db_session, label="iqtisod", grade_level=10)
+    mat, ing = make_subject(db_session, name="Matematika"), make_subject(db_session, name="Ingliz tili")
+    mat_t = make_teacher(db_session, subject=mat, username="mat_t")
+    ing_t = make_teacher(db_session, subject=ing, username="ing_t")
+    db_session.add_all(
+        [
+            TeacherClassSubject(teacher_id=mat_t.id, class_id=klass.id, subject_id=mat.id),
+            TeacherClassSubject(teacher_id=ing_t.id, class_id=klass.id, subject_id=ing.id),
+        ]
+    )
+    db_session.commit()
+    admin = _login(client, "boss")
+
+    same_kind = [
+        {"subject_id": mat.id, "kind": "majburiy", "question_count": 2, "points_per_question": 1},
+        {"subject_id": mat.id, "kind": "majburiy", "question_count": 2, "points_per_question": 1},
+    ]
+    assert client.post(f"{API}/templates", headers=admin, json={"name": "Bad", "sections": same_kind}).status_code == 400
+
+    resp = client.post(
+        f"{API}/templates",
+        headers=admin,
+        json={
+            "name": "Iqtisod",
+            "sections": [
+                {"subject_id": mat.id, "kind": "asosiy", "question_count": 4, "points_per_question": 2},
+                {"subject_id": ing.id, "kind": "asosiy", "question_count": 2, "points_per_question": 2},
+                {"subject_id": mat.id, "kind": "majburiy", "question_count": 2, "points_per_question": 1},
+            ],
+        },
+    )
+    assert resp.status_code == 201, resp.text
+    now = datetime.now(timezone.utc)
+    resp = client.post(
+        f"{API}/chorak",
+        headers=admin,
+        json={
+            "title": "1-chorak iqtisod",
+            "template_id": resp.json()["id"],
+            "class_ids": [klass.id],
+            "quarter": 1,
+            "start_at": (now - timedelta(minutes=5)).isoformat(),
+            "end_at": (now + timedelta(hours=4)).isoformat(),
+        },
+    )
+    assert resp.status_code == 201, resp.text
+    exam = resp.json()[0]
+    # the two Matematika blocks are told apart; the lone Ingliz tili is not renamed
+    assert [s["subject_name"] for s in exam["sections"]] == [
+        "Matematika (asosiy)",
+        "Ingliz tili",
+        "Matematika (majburiy)",
+    ]
+    ctx_sections = exam["sections"]
+
+    # the Matematika teacher writes BOTH Matematika blocks, not the English one
+    mat_h, ing_h = _login(client, "mat_t"), _login(client, "ing_t")
+    for section in ctx_sections:
+        owner = ing_h if section["subject_name"] == "Ingliz tili" else mat_h
+        for _ in range(section["question_count"]):
+            assert client.post(f"{API}/{exam['id']}/questions", headers=owner, json=_mcq(section["id"])).status_code == 201
+        assert client.put(
+            f"{API}/{exam['id']}/sections/{section['id']}/ready", headers=owner, json={"ready": True}
+        ).status_code == 200
+    stranger = client.post(f"{API}/{exam['id']}/questions", headers=ing_h, json=_mcq(ctx_sections[0]["id"]))
+    assert stranger.status_code == 403
+    assert client.post(f"{API}/{exam['id']}/publish", headers=admin).status_code == 200
+
+    # a student gets 3/4 right in asosiy, 2/2 in majburiy -> Matematika 6+2 = 8 of 10
+    student = make_student(db_session, klass, username="ali", full_name="Ali")
+    db_session.commit()
+    headers = _login(client, "ali", class_id=klass.id)
+    state = client.post(f"/api/v1/student/exams/{exam['id']}/start", headers=headers).json()
+    labels = {s["id"]: s["subject_name"] for s in state["sections"]}
+    assert sorted(labels.values()) == ["Ingliz tili", "Matematika (asosiy)", "Matematika (majburiy)"]
+    seen: dict[str, int] = {}
+    allowed_right = {"Matematika (asosiy)": 3, "Matematika (majburiy)": 2, "Ingliz tili": 1}
+    for q in state["questions"]:
+        name = labels[q["section_id"]]
+        index = seen.get(name, 0)
+        seen[name] = index + 1
+        options = {o["option_text"]: o["id"] for o in q["options"]}
+        pick = options["To'g'ri"] if index < allowed_right[name] else options["Xato 1"]
+        assert client.put(
+            f"/api/v1/student/exams/{exam['id']}/answers/{q['id']}", headers=headers, json={"selected_option_id": pick}
+        ).status_code == 204
+    submitted = client.post(f"/api/v1/student/exams/{exam['id']}/submit", headers=headers).json()
+    assert submitted["score"] == 8 + 2  # Matematika 8 + Ingliz tili 1 x 2
+    assert submitted["max_score"] == 14
+
+    # the portfolio / dynamics see ONE Matematika result for this exam
+    stats = db_session.query(StudentSubjectStats).filter_by(student_id=student.id, subject_id=mat.id).one()
+    assert float(stats.total_points_earned) == 8 and float(stats.total_points_possible) == 10
+    dyn = client.get("/api/v1/student/me/dynamics", headers=headers).json()
+    mat_points = [p for p in dyn["points"] if p["subject_id"] == mat.id]
+    assert len(mat_points) == 1
+    assert (mat_points[0]["score"], mat_points[0]["max_score"], mat_points[0]["percent"]) == (8, 10, 80)
+    assert len([p for p in dyn["points"] if p["subject_id"] == ing.id]) == 1

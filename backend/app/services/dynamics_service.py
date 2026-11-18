@@ -92,9 +92,17 @@ def _graded_results(db: Session, student_ids: list[int], lo: datetime, hi: datet
             "date": day,
         }
         if exam.exam_type == ExamType.chorak.value:
+            # Two blocks of one subject (asosiy + majburiy) are ONE result.
+            merged: dict[int, dict] = {}
             for sc in sections.get(attempt.id, []):
-                results.append({**base, "subject_id": sc.subject_id, "section_id": sc.section_id,
-                                "score": float(sc.score), "max_score": float(sc.max_score)})
+                got = merged.get(sc.subject_id)
+                if got is None:
+                    merged[sc.subject_id] = {**base, "subject_id": sc.subject_id, "section_id": sc.section_id,
+                                             "score": float(sc.score), "max_score": float(sc.max_score)}
+                else:
+                    got["score"] = round(got["score"] + float(sc.score), 2)
+                    got["max_score"] = round(got["max_score"] + float(sc.max_score), 2)
+            results.extend(merged.values())
         elif attempt.max_score and float(attempt.max_score) > 0:
             results.append({**base, "subject_id": exam.subject_id, "section_id": None,
                             "score": float(attempt.score), "max_score": float(attempt.max_score)})
@@ -120,9 +128,15 @@ def _class_averages(db: Session, results: list[dict]) -> dict[tuple[int, int], f
             if max_score and float(max_score) > 0:
                 pool[(exam_id, subject_id)].append(_pct(score, max_score))
     if chorak_ids:
-        for exam_id, subject_id, score, max_score in db.query(
-            AttemptSectionScore.exam_id, AttemptSectionScore.subject_id, AttemptSectionScore.score, AttemptSectionScore.max_score
+        per_student: dict[tuple[int, int, int], list[float]] = defaultdict(lambda: [0.0, 0.0])
+        for exam_id, student_id, subject_id, score, max_score in db.query(
+            AttemptSectionScore.exam_id, AttemptSectionScore.student_id, AttemptSectionScore.subject_id,
+            AttemptSectionScore.score, AttemptSectionScore.max_score,
         ).filter(AttemptSectionScore.exam_id.in_(chorak_ids)):
+            acc = per_student[(exam_id, student_id, subject_id)]
+            acc[0] += float(score)
+            acc[1] += float(max_score)
+        for (exam_id, _student, subject_id), (score, max_score) in per_student.items():
             pool[(exam_id, subject_id)].append(_pct(score, max_score))
     return {k: round(sum(v) / len(v), 1) for k, v in pool.items() if len(v) >= MIN_CLASS_SAMPLE}
 

@@ -706,7 +706,7 @@ export const translations: Record<string, Record<Lang, string>> = {
     uz: "Har bir blokda fan, savollar soni va ball to'ldirilishi kerak",
     ru: "В каждом блоке нужно указать предмет, число вопросов и балл",
   },
-  "templates.subjectTwice": { uz: "Bitta fan ikki marta tanlangan", ru: "Один предмет выбран дважды" },
+  "templates.subjectTwice": { uz: "Bitta fan bir xil turda ikki marta tanlangan (asosiy va majburiy bo'lishi mumkin)", ru: "Один предмет выбран дважды с одним и тем же типом (можно как основной и обязательный)" },
   "templates.saveError": { uz: "Saqlab bo'lmadi", ru: "Не удалось сохранить" },
   "templates.loadError": { uz: "Shablonlarni yuklab bo'lmadi", ru: "Не удалось загрузить шаблоны" },
   "chorak.new": { uz: "Choraklik imtihon", ru: "Четвертной экзамен" },

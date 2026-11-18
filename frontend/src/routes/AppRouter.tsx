@@ -20,6 +20,7 @@ const AttemptAnswerReviewPage = lazy(() => import("../features/admin/AttemptAnsw
 const OverallRankingPage = lazy(() => import("../features/admin/OverallRankingPage"));
 const StudentPerformancePage = lazy(() => import("../features/admin/StudentPerformancePage"));
 const DailyResultsPage = lazy(() => import("../features/admin/DailyResultsPage"));
+const ClassResultsPage = lazy(() => import("../features/admin/ClassResultsPage"));
 const ChangePasswordPage = lazy(() => import("../features/shared/ChangePasswordPage"));
 const ClassesPage = lazy(() => import("../features/admin/manage/ClassesPage"));
 const ClassDetailPage = lazy(() => import("../features/admin/manage/ClassDetailPage"));
@@ -201,6 +202,14 @@ export default function AppRouter() {
           element={
             <RequireRole roles={["teacher", "admin"]}>
               <ClassDetailPage />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="/classes/:classId/results"
+          element={
+            <RequireRole roles={["teacher", "admin"]}>
+              <ClassResultsPage />
             </RequireRole>
           }
         />

@@ -38,14 +38,18 @@ export default function DailyResultsPage() {
   const [data, setData] = useState<DailyClassResults | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [day, setDay] = useState<string>("");
   const captureRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    getClassDailyResults(id)
-      .then(setData)
+    getClassDailyResults(id, day || undefined)
+      .then((d) => {
+        setData(d);
+        setError(null);
+      })
       .catch(() => setError(t("dailyResults.loadError")));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+  }, [id, day]);
 
   async function handleDownload() {
     if (!captureRef.current || !data) return;
@@ -91,7 +95,18 @@ export default function DailyResultsPage() {
 
         {data && (
           <>
-            <div style={{ marginBottom: "var(--space-5)" }}>
+            <div style={{ marginBottom: "var(--space-5)", display: "flex", gap: "var(--space-3)", alignItems: "center", flexWrap: "wrap" }}>
+              <input
+                type="date"
+                className="sp-input"
+                style={{ width: "auto" }}
+                value={day || data.date}
+                aria-label={t("dailyResults.pickDate")}
+                onChange={(e) => setDay(e.target.value)}
+              />
+              <Link to={`/classes/${id}/results`} className="body-sm">
+                {t("classRes.navLink")} &rarr;
+              </Link>
               <Button onClick={handleDownload} disabled={exporting || data.exams.length === 0}>
                 {exporting ? t("dailyResults.exporting") : t("dailyResults.download")}
               </Button>

@@ -7,6 +7,13 @@ Versiya raqamlari ish bosqichlariga qarab qo'yilgan (rasmiy release tag emas).
 
 ---
 
+## v2.3 — Sinf natijalari va dinamikasi (2026-noyabr)
+- **Sinf natijalari** sahifasi (`Sinf → Sinf natijalari`): butun sinf bitta jadvalda — o'quvchilar qator, har bir imtihon va fan ustun, Jami %, o'rin, pastda sinf o'rtachasi.
+- Davrni tanlash: Bugun, oxirgi 7 kun, 1–4-chorak, butun yil yoki sanadan–sanagacha. Rasm sifatida yuklab olish (Telegram uchun) va chop etish.
+- **Sinf dinamikasi** (alohida tab): sinfning umumiy darajasi "boshida → hozir", 70%+/50–70%/50%− bo'yicha o'quvchilar soni, fanlar radari, chorak ustunlari, vaqt chizig'i, fan × oy xaritasi, fanlar jadvali va har bir o'quvchining "boshida → hozir" o'zgarishi (saralanadi, ism bosilsa shaxsiy dinamika ochiladi).
+- **Kim nimani ko'radi:** fan ustozi faqat o'z fanini; sinf rahbari va admin hamma fanni. Jami, o'rin va o'rtachalar ham faqat ko'rinadigan fanlar bo'yicha hisoblanadi.
+- **Kunlik natijalar** sahifasida endi sana tanlash bor va u ham fan bo'yicha cheklanadi (avval sinfga ulangan hamma ustoz hamma fanni ko'rardi).
+
 ## v2.2 — Iqtisod yo'nalishi uchun choraklik shablon (2026-noyabr)
 - Choraklik shablonda **bitta fan ham asosiy, ham majburiy** bo'lishi mumkin (masalan iqtisod: asosiy fanlar Matematika va Ingliz tili, majburiylari Matematika, Tarix, Ona tili). Faqat bir xil fan + bir xil tur ikki marta qo'shilmaydi.
 - Ikki "Matematika" bloki chalkashmasligi uchun nomlari "Matematika (asosiy)" / "Matematika (majburiy)" ko'rinishida chiqadi (faqat fan takrorlansa).

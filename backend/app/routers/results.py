@@ -3,6 +3,8 @@ student performance, class-subject performance trend. See docs/spec.md
 sections 1.4 and 2.
 """
 
+from datetime import date as date_type
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 
@@ -28,8 +30,9 @@ from app.schemas.results import (
     StudentPerformanceOut,
     StudentPerformanceSubjectOut,
 )
+from app.schemas.class_results import ClassDynamicsOut, ClassResultsOut
 from app.schemas.dynamics import DynamicsOut
-from app.services import dynamics_service, exam_service, ranking_service
+from app.services import class_results_service, dynamics_service, exam_service, ranking_service
 
 router = APIRouter(prefix="/api/v1/admin", tags=["results"])
 
@@ -266,6 +269,7 @@ def get_class_daily_results(
     student's own attempt.submitted_at is the only signal that actually
     means "this happened today"."""
     klass = _ensure_class_view_access(db, user, class_id)
+    visible = class_results_service.visible_subject_ids(db, user, klass)
     resolved_date, day_start, day_end = local_day_bounds_utc(date)
 
     exam_ids_today = [
@@ -287,6 +291,8 @@ def get_class_daily_results(
     exam_outs: list[DailyResultsExamOut] = []
     per_exam_scores: list[dict[int, float]] = []
     for exam in exams:
+        if not exam.is_chorak and visible is not None and exam.subject_id not in visible:
+            continue  # a subject teacher sees only their own subjects
         if exam.is_chorak:
             # One column per block, so the table reads Kimyo | Biologiya | ...
             # | Umumiy exactly like a day of separate single-subject exams.
@@ -298,6 +304,8 @@ def get_class_daily_results(
             for sc in db.query(AttemptSectionScore).filter_by(exam_id=exam.id):
                 block_scores.setdefault(sc.section_id, {})[sc.student_id] = float(sc.score)
             for section in exam.sections:
+                if visible is not None and section.subject_id not in visible:
+                    continue
                 exam_outs.append(
                     DailyResultsExamOut(
                         exam_id=exam.id,
@@ -371,3 +379,33 @@ def get_class_daily_results(
     return DailyClassResultsOut(
         class_id=klass.id, class_name=klass.display_name, date=resolved_date, exams=exam_outs, students=student_outs
     )
+
+
+@router.get("/classes/{class_id}/results", response_model=ClassResultsOut)
+def get_class_results(
+    class_id: int,
+    start: date_type | None = None,
+    end: date_type | None = None,
+    school_year: int | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role("teacher", "admin")),
+):
+    """The whole class over a date range (default: this school year): one row
+    per student, one column per exam and subject. A subject teacher gets only
+    their own subjects' columns, the homeroom teacher and admin all of them."""
+    klass = _ensure_class_view_access(db, user, class_id)
+    visible = class_results_service.visible_subject_ids(db, user, klass)
+    return class_results_service.build_class_results(db, klass, visible, start, end, school_year)
+
+
+@router.get("/classes/{class_id}/dynamics", response_model=ClassDynamicsOut)
+def get_class_dynamics(
+    class_id: int,
+    school_year: int | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_role("teacher", "admin")),
+):
+    """How the class moved across a school year, same scoping as /results."""
+    klass = _ensure_class_view_access(db, user, class_id)
+    visible = class_results_service.visible_subject_ids(db, user, klass)
+    return class_results_service.build_class_dynamics(db, klass, visible, school_year)

@@ -51,7 +51,7 @@ subject performance over time (not just per-exam).
 
 ## Current status
 
-Backend is implemented end-to-end (233 passing tests as of Nov 2026 — the 5 in `test_question_images.py` need `STORAGE_BACKEND=local` when MinIO isn't running; originally 78 in `backend/app/tests/`,
+Backend is implemented end-to-end (240 passing tests as of Nov 2026 — the 5 in `test_question_images.py` need `STORAGE_BACKEND=local` when MinIO isn't running; originally 78 in `backend/app/tests/`,
 run with `pytest app/tests -q` against an in-memory SQLite DB — no live
 Postgres needed to test) and has been exercised live: Node.js + Docker
 Desktop were installed into this dev environment, the frontend was built
@@ -1497,6 +1497,37 @@ Decisions already confirmed with the user, so don't re-litigate them:
       one per block. A block teacher is "teacher of the subject", so the same
       teacher edits both Matematika blocks.
     - Test: `test_one_subject_can_be_both_an_asosiy_and_a_majburiy_block`.
+
+16. **Whole-class results + class dynamics (Nov 2026) — built and verified
+    locally in a browser, not deployed, no migration.** `/classes/:id/results`
+    (`ClassResultsPage.tsx`, button "Sinf natijalari" on `ClassDetailPage`, link
+    from the daily-results page). Two tabs: a **results table** over a period
+    (Bugun / 7 kun / 1-4 chorak / butun yil / custom range; opens on the current
+    chorak) and the class's **dynamics** for the school year.
+    - **Who sees what — decided in one place**,
+      `class_results_service.visible_subject_ids`: admin and the class's
+      homeroom teacher see every subject; any other teacher of the class sees
+      only the subjects they teach to it. Totals, ranks, class averages and
+      every chart are computed over the visible subjects only, so a subject
+      teacher never gets a colleague's points mixed in. **`daily-results` is
+      scoped the same way now** (it used to show every subject to any teacher
+      connected to the class — a deliberate change, user's decision Nov 2026).
+      A new class-level endpoint must call `visible_subject_ids`.
+    - `GET /admin/classes/{id}/results?start&end&school_year` and
+      `GET /admin/classes/{id}/dynamics?school_year` (`routers/results.py`,
+      schemas `schemas/class_results.py`, tests `tests/test_class_results.py`).
+      Built on `dynamics_service._graded_results`, so a chorak exam is one column
+      per subject (two blocks of one subject merged), a missed exam is `null`
+      (never 0), only active students are listed, ranks are RANK() by points
+      earned / possible. Class "baseline → now" = first-k vs last-k of the per
+      exam class averages, equal weight per subject (same rule as the student
+      page); the same rule per student.
+    - Frontend reuses the student page's charts by mapping the class numbers
+      into `DynamicsPoint`/`DynamicsSubject`/`DynamicsQuarter` (`Ring`, `Radar`,
+      `QuarterBars`, `Timeline`, `Heatmap`). The table card is styled with fixed
+      hex colours (it is exported as an image for Telegram, like the daily
+      card), left-aligned so a wide table's title isn't scrolled off-screen.
+    - Not built: a class A4 PDF (PNG + print only), comparing two classes.
 
 ## Next steps (in order)
 

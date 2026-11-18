@@ -433,6 +433,9 @@ export default function ClassDetailPage() {
               </p>
             </div>
             <div style={{ display: "flex", gap: "var(--space-2)", flexShrink: 0 }}>
+              <Button size="sm" onClick={() => navigate(`/classes/${id}/results`)}>
+                {t("classRes.navLink")}
+              </Button>
               <Button variant="ghost" size="sm" onClick={() => navigate(`/classes/${id}/daily-results`)}>
                 {t("dailyResults.navLink")}
               </Button>
